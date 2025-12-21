@@ -5,12 +5,11 @@ use serde::{Deserialize, Serialize};
 use rocket::http::Status;
 use rocket::serde::json::{Json, json, Value};
 
-use mongododm::{
-    CollectionConfig, Index, IndexOption, Indexes, Model, ToRepository, 
-
-};
+use mongododm::{CollectionConfig, Index, IndexOption, Indexes, Model, ToRepository};
+use mongododm::mongo::bson;
 use mongododm::mongo::bson::{oid::ObjectId, doc};
 use mongododm::field; // or use mongododm::f for shorthand
+use mongododm::mongo::options::{FindOneAndUpdateOptions, ReturnDocument};
 
 pub struct CabinetColl;
 impl CollectionConfig for CabinetColl {
@@ -33,18 +32,34 @@ pub struct Cabinet {
 
     slug: String,
     name: String,
-    description: String,
+    description: Option<String>,
 }
 
 #[derive(Deserialize)]
-pub struct CabinetInput {
+pub struct CreateCabinet {
     slug: String,
     name: String,
-    description: String,
+    description: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateCabinet {
+    name: Option<String>,
+    description: Option<String>,
+}
+
+#[derive(Serialize)]
+struct PatchCabinet<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<&'a str>,
+
+    updated_at: i64,
 }
 
 impl Cabinet {
-    pub fn new(input: CabinetInput) -> Self {
+    pub fn new(input: CreateCabinet) -> Self {
         let now = chrono::Utc::now().timestamp();
         Cabinet {
             id: None,
@@ -54,10 +69,6 @@ impl Cabinet {
             name: input.name,
             description: input.description,
         }
-    }
-
-    pub fn touch(&mut self) {
-        self.updated_at = chrono::Utc::now().timestamp();
     }
 }
 
@@ -79,7 +90,7 @@ pub async fn get(db: &MongoDb, slug: &str) -> Option<Json<Cabinet>> {
 }
 
 #[post("/", format = "json", data = "<input>")]
-async fn create(db: &MongoDb, input: Json<CabinetInput>) -> Result<Json<Cabinet>, Status> {
+async fn create(db: &MongoDb, input: Json<CreateCabinet>) -> Result<Json<Cabinet>, Status> {
     let repo = db.0.default_database().ok_or(Status::InternalServerError)?.repository::<Cabinet>();
 
     let cabinet = Cabinet::new(input.into_inner());
@@ -90,6 +101,34 @@ async fn create(db: &MongoDb, input: Json<CabinetInput>) -> Result<Json<Cabinet>
 
     Ok(Json(cabinet))
 }
+
+#[put("/<slug>", format = "json", data = "<input>")]
+async fn update(db: &MongoDb, slug: &str, input: Json<UpdateCabinet>) -> Result<Json<Cabinet>, Status> {
+    let repo = db.0.default_database().ok_or(Status::InternalServerError)?.repository::<Cabinet>();
+
+    let now = chrono::Utc::now().timestamp();
+    let patch = PatchCabinet {
+        name: input.name.as_deref(),
+        description: input.description.as_deref(),
+        updated_at: now,
+    };
+    let set_doc = bson::to_document(&patch).map_err(|_| Status::InternalServerError)?;
+
+    let result = repo
+        .find_one_and_update(
+            doc! { "slug": slug },
+            doc! { "$set": set_doc },
+            FindOneAndUpdateOptions::builder()
+                .return_document(ReturnDocument::After)
+                .build(),
+        )
+        .await
+        .map_err(|_| Status::InternalServerError)?
+        .ok_or(Status::NotFound)?;
+
+    Ok(Json(result))
+}
+
 
 
 #[catch(404)]
@@ -102,7 +141,7 @@ fn not_found() -> Value {
 
 pub fn stage() -> rocket::fairing::AdHoc {
     rocket::fairing::AdHoc::on_ignite("Autofile Cabinets", |rocket| async {
-        rocket.mount("/cabinets", routes![get, create])
+        rocket.mount("/cabinets", routes![get, create, update])
             .register("/cabinets", catchers![not_found])
             // .manage(MessageList::new(vec![]))
     })
