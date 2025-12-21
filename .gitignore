@@ -1,0 +1,6 @@
+**/target
+**/tmp
+
+# Local development environment
+.envrc
+*.log
