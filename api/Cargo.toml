@@ -6,6 +6,6 @@ edition = "2024"
 [dependencies]
 rocket = { version = "0.5.1", features = ["json"] }
 rocket_db_pools = { version = "0.2.0", features = ["mongodb"] }
-mongodb = "2.8"
+mongodb = "3.4"
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
