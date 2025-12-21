@@ -9,3 +9,4 @@ rocket_db_pools = { version = "0.2.0", features = ["mongodb"] }
 mongodb = "3.4"
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+mongododm = "0.9"

@@ -8,11 +8,14 @@ use mongodb::bson::doc;
 #[database("autofile")]
 pub struct MongoDb(mongodb::Client);
 
+mod cabinets;
+
 #[launch]
 fn rocket() -> _ {
     rocket::build().
         attach(MongoDb::init()).
-        mount("/", routes![index, health])
+        mount("/", routes![index, health_ready]).
+        attach(cabinets::stage())
 }
 
 #[get("/")]
@@ -20,19 +23,21 @@ fn index() -> &'static str {
     "Hello, world!"
 }
 
-#[get("/health")]
-pub async fn health(db: &MongoDb) -> Json<HealthResponse> {
-    let result = db
+#[get("/health/ready")]
+pub async fn health_ready(db: &MongoDb) -> Json<ReadyResponse> {
+    let mongo_ok = db
         .database("autofile")
         .run_command(doc! { "ping": 1 }, None)
-        .await;
+        .await.is_ok();
 
-    Json(HealthResponse {
-        mongo: result.is_ok(),
+    Json(ReadyResponse {
+        ok : mongo_ok,
+        mongo : mongo_ok,
     })
 }
 
 #[derive(serde::Serialize)]
-pub struct HealthResponse {
+pub struct ReadyResponse {
+    ok: bool,
     mongo: bool,
 }
