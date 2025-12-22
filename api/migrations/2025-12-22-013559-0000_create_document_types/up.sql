@@ -2,11 +2,11 @@
 
 
 CREATE TABLE "document_types"(
-	"id" INT8 NOT NULL PRIMARY KEY,
-	"slug" VARCHAR NOT NULL,
+	"id" BIGSERIAL PRIMARY KEY,
+	"slug" VARCHAR NOT NULL UNIQUE,
 	"name" VARCHAR NOT NULL,
 	"description" VARCHAR,
-	"created_at" TIMESTAMPTZ NOT NULL,
-	"updated_at" TIMESTAMPTZ NOT NULL
+	"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	"updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
