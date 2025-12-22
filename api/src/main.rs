@@ -20,6 +20,9 @@ fn database_url(figment: &Figment, db_name: &str) -> Option<String> {
 }
 
 mod schema;
+mod resource {
+    pub mod users;
+}
 // mod resource::cabinets;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
@@ -30,7 +33,7 @@ fn rocket() -> _ {
         .attach(Db::init())
         .attach(rocket::fairing::AdHoc::try_on_ignite("Diesel Migrations", run_migrations))
         .mount("/", routes![index, health_ready])
-        // attach(cabinets::stage())
+        .attach(resource::users::stage())
 }
 
 #[get("/")]

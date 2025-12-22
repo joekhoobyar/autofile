@@ -7,7 +7,7 @@ edition = "2024"
 rocket = { version = "0.5.1", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-chrono = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
 
 diesel = { version = "2", features = ["postgres", "chrono"] }
 diesel-async = { version = "0.4.1", features = ["postgres", "async-connection-wrapper"] }
