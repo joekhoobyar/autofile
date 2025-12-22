@@ -1,6 +1,6 @@
 use crate::Db;
 use crate::schema::{users};
-use crate::util::{diesel_to_http, err, ApiError, ApiResult};
+use crate::util::{diesel_to_http, err, ApiResult};
 
 use serde::{Deserialize, Serialize};
 
@@ -28,7 +28,6 @@ pub struct User {
 struct NewUser {
     username: String,
     display_name: String,
-    // let DB defaults handle created_at/updated_at (preferred)
 }
 
 #[derive(Debug, Deserialize, AsChangeset)]
@@ -47,7 +46,6 @@ pub struct ListUsersQuery {
     // optional substring search
     pub q: Option<String>,
 }
-
 
 #[get("/<id>")]
 pub async fn get(mut db: Connection<Db>, id: i64) -> ApiResult<Json<User>> {
@@ -85,14 +83,14 @@ async fn create(mut db: Connection<Db>, input: Json<NewUser>) -> ApiResult<Json<
     Ok(Json(inserted))
 }
 
-#[patch("/<username>", format = "json", data = "<input>")]
-async fn update(mut db: Connection<Db>, username: &str, input: Json<UserChangeset>) -> ApiResult<Json<User>> {
+#[patch("/<id>", format = "json", data = "<input>")]
+async fn update(mut db: Connection<Db>, id: i64, input: Json<UserChangeset>) -> ApiResult<Json<User>> {
     let mut changes = input.into_inner();
     changes.updated_at = Some(Utc::now());
 
     // Update + return the updated row in one round-trip.
     let updated: User =
-        diesel::update(users::table.filter(users::username.eq(username)))
+        diesel::update(users::table.filter(users::id.eq(id)))
             .set(&changes)
             .returning(User::as_returning())
             .get_result(&mut db)

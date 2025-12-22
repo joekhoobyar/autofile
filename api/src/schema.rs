@@ -8,3 +8,14 @@ diesel::table! {
         updated_at -> Timestamptz,
     }
 }
+
+diesel::table! {
+    cabinets (id) {
+        id -> Int8,
+        slug -> Varchar,
+        name -> Varchar,
+        description -> Nullable<Varchar>,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
+    }
+}

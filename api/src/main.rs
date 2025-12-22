@@ -21,6 +21,7 @@ fn database_url(figment: &Figment, db_name: &str) -> Option<String> {
 
 mod schema;
 mod resource {
+    pub mod cabinets;
     pub mod users;
 }
 mod util;
@@ -33,6 +34,7 @@ fn rocket() -> _ {
         .attach(Db::init())
         .attach(rocket::fairing::AdHoc::try_on_ignite("Diesel Migrations", run_migrations))
         .mount("/", routes![index, health_ready])
+        .attach(resource::cabinets::stage())
         .attach(resource::users::stage())
 }
 
