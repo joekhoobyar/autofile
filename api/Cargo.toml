@@ -5,9 +5,12 @@ edition = "2024"
 
 [dependencies]
 rocket = { version = "0.5.1", features = ["json"] }
-rocket_db_pools = { version = "0.2.0", features = ["mongodb"] }
-mongodb = "3.4"
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-mongododm = "0.9"
 chrono = "0.4"
+
+diesel = { version = "2", features = ["postgres", "chrono"] }
+diesel-async = { version = "0.4.1", features = ["postgres", "async-connection-wrapper"] }
+diesel_migrations = "2"
+
+rocket_db_pools = { version = "0.2.0", features = ["diesel_postgres"] }
