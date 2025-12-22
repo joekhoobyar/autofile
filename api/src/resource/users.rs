@@ -11,7 +11,6 @@ use rocket_db_pools::Connection;
 use rocket_db_pools::diesel::prelude::*;
 
 use chrono::{DateTime, Utc};
-use diesel::prelude::*; // macros + schema/table dsl live here
 
 #[derive(Debug, Serialize, Queryable, Selectable)]
 #[diesel(table_name = users)]

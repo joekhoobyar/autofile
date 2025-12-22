@@ -1,6 +1,6 @@
 use crate::Db;
 use crate::schema::{cabinets};
-use crate::util::{diesel_to_http, err, ApiError, ApiResult};
+use crate::util::{diesel_to_http, err, ApiResult};
 
 use serde::{Deserialize, Serialize};
 
@@ -11,7 +11,6 @@ use rocket_db_pools::Connection;
 use rocket_db_pools::diesel::prelude::*;
 
 use chrono::{DateTime, Utc};
-use diesel::prelude::*; // macros + schema/table dsl live here
 
 #[derive(Debug, Serialize, Queryable, Selectable)]
 #[diesel(table_name = cabinets)]
