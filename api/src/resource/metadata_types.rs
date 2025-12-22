@@ -20,6 +20,7 @@ pub struct MetadataType {
 
     slug: String,
     name: String,
+    data_type: String,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     description: Option<String>
@@ -31,6 +32,7 @@ pub struct MetadataType {
 struct NewMetadataType {
     slug: String,
     name: String,
+    data_type: String,
     description: Option<String>,
 }
 
@@ -39,6 +41,7 @@ struct NewMetadataType {
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct MetadataTypeChangeset {
     name: Option<String>,
+    data_type: Option<String>,
     description: Option<String>,
     updated_at: Option<DateTime<Utc>>,
 }
@@ -121,6 +124,7 @@ pub async fn list(mut db: Connection<Db>, params: ListMetadataTypesQuery) -> Api
         query = query.filter(
             metadata_types::slug.ilike(pattern.clone())
                 .or(metadata_types::name.ilike(pattern.clone()))
+                .or(metadata_types::data_type.ilike(pattern.clone()))
                 .or(metadata_types::description.ilike(pattern)),
         );
     }
