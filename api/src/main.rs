@@ -23,6 +23,7 @@ mod schema;
 mod resource {
     pub mod cabinets;
     pub mod document_types;
+    pub mod metadata_types;
     pub mod users;
 }
 mod util;
@@ -37,6 +38,7 @@ fn rocket() -> _ {
         .mount("/", routes![index, health_ready])
         .attach(resource::cabinets::stage())
         .attach(resource::document_types::stage())
+        .attach(resource::metadata_types::stage())
         .attach(resource::users::stage())
 }
 

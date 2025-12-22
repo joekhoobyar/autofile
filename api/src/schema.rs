@@ -31,3 +31,13 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    metadata_types (id) {
+        id -> Int8,
+        slug -> Varchar,
+        name -> Varchar,
+        description -> Nullable<Varchar>,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
+    }
+}
