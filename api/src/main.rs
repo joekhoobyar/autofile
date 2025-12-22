@@ -23,7 +23,7 @@ mod schema;
 mod resource {
     pub mod users;
 }
-// mod resource::cabinets;
+mod util;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 

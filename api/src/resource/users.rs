@@ -1,14 +1,14 @@
 use crate::Db;
 use crate::schema::{users};
+use crate::util::{diesel_to_http, err, ApiError, ApiResult};
 
 use serde::{Deserialize, Serialize};
 
-use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::form::FromForm;
 
-use rocket_db_pools::{Connection};
-use rocket_db_pools::diesel::{QueryResult, prelude::*};
+use rocket_db_pools::Connection;
+use rocket_db_pools::diesel::prelude::*;
 
 use chrono::{DateTime, Utc};
 use diesel::prelude::*; // macros + schema/table dsl live here
@@ -50,78 +50,60 @@ pub struct ListUsersQuery {
 
 
 #[get("/<id>")]
-pub async fn get(mut db: Connection<Db>, id: i64) -> Result<Json<User>, Status> {
+pub async fn get(mut db: Connection<Db>, id: i64) -> ApiResult<Json<User>> {
     let row = users::table
         .find(id)
         .select(User::as_select())
         .first::<User>(&mut db)
         .await
-        .map_err(|e| match e {
-            diesel::result::Error::NotFound => Status::NotFound,
-            _ => Status::InternalServerError,
-        })?;
+        .map_err(|e| err(diesel_to_http(e), "failed to fetch user"))?;
 
     Ok(Json(row))
 }
 
 #[get("/by-username/<username>")]
-pub async fn get_by_username(
-    mut db: Connection<Db>,
-    username: &str,
-) -> Result<Json<User>, Status> {
+pub async fn get_by_username(mut db: Connection<Db>, username: &str) -> ApiResult<Json<User>> {
     let row = users::table
         .filter(users::username.eq(username))
         .select(User::as_select())
         .first::<User>(&mut db)
         .await
-        .map_err(|e| match e {
-            diesel::result::Error::NotFound => Status::NotFound,
-            _ => Status::InternalServerError,
-        })?;
+        .map_err(|e| err(diesel_to_http(e), "failed to fetch user"))?;
 
     Ok(Json(row))
 }
 
 #[post("/", format = "json", data = "<input>")]
-async fn create(mut db: Connection<Db>, input: Json<NewUser>) -> QueryResult<Json<User>> {
+async fn create(mut db: Connection<Db>, input: Json<NewUser>) -> ApiResult<Json<User>> {
     let inserted: User = diesel::insert_into(users::table)
         .values(&*input)
         .returning(User::as_returning())
         .get_result(&mut db)
-        .await?;
+        .await
+        .map_err(|e| err(diesel_to_http(e), "failed to create user"))?;
 
     Ok(Json(inserted))
 }
 
 #[patch("/<username>", format = "json", data = "<input>")]
-async fn update(
-    mut db: Connection<Db>,
-    username: &str,
-    input: Json<UserChangeset>,
-) -> Result<Json<User>, Status> {
+async fn update(mut db: Connection<Db>, username: &str, input: Json<UserChangeset>) -> ApiResult<Json<User>> {
     let mut changes = input.into_inner();
     changes.updated_at = Some(Utc::now());
 
     // Update + return the updated row in one round-trip.
-    let updated: Result<User, diesel::result::Error> =
+    let updated: User =
         diesel::update(users::table.filter(users::username.eq(username)))
             .set(&changes)
             .returning(User::as_returning())
             .get_result(&mut db)
-            .await;
+            .await
+            .map_err(|e| err(diesel_to_http(e), "failed to update user"))?;
 
-    match updated {
-        Ok(row) => Ok(Json(row)),
-        Err(diesel::result::Error::NotFound) => Err(Status::NotFound),
-        Err(_) => Err(Status::InternalServerError),
-    }
+    Ok(Json(updated))
 }
 
 #[get("/?<params..>")]
-pub async fn list(
-    mut db: Connection<Db>,
-    params: ListUsersQuery,
-) -> Result<Json<Vec<User>>, Status> {
+pub async fn list(mut db: Connection<Db>, params: ListUsersQuery) -> ApiResult<Json<Vec<User>>> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
@@ -144,7 +126,7 @@ pub async fn list(
         .select(User::as_select())
         .load::<User>(&mut db)
         .await
-        .map_err(|_| Status::InternalServerError)?;
+        .map_err(|e| err(diesel_to_http(e), "failed to list users"))?;
 
     Ok(Json(rows))
 }
@@ -152,7 +134,5 @@ pub async fn list(
 pub fn stage() -> rocket::fairing::AdHoc {
     rocket::fairing::AdHoc::on_ignite("Autofile Users", |rocket| async {
         rocket.mount("/users", routes![list, get, get_by_username, create, update])
-            // .register("/users", catchers![not_found])
-            // .manage(MessageList::new(vec![]))
     })
 }
