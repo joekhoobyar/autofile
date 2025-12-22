@@ -1,13 +1,4 @@
-diesel::table! {
-    users (id) {
-        id -> Int8,
-        username -> Varchar,
-        email -> Varchar,
-        display_name -> Varchar,
-        created_at -> Timestamptz,
-        updated_at -> Timestamptz,
-    }
-}
+// @generated automatically by Diesel CLI.
 
 diesel::table! {
     cabinets (id) {
@@ -32,12 +23,42 @@ diesel::table! {
 }
 
 diesel::table! {
+    document_types_metadata_types (document_type_id, metadata_type_id) {
+        document_type_id -> Int8,
+        metadata_type_id -> Int8,
+    }
+}
+
+diesel::table! {
     metadata_types (id) {
         id -> Int8,
         slug -> Varchar,
         name -> Varchar,
+        data_type -> Varchar,
         description -> Nullable<Varchar>,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
     }
 }
+
+diesel::table! {
+    users (id) {
+        id -> Int8,
+        username -> Text,
+        display_name -> Text,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
+        email -> Varchar,
+    }
+}
+
+diesel::joinable!(document_types_metadata_types -> document_types (document_type_id));
+diesel::joinable!(document_types_metadata_types -> metadata_types (metadata_type_id));
+
+diesel::allow_tables_to_appear_in_same_query!(
+    cabinets,
+    document_types,
+    document_types_metadata_types,
+    metadata_types,
+    users,
+);

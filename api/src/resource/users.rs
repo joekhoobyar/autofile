@@ -12,7 +12,7 @@ use rocket_db_pools::diesel::prelude::*;
 
 use chrono::{DateTime, Utc};
 
-#[derive(Debug, Serialize, Queryable, Selectable)]
+#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
 #[diesel(table_name = users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
