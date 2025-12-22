@@ -15,6 +15,7 @@ use diesel::prelude::*; // macros + schema/table dsl live here
 
 #[derive(Debug, Serialize, Queryable, Selectable)]
 #[diesel(table_name = users)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
     id: i64,
     username: String,
@@ -25,6 +26,7 @@ pub struct User {
 
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = users)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 struct NewUser {
     username: String,
     display_name: String,
@@ -32,6 +34,7 @@ struct NewUser {
 
 #[derive(Debug, Deserialize, AsChangeset)]
 #[diesel(table_name = users)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 struct UserChangeset {
     display_name: Option<String>,
     updated_at: Option<DateTime<Utc>>,

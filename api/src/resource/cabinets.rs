@@ -28,6 +28,7 @@ pub struct Cabinet {
 
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = cabinets)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 struct NewCabinet {
     slug: String,
     name: String,
@@ -36,6 +37,7 @@ struct NewCabinet {
 
 #[derive(Debug, Deserialize, AsChangeset)]
 #[diesel(table_name = cabinets)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 struct CabinetChangeset {
     name: Option<String>,
     description: Option<String>,
