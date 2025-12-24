@@ -21,4 +21,5 @@ use chrono::{DateTime, Utc};
 pub struct DocumentTypeMetadataType {
     document_type_id: i64,
     metadata_type_id: i64,
+    required: bool,
 }

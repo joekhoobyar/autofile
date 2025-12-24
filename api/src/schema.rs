@@ -26,6 +26,7 @@ diesel::table! {
     document_types_metadata_types (document_type_id, metadata_type_id) {
         document_type_id -> Int8,
         metadata_type_id -> Int8,
+        required -> Bool,
     }
 }
 
