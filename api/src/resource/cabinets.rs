@@ -1,6 +1,6 @@
 use crate::Db;
 use crate::schema::{cabinets};
-use crate::util::{ApiResult, FormFieldPresence, diesel_to_http, err};
+use crate::util::{ApiResult, FormFieldPresence, diesel_to_http, err, de_present_option};
 
 use serde::{Deserialize, Serialize};
 
@@ -37,13 +37,16 @@ struct NewCabinet {
 }
 
 #[derive(Debug, Deserialize, AsChangeset)]
+#[serde(crate = "rocket::serde")]
 #[diesel(table_name = cabinets)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct CabinetChangeset {
     name: Option<String>,
     description: Option<String>,
+
+    #[serde(default, deserialize_with = "de_present_option")]
     parent_id: Option<Option<i64>>,
-    #[serde(default)]
+
     updated_at: Option<DateTime<Utc>>,
 }
 
@@ -103,26 +106,50 @@ async fn create(mut db: Connection<Db>, input: Json<NewCabinet>) -> ApiResult<Js
 
 #[patch("/<id>", format = "json", data = "<input>")]
 async fn update(mut db: Connection<Db>, id: i64, input: Json<CabinetChangeset>) -> ApiResult<Json<Cabinet>> {
-    let mut changes = input.into_inner();
-    changes.updated_at = Some(Utc::now());
+    dbg!(&input.parent_id);
 
-    if let Some(pparent_id) = changes.parent_id {
-        if let Some(parent_id) = pparent_id && (parent_id <= 0 || parent_id == id) {
-            return Err(err(
-                rocket::http::Status::UnprocessableEntity,
-                "invalid parent cabinet",
-            ));
-        }
-    }
+    let patch = input.into_inner();
+
+
+    // Common assignments (no parent_id here)
+    let common = (
+        patch.name.map(|v| cabinets::name.eq(v)),
+        patch.description.map(|v| cabinets::description.eq(v)),
+        cabinets::updated_at.eq(Utc::now()),
+    );
+
+    let base = diesel::update(cabinets::table.filter(cabinets::id.eq(id)));
+
+    let base = match patch.parent_id {
+        None => {
+            base.set(common)
+                .returning(Cabinet::as_returning())
+                .get_result(&mut db)
+                .await
+        },
+        Some(Some(parent_id)) => {
+            if parent_id <= 0 || parent_id == id {
+                return Err(err(
+                    rocket::http::Status::UnprocessableEntity,
+                    "invalid parent cabinet",
+                ));
+            }
+            base.set((common, cabinets::parent_id.eq(parent_id)))
+                .returning(Cabinet::as_returning())
+                .get_result(&mut db)
+                .await
+        },
+        Some(None) => {
+            base.set((common, cabinets::parent_id.eq::<Option<i64>>(None)))
+                .returning(Cabinet::as_returning())
+                .get_result(&mut db)
+                .await
+        },
+    };
 
     // Update + return the updated row in one round-trip.
-    let updated: Cabinet =
-        diesel::update(cabinets::table.filter(cabinets::id.eq(id)))
-            .set(&changes)
-            .returning(Cabinet::as_returning())
-            .get_result(&mut db)
-            .await
-            .map_err(|e| err(diesel_to_http(e), "failed to update cabinet"))?;
+    let updated: Cabinet = base
+        .map_err(|e| err(diesel_to_http(e), "failed to update cabinet"))?;
 
     Ok(Json(updated))
 }

@@ -3,6 +3,8 @@ use rocket::serde::json::Json;
 use rocket::response::status::Custom;
 use rocket::form::{self, FromFormField, ValueField};
 
+use rocket::serde::Deserialize;
+
 use diesel::result::{DatabaseErrorKind, Error as DieselError};
 
 #[derive(Debug, serde::Serialize)]
@@ -31,6 +33,7 @@ pub fn err(status: Status, msg: impl Into<String>) -> Custom<Json<ApiError>> {
     Custom(status, Json(ApiError::new(status, msg.into())))
 }
 
+// Map a Diesel error to an appropriate HTTP status code.
 pub fn diesel_to_http(e: DieselError) -> Status {
     match e {
         DieselError::NotFound => Status::NotFound,
@@ -43,6 +46,7 @@ pub fn diesel_to_http(e: DieselError) -> Status {
     }
 }
 
+// A form field to use when distinguishing between "not present" and "present but empty".
 #[derive(Debug, Clone, Copy)]
 pub enum FormFieldPresence<T> {
     Null,      // param present but empty
@@ -61,3 +65,18 @@ where
         }
     }
 }
+
+// Deserialize an Option<Option<T>> where the outer Option indicates presence of the field,
+// and the inner Option is the actual value (Some or None).
+pub fn de_present_option<'de, D, T>(d: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    // If the field is present:
+    // - null -> Option<T>::None
+    // - value -> Option<T>::Some(value)
+    // Then we wrap it in Some(...) to record presence.
+    Ok(Some(Option::<T>::deserialize(d)?))
+}
+
