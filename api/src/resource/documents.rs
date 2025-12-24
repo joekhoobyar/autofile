@@ -1,0 +1,135 @@
+use crate::Db;
+use crate::schema::{documents};
+use crate::util::{diesel_to_http, err, ApiResult};
+
+use serde::{Deserialize, Serialize};
+
+use rocket::serde::json::Json;
+use rocket::form::FromForm;
+
+use rocket_db_pools::Connection;
+use rocket_db_pools::diesel::prelude::*;
+
+use chrono::{DateTime, Utc};
+
+#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
+#[diesel(table_name = documents)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct Document {
+    id: i64,
+
+    title: String,
+    document_type_id: i64,
+
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize, Insertable)]
+#[diesel(table_name = documents)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+struct NewDocument {
+    title: String,
+    document_type_id: i64,
+}
+
+#[derive(Debug, Deserialize, AsChangeset)]
+#[diesel(table_name = documents)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+struct DocumentChangeset {
+    title: Option<String>,
+    document_type_id: Option<i64>,
+    updated_at: Option<DateTime<Utc>>,
+}
+
+#[derive(FromForm)]
+pub struct ListDocumentsQuery {
+    // 1-based page number
+    pub page: Option<i64>,
+    // items per page (cap it)
+    pub per_page: Option<i64>,
+    // optional substring search
+    pub q: Option<String>,
+    document_type_id: Option<i64>,
+}
+
+#[get("/<id>")]
+pub async fn get(mut db: Connection<Db>, id: i64) -> ApiResult<Json<Document>> {
+    let row = documents::table
+        .find(id)
+        .select(Document::as_select())
+        .first::<Document>(&mut db)
+        .await
+        .map_err(|e| err(diesel_to_http(e), "failed to fetch document"))?;
+
+    Ok(Json(row))
+}
+
+#[post("/", format = "json", data = "<input>")]
+async fn create(mut db: Connection<Db>, input: Json<NewDocument>) -> ApiResult<Json<Document>> {
+    let inserted: Document = diesel::insert_into(documents::table)
+        .values(&*input)
+        .returning(Document::as_returning())
+        .get_result(&mut db)
+        .await
+        .map_err(|e| err(diesel_to_http(e), "failed to create document"))?;
+
+    Ok(Json(inserted))
+}
+
+#[patch("/<id>", format = "json", data = "<input>")]
+async fn update(mut db: Connection<Db>, id: i64, input: Json<DocumentChangeset>) -> ApiResult<Json<Document>> {
+    let mut changes = input.into_inner();
+    changes.updated_at = Some(Utc::now());
+
+    // Update + return the updated row in one round-trip.
+    let updated: Document =
+        diesel::update(documents::table.filter(documents::id.eq(id)))
+            .set(&changes)
+            .returning(Document::as_returning())
+            .get_result(&mut db)
+            .await
+            .map_err(|e| err(diesel_to_http(e), "failed to update document"))?;
+
+    Ok(Json(updated))
+}
+
+#[get("/?<params..>")]
+pub async fn list(mut db: Connection<Db>, params: ListDocumentsQuery) -> ApiResult<Json<Vec<Document>>> {
+    let page = params.page.unwrap_or(1).max(1);
+    let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
+    let offset = (page - 1) * per_page;
+
+    // Start with a boxed query so we can conditionally add filters.
+    let mut query = documents::table.into_boxed();
+
+    // Optional search: case-insensitive substring on slug/name/description
+    if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
+        let pattern = format!("%{}%", q);
+        query = query.filter(
+            documents::title.ilike(pattern)
+        );
+    }
+
+    // Filter by document type
+    if let Some(id) = params.document_type_id {
+        query = query.filter(documents::document_type_id.eq(id));
+    }
+
+    let rows = query
+        .order(documents::id.desc())
+        .limit(per_page)
+        .offset(offset)
+        .select(Document::as_select())
+        .load::<Document>(&mut db)
+        .await
+        .map_err(|e| err(diesel_to_http(e), "failed to list documents"))?;
+
+    Ok(Json(rows))
+}
+
+pub fn stage() -> rocket::fairing::AdHoc {
+    rocket::fairing::AdHoc::on_ignite("Autofile documents", |rocket| async {
+        rocket.mount("/documents", routes![list, get, create, update])
+    })
+}

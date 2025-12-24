@@ -24,6 +24,7 @@ mod resource {
     pub mod cabinets;
     pub mod document_types_metadata_types;
     pub mod document_types;
+    pub mod documents;
     pub mod metadata_types;
     pub mod users;
 }
@@ -40,6 +41,7 @@ fn rocket() -> _ {
         .attach(resource::cabinets::stage())
         .attach(resource::document_types_metadata_types::stage())
         .attach(resource::document_types::stage())
+        .attach(resource::documents::stage())
         .attach(resource::metadata_types::stage())
         .attach(resource::users::stage())
 }
