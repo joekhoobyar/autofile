@@ -33,6 +33,13 @@ struct NewDocumentTypeMetadataType {
     required: bool,
 }
 
+#[derive(Debug, Deserialize, AsChangeset)]
+#[diesel(table_name = document_types_metadata_types)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+struct DocumentTypeMetadataTypeChangeset {
+    required: Option<bool>,
+}
+
 #[derive(FromForm)]
 pub struct ListDocumentTypesMetadataTypesQuery {
     // 1-based page number
@@ -45,6 +52,18 @@ pub struct ListDocumentTypesMetadataTypesQuery {
     pub metadata_type_id: Option<i64>,
 }
 
+#[get("/<document_type_id>/<metadata_type_id>")]
+pub async fn get(mut db: Connection<Db>, document_type_id: i64, metadata_type_id: i64) -> ApiResult<Json<DocumentTypeMetadataType>> {
+    let row = document_types_metadata_types::table
+        .find((document_type_id, metadata_type_id))
+        .select(DocumentTypeMetadataType::as_select())
+        .first::<DocumentTypeMetadataType>(&mut db)
+        .await
+        .map_err(|e| err(diesel_to_http(e), "failed to fetch document_type_metadata_type"))?;
+
+    Ok(Json(row))
+}
+
 #[post("/", format = "json", data = "<input>")]
 async fn create(mut db: Connection<Db>, input: Json<NewDocumentTypeMetadataType>) -> ApiResult<Json<DocumentTypeMetadataType>> {
     let inserted: DocumentTypeMetadataType = diesel::insert_into(document_types_metadata_types::table)
@@ -55,6 +74,26 @@ async fn create(mut db: Connection<Db>, input: Json<NewDocumentTypeMetadataType>
         .map_err(|e| err(diesel_to_http(e), "failed to create document_type_metadata_type"))?;
 
     Ok(Json(inserted))
+}
+
+#[patch("/<document_type_id>/<metadata_type_id>", format = "json", data = "<input>")]
+async fn update(mut db: Connection<Db>, document_type_id: i64, metadata_type_id: i64, input: Json<DocumentTypeMetadataTypeChangeset>) -> ApiResult<Json<DocumentTypeMetadataType>> {
+    let mut changes = input.into_inner();
+
+    // Update + return the updated row in one round-trip.
+    let updated: DocumentTypeMetadataType =
+        diesel::update(
+                document_types_metadata_types::table
+                    .filter(document_types_metadata_types::document_type_id.eq(document_type_id))
+                    .filter(document_types_metadata_types::metadata_type_id.eq(metadata_type_id))
+            )
+            .set(&changes)
+            .returning(DocumentTypeMetadataType::as_returning())
+            .get_result(&mut db)
+            .await
+            .map_err(|e| err(diesel_to_http(e), "failed to update metadata_type"))?;
+
+    Ok(Json(updated))
 }
 
 #[get("/?<params..>")]
@@ -100,6 +139,6 @@ pub async fn list(mut db: Connection<Db>, params: ListDocumentTypesMetadataTypes
 
 pub fn stage() -> rocket::fairing::AdHoc {
     rocket::fairing::AdHoc::on_ignite("Autofile document_types_metadata_types", |rocket| async {
-        rocket.mount("/document-types-metadata-types", routes![list, create])
+        rocket.mount("/document-types-metadata-types", routes![list, get, create, update])
     })
 }
