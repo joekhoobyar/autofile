@@ -106,10 +106,7 @@ async fn create(mut db: Connection<Db>, input: Json<NewCabinet>) -> ApiResult<Js
 
 #[patch("/<id>", format = "json", data = "<input>")]
 async fn update(mut db: Connection<Db>, id: i64, input: Json<CabinetChangeset>) -> ApiResult<Json<Cabinet>> {
-    dbg!(&input.parent_id);
-
     let patch = input.into_inner();
-
 
     // Common assignments (no parent_id here)
     let common = (

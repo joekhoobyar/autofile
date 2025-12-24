@@ -35,12 +35,14 @@ pub fn err(status: Status, msg: impl Into<String>) -> Custom<Json<ApiError>> {
 
 // Map a Diesel error to an appropriate HTTP status code.
 pub fn diesel_to_http(e: DieselError) -> Status {
+    println!("Diesel error: {:?}", e);
     match e {
         DieselError::NotFound => Status::NotFound,
         DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => Status::Conflict,
-        DieselError::DatabaseError(DatabaseErrorKind::ForeignKeyViolation, _) => Status::BadRequest,
+        DieselError::DatabaseError(DatabaseErrorKind::NotNullViolation, _) => Status::UnprocessableEntity,
+        DieselError::DatabaseError(DatabaseErrorKind::ForeignKeyViolation, _) => Status::UnprocessableEntity,
+        DieselError::DatabaseError(DatabaseErrorKind::CheckViolation, _) => Status::UnprocessableEntity,
         _ => {
-            println!("Unhandled Diesel error: {:?}", e);
             Status::InternalServerError
         },
     }
