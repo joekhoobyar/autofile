@@ -1,7 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { createBrowserRouter, Outlet, RouterProvider } from 'react-router-dom';
 import './index.scss'
-import App from './App.tsx'
+import Navigation from './navigation.tsx';
 import {
   QueryClient,
   QueryClientProvider,
@@ -9,6 +10,7 @@ import {
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 
 import './App.scss'
+import { ListCabinets } from './pages/cabinets.tsx';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,11 +21,30 @@ const queryClient = new QueryClient({
   },
 });
 
+export function Layout() {
+  return (
+    <>
+      <Navigation />
+      <Outlet />
+    </>
+  );
+}
+
+const router = createBrowserRouter([
+  {
+    path: '/',
+    element: <Layout />,
+    children: [
+      { index: true, element: <ListCabinets/> },
+    ],
+  },
+]);
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <ReactQueryDevtools />
-      <App />
+      <RouterProvider router={router} />
     </QueryClientProvider>
   </StrictMode>,
 )
