@@ -1,6 +1,7 @@
 use rocket::{http::Status, response::Responder, Request};
 use rocket::serde::json::Json;
 use rocket::response::status::Custom;
+use rocket::form::{self, FromFormField, ValueField};
 
 use diesel::result::{DatabaseErrorKind, Error as DieselError};
 
@@ -39,5 +40,24 @@ pub fn diesel_to_http(e: DieselError) -> Status {
             println!("Unhandled Diesel error: {:?}", e);
             Status::InternalServerError
         },
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum FormFieldPresence<T> {
+    Null,      // param present but empty
+    Value(T),
+}
+
+impl<'v, T> FromFormField<'v> for FormFieldPresence<T>
+where
+    T: FromFormField<'v>,
+{
+    fn from_value(field: ValueField<'v>) -> form::Result<'v, Self> {
+        if field.value.is_empty() {
+            Ok(FormFieldPresence::Null)
+        } else {
+            Ok(FormFieldPresence::Value(T::from_value(field)?))
+        }
     }
 }

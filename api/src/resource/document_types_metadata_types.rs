@@ -91,7 +91,7 @@ async fn update(mut db: Connection<Db>, document_type_id: i64, metadata_type_id:
             .returning(DocumentTypeMetadataType::as_returning())
             .get_result(&mut db)
             .await
-            .map_err(|e| err(diesel_to_http(e), "failed to update metadata_type"))?;
+            .map_err(|e| err(diesel_to_http(e), "failed to update document_type_metadata_type"))?;
 
     Ok(Json(updated))
 }
@@ -107,7 +107,7 @@ async fn delete(mut db: Connection<Db>, document_type_id: i64, metadata_type_id:
         )
         .execute(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to update metadata_type"))?;
+        .map_err(|e| err(diesel_to_http(e), "failed to delete document_type_metadata_type"))?;
 
     if affected == 0 {
         return Err(err(rocket::http::Status::NotFound, "document_type_metadata_type not found"));

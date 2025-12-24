@@ -8,6 +8,7 @@ diesel::table! {
         description -> Nullable<Varchar>,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        parent_id -> Nullable<Int8>,
     }
 }
 

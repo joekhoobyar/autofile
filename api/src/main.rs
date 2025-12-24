@@ -21,8 +21,6 @@ fn database_url(figment: &Figment, db_name: &str) -> Option<String> {
 
 mod schema;
 mod resource {
-    pub mod base;
-
     pub mod cabinets;
     pub mod document_types_metadata_types;
     pub mod document_types;
