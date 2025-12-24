@@ -3,18 +3,34 @@ import { useQuery } from '@tanstack/react-query'
 
 import './App.scss'
 
+interface Cabinet {
+  id: number
+  slug: string
+  name: string
+  description: string
+}
+
 export default function App() {
   return (
-    <Example />
+    <ListCabinets/>
   )
 }
 
-function Example() {
+function ListItemCabinet(cabinet: Cabinet) {
+  return (
+    <li>
+      <header>{cabinet.name}</header>
+      <p>{cabinet.description}</p>
+    </li>
+  )
+}
+
+function ListCabinets() {
   const { isPending, error, data, isFetching } = useQuery({
-    queryKey: ['repoData'],
+    queryKey: ['cabinets', 'list'],
     queryFn: async () => {
       const response = await fetch(
-        'https://api.github.com/repos/TanStack/query',
+        'http://localhost:8000/cabinets',
       )
       return await response.json()
     },
@@ -25,13 +41,11 @@ function Example() {
   if (error) return 'An error has occurred: ' + error.message
 
   return (
-    <div>
-      <h1>{data.full_name}</h1>
-      <p>{data.description}</p>
-      <strong>👀 {data.subscribers_count}</strong>{' '}
-      <strong>✨ {data.stargazers_count}</strong>{' '}
-      <strong>🍴 {data.forks_count}</strong>
-      <div>{isFetching ? 'Updating...' : ''}</div>
-    </div>
+    <ul>
+      {data.map((cabinet: Cabinet) => (
+        <ListItemCabinet key={cabinet.id} {...cabinet} />
+      ))}
+      {isFetching ? 'Updating...' : null}
+    </ul>
   )
 }
