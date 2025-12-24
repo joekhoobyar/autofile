@@ -21,7 +21,10 @@ fn database_url(figment: &Figment, db_name: &str) -> Option<String> {
 
 mod schema;
 mod resource {
+    pub mod base;
+
     pub mod cabinets;
+    pub mod document_types_metadata_types;
     pub mod document_types;
     pub mod metadata_types;
     pub mod users;
@@ -37,6 +40,7 @@ fn rocket() -> _ {
         .attach(rocket::fairing::AdHoc::try_on_ignite("Diesel Migrations", run_migrations))
         .mount("/", routes![index, health_ready])
         .attach(resource::cabinets::stage())
+        .attach(resource::document_types_metadata_types::stage())
         .attach(resource::document_types::stage())
         .attach(resource::metadata_types::stage())
         .attach(resource::users::stage())
