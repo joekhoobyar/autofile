@@ -1,14 +1,8 @@
 // import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useCabinets } from './queries/useCabinets'
+import { type Cabinet } from './models/cabinet'
 
 import './App.scss'
-
-interface Cabinet {
-  id: number
-  slug: string
-  name: string
-  description: string
-}
 
 export default function App() {
   return (
@@ -26,22 +20,14 @@ function ListItemCabinet(cabinet: Cabinet) {
 }
 
 function ListCabinets() {
-  const { isPending, error, data, isFetching } = useQuery({
-    queryKey: ['cabinets', 'list'],
-    queryFn: async () => {
-      const response = await fetch(
-        'http://localhost:8000/cabinets',
-      )
-      return await response.json()
-    },
-  })
+  const { isPending, error, data, isFetching } = useCabinets();
 
   if (isPending) return 'Loading...'
 
   if (error) return 'An error has occurred: ' + error.message
 
   return (
-    <ul>
+    <ul className="model-list cabinets">
       {data.map((cabinet: Cabinet) => (
         <ListItemCabinet key={cabinet.id} {...cabinet} />
       ))}
