@@ -43,7 +43,7 @@ pub fn diesel_to_http(e: DieselError) -> Status {
         DieselError::DatabaseError(DatabaseErrorKind::ForeignKeyViolation, _) => Status::UnprocessableEntity,
         DieselError::DatabaseError(DatabaseErrorKind::CheckViolation, _) => Status::UnprocessableEntity,
         _ => {
-            Status::InternalServerError
+            Status::BadRequest
         },
     }
 }
