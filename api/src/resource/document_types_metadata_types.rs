@@ -78,7 +78,7 @@ async fn create(mut db: Connection<Db>, input: Json<NewDocumentTypeMetadataType>
 
 #[patch("/<document_type_id>/<metadata_type_id>", format = "json", data = "<input>")]
 async fn update(mut db: Connection<Db>, document_type_id: i64, metadata_type_id: i64, input: Json<DocumentTypeMetadataTypeChangeset>) -> ApiResult<Json<DocumentTypeMetadataType>> {
-    let mut changes = input.into_inner();
+    let changes = input.into_inner();
 
     // Update + return the updated row in one round-trip.
     let updated: DocumentTypeMetadataType =
@@ -94,6 +94,26 @@ async fn update(mut db: Connection<Db>, document_type_id: i64, metadata_type_id:
             .map_err(|e| err(diesel_to_http(e), "failed to update metadata_type"))?;
 
     Ok(Json(updated))
+}
+
+#[delete("/<document_type_id>/<metadata_type_id>", format = "json")]
+async fn delete(mut db: Connection<Db>, document_type_id: i64, metadata_type_id: i64) -> ApiResult<Json<()>> {
+
+    // Update + return the updated row in one round-trip.
+    let affected = diesel::delete(
+            document_types_metadata_types::table
+                .filter(document_types_metadata_types::document_type_id.eq(document_type_id))
+                .filter(document_types_metadata_types::metadata_type_id.eq(metadata_type_id))
+        )
+        .execute(&mut db)
+        .await
+        .map_err(|e| err(diesel_to_http(e), "failed to update metadata_type"))?;
+
+    if affected == 0 {
+        return Err(err(rocket::http::Status::NotFound, "document_type_metadata_type not found"));
+    }
+
+    Ok(Json(()))
 }
 
 #[get("/?<params..>")]
@@ -139,6 +159,6 @@ pub async fn list(mut db: Connection<Db>, params: ListDocumentTypesMetadataTypes
 
 pub fn stage() -> rocket::fairing::AdHoc {
     rocket::fairing::AdHoc::on_ignite("Autofile document_types_metadata_types", |rocket| async {
-        rocket.mount("/document-types-metadata-types", routes![list, get, create, update])
+        rocket.mount("/document-types-metadata-types", routes![list, get, create, update, delete])
     })
 }
