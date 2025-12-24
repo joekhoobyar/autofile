@@ -1,8 +1,10 @@
 #[macro_use] extern crate rocket;
 
-use rocket::http::Status;
+use rocket::http::{Status, Method};
 use rocket::serde::json::Json;
 use rocket::figment::Figment;
+
+use rocket_cors::{AllowedOrigins, CorsOptions};
 
 use rocket_db_pools::{Connection, Database};
 use rocket_db_pools::diesel::{PgPool, prelude::*};
@@ -34,8 +36,20 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 #[launch]
 fn rocket() -> _ {
+
+    let cors = CorsOptions::default()
+        .allowed_origins(AllowedOrigins::all())
+        .allowed_methods(
+            vec![Method::Get, Method::Post, Method::Patch, Method::Delete, Method::Options]
+                .into_iter()
+                .map(From::from)
+                .collect(),
+        )
+        .allow_credentials(true);
+
     rocket::build()
         .attach(Db::init())
+        .attach(cors.to_cors().unwrap())
         .attach(rocket::fairing::AdHoc::try_on_ignite("Diesel Migrations", run_migrations))
         .mount("/", routes![index, health_ready])
         .attach(resource::cabinets::stage())
