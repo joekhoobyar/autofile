@@ -9,7 +9,9 @@ import {
 } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 
+import { PrimeReactProvider } from 'primereact/api';
 import './App.scss'
+import 'primereact/resources/themes/md-dark-indigo/theme.css';
 import { ListCabinets } from './pages/cabinets.tsx';
 
 const queryClient = new QueryClient({
@@ -44,7 +46,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <ReactQueryDevtools />
-      <RouterProvider router={router} />
+      <PrimeReactProvider>
+        <RouterProvider router={router} />
+      </PrimeReactProvider>
     </QueryClientProvider>
   </StrictMode>,
 )
