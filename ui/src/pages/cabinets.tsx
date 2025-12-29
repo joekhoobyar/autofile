@@ -15,7 +15,7 @@ export function ListCabinets() {
   return (
     <div className="card">
       <DataTable value={data} rows={data?.length} loading={isPending || isFetching}>
-        <Column header="Name" body={nameTemplate} sortable></Column>
+        <Column field="name" header="Name" body={nameTemplate} sortable></Column>
         <Column field="description" header="Description" sortable></Column>
       </DataTable>
     </div>
