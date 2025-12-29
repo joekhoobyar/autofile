@@ -46,6 +46,24 @@ struct MetadataTypeChangeset {
     updated_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Clone, Copy, FromFormField)]
+pub enum MetadataTypeSortField {
+    #[field(value="id")]
+    Id,
+    #[field(value="slug")]
+    Slug,
+    #[field(value="name")]
+    Name,
+    #[field(value="data_type")]
+    DataType,
+    #[field(value="description")]
+    Description,
+    #[field(value="created_at")]
+    CreatedAt,
+    #[field(value="updated_at")]
+    UpdatedAt,
+}
+
 #[derive(FromForm)]
 pub struct ListMetadataTypesQuery {
     // 1-based page number
@@ -54,6 +72,10 @@ pub struct ListMetadataTypesQuery {
     pub per_page: Option<i64>,
     // optional substring search
     pub q: Option<String>,
+    // optional sort field
+    pub sf: Option<MetadataTypeSortField>,
+    // optional sort descending
+    pub sd: Option<bool>,
 }
 
 #[get("/<id>")]
@@ -111,6 +133,8 @@ async fn update(mut db: Connection<Db>, id: i64, input: Json<MetadataTypeChanges
 
 #[get("/?<params..>")]
 pub async fn list(mut db: Connection<Db>, params: ListMetadataTypesQuery) -> ApiResult<Json<ResourceList<MetadataType>>> {
+    println!("sort: {:?} dir: {:?} q: {:?}", params.sf, params.sd, params.q);
+
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
@@ -140,8 +164,40 @@ pub async fn list(mut db: Connection<Db>, params: ListMetadataTypesQuery) -> Api
         .await
         .map_err(|e| err(diesel_to_http(e), "failed to count metadata_types"))?;
 
-    let items= base_filter()
-        .order(metadata_types::id.desc())
+    let mut query: metadata_types::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
+    query = match (params.sf, params.sd) {
+        (Some(MetadataTypeSortField::Slug), Some(true)) =>
+            query.order((metadata_types::slug.desc(), metadata_types::id.asc())), // tie-breaker
+        (Some(MetadataTypeSortField::Slug), _) =>
+            query.order((metadata_types::slug.asc(), metadata_types::id.asc())), // tie-breaker
+        (Some(MetadataTypeSortField::Name), Some(true)) =>
+            query.order((metadata_types::name.desc(), metadata_types::id.asc())), // tie-breaker
+        (Some(MetadataTypeSortField::Name), _) =>
+            query.order((metadata_types::name.asc(), metadata_types::id.asc())), // tie-breaker
+        (Some(MetadataTypeSortField::DataType), Some(true)) =>
+            query.order((metadata_types::data_type.desc(), metadata_types::id.asc())), // tie-breaker
+        (Some(MetadataTypeSortField::DataType), _) =>
+            query.order((metadata_types::data_type.asc(), metadata_types::id.asc())), // tie-breaker
+        (Some(MetadataTypeSortField::Description), Some(true)) =>
+            query.order((metadata_types::description.desc(), metadata_types::id.asc())), // tie-breaker
+        (Some(MetadataTypeSortField::Description), _) =>
+            query.order((metadata_types::description.asc(), metadata_types::id.asc())), // tie-breaker
+        (Some(MetadataTypeSortField::CreatedAt), Some(true)) =>
+            query.order((metadata_types::created_at.desc(), metadata_types::id.asc())), // tie-breaker
+        (Some(MetadataTypeSortField::CreatedAt), _) =>
+            query.order((metadata_types::created_at.asc(), metadata_types::id.asc())), // tie-breaker
+        (Some(MetadataTypeSortField::UpdatedAt), Some(true)) =>
+            query.order((metadata_types::updated_at.desc(), metadata_types::id.asc())), // tie-breaker
+        (Some(MetadataTypeSortField::UpdatedAt), _) =>
+            query.order((metadata_types::updated_at.asc(), metadata_types::id.asc())), // tie-breaker
+
+        (Some(MetadataTypeSortField::Id), Some(true)) =>
+            query.order(metadata_types::id.desc()),
+        _ =>
+            query.order(metadata_types::id.asc()),
+    };
+
+    let items= query
         .limit(per_page)
         .offset(offset)
         .select(MetadataType::as_select())
