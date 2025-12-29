@@ -1,10 +1,15 @@
-import { useMetadataTypes } from '../queries/useMetadataTypes';
-import { type MetadataType } from '../models/metadataType';
-import { DataTable } from 'primereact/datatable';
+import { useState } from 'react';
+import { DataTable, type DataTableStateEvent } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 
+
+import type { ListParams } from '../api';
+import { useMetadataTypes } from '../queries/useMetadataTypes';
+import { type MetadataType } from '../models/metadataType';
+
 export function ListMetadataTypes() {
-  const { isPending, data, isFetching } = useMetadataTypes();
+  const [listParams, setListParams] = useState<ListParams>({});
+  const { isPending, data, isFetching } = useMetadataTypes(listParams);
 
   const slugTemplate = (c: MetadataType) => {
     return (
@@ -18,9 +23,20 @@ export function ListMetadataTypes() {
     );
   }
 
+  const onSort = (event: DataTableStateEvent) => {
+    const p = { 
+      ...listParams,
+      sf: event.sortField as string,
+      sd: event.sortOrder === -1,
+    };
+    setListParams(p);
+  };
+
   return (
     <div className="card">
-      <DataTable value={data?.items} rows={data?.items?.length} loading={isPending || isFetching}>
+      <DataTable lazy value={data?.items} rows={data?.items?.length} loading={isPending || isFetching}
+          onSort={onSort} sortField={listParams.sf} sortOrder={listParams.sd===true ? -1 : 1}
+        >
         <Column field="slug" header="Slug" body={slugTemplate} sortable></Column>
         <Column field="name" header="Name" body={nameTemplate} sortable></Column>
         <Column field="data_type" header="Data Type" sortable></Column>
