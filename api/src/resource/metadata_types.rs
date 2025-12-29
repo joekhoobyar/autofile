@@ -1,6 +1,6 @@
 use crate::Db;
 use crate::schema::{metadata_types};
-use crate::util::{diesel_to_http, err, ApiResult};
+use crate::util::{diesel_to_http, err, ApiResult, ResourceList};
 
 use serde::{Deserialize, Serialize};
 
@@ -110,26 +110,37 @@ async fn update(mut db: Connection<Db>, id: i64, input: Json<MetadataTypeChanges
 }
 
 #[get("/?<params..>")]
-pub async fn list(mut db: Connection<Db>, params: ListMetadataTypesQuery) -> ApiResult<Json<Vec<MetadataType>>> {
+pub async fn list(mut db: Connection<Db>, params: ListMetadataTypesQuery) -> ApiResult<Json<ResourceList<MetadataType>>> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
 
-    // Start with a boxed query so we can conditionally add filters.
-    let mut query = metadata_types::table.into_boxed();
+    let base_filter =  || -> metadata_types::BoxedQuery<'_, diesel::pg::Pg> {
+        // Start with a boxed query so we can conditionally add filters.
+        let query= metadata_types::table.into_boxed();
 
-    // Optional search: case-insensitive substring on slug/name/description
-    if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
-        let pattern = format!("%{}%", q);
-        query = query.filter(
-            metadata_types::slug.ilike(pattern.clone())
-                .or(metadata_types::name.ilike(pattern.clone()))
-                .or(metadata_types::data_type.ilike(pattern.clone()))
-                .or(metadata_types::description.ilike(pattern)),
-        );
-    }
+        // Optional search: case-insensitive substring on slug/name/description
+        if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
+            let pattern = format!("%{}%", q);
+            query.filter(
+                metadata_types::slug.ilike(pattern.clone())
+                    .or(metadata_types::name.ilike(pattern.clone()))
+                    .or(metadata_types::data_type.ilike(pattern.clone()))
+                    .or(metadata_types::description.ilike(pattern)),
+            )
+        } else { 
+            query
+        }
+    };
 
-    let rows = query
+
+    let total = base_filter()
+        .count()
+        .get_result::<i64>(&mut db)
+        .await
+        .map_err(|e| err(diesel_to_http(e), "failed to count metadata_types"))?;
+
+    let items= base_filter()
         .order(metadata_types::id.desc())
         .limit(per_page)
         .offset(offset)
@@ -138,7 +149,7 @@ pub async fn list(mut db: Connection<Db>, params: ListMetadataTypesQuery) -> Api
         .await
         .map_err(|e| err(diesel_to_http(e), "failed to list metadata_types"))?;
 
-    Ok(Json(rows))
+    Ok(Json(ResourceList { total, page, per_page, items }))
 }
 
 pub fn stage() -> rocket::fairing::AdHoc {

@@ -8,6 +8,14 @@ use rocket::serde::Deserialize;
 use diesel::result::{DatabaseErrorKind, Error as DieselError};
 
 #[derive(Debug, serde::Serialize)]
+pub struct ResourceList<T> {
+    pub total: i64,
+    pub page: i64,
+    pub per_page: i64,
+    pub items: Vec<T>,
+}
+
+#[derive(Debug, serde::Serialize)]
 pub struct ApiError {
     pub status: Status,
     pub message: String,
