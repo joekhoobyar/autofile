@@ -1,14 +1,19 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { data, useNavigate } from 'react-router-dom';
+
 import { DataTable, type DataTableStateEvent } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
 import { FloatLabel } from 'primereact/floatlabel';
+import { classNames } from 'primereact/utils';
 
 import type { ListParams } from '../api';
 import { useMetadataTypes } from '../queries/useMetadataTypes';
 import { type MetadataType } from '../models/metadataType';
+import { Dropdown } from 'primereact/dropdown';
 
 export function ListMetadataTypes() {
   const [listParams, setListParams] = useState<ListParams>({});
@@ -52,27 +57,147 @@ export function ListMetadataTypes() {
 
 export function NewMetadataType() {
   const [metadataType, ] = useState<Partial<MetadataType>>({});
+  const navigate = useNavigate();
+
   const footer = (
     <>
-        <Button label="Save" icon="pi pi-check" />
-        <Button label="Cancel" severity="secondary" icon="pi pi-times" style={{ marginLeft: '0.5em' }} />
+        <Button label="Save" icon="pi pi-check" onClick={() => console.log(metadataType)} />
+        <Button label="Cancel" severity="secondary" icon="pi pi-times" style={{ marginLeft: '0.5em' }} onClick={() => navigate('/metadata-types')} />
     </>
   );
 
   return (
     <Card title="New Metadata Type" footer={footer}>
-      <FloatLabel className="mt-1">
-        <InputText id="slug" value={metadataType.slug}></InputText>
-        <label htmlFor="slug">Slug</label>
-      </FloatLabel>
-      <FloatLabel className="mt-4">
-        <InputText id="name" value={metadataType.name}></InputText>
-        <label htmlFor="name">Name</label>
-      </FloatLabel>
-      <FloatLabel className="mt-4">
-        <InputText id="description" value={metadataType.description}></InputText>
-        <label htmlFor="description">Description</label>
-      </FloatLabel>
+      <MetadataTypeForm />
     </Card>
+  );
+}
+
+function MetadataTypeForm() {
+  const {
+    control,
+    handleSubmit,
+    formState: { errors, isSubmitting, isValid, isDirty },
+    reset,
+  } = useForm<Partial<MetadataType>>({
+    mode: 'onChange', // validate as user types
+    defaultValues: {
+      name: '',
+      slug: '',
+    },
+  });
+
+  const onSubmit = async (data: Partial<MetadataType>) => {
+    // pretend API call
+    console.log('submit', data);
+  };
+
+  // PrimeReact-friendly error helper
+  const errMsg = (name: keyof Partial<MetadataType>) =>
+    errors[name]?.message ? String(errors[name]?.message) : null;
+
+  const data_type_options = [
+    { label: 'String', value: 'string' },
+    { label: 'Integer', value: 'integer' },
+    { label: 'Decimal', value: 'float' },
+    { label: 'Boolean', value: 'boolean' },
+    { label: 'Date', value: 'date' },
+  ];
+
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="p-fluid">
+      <div className="grid">
+
+        {/* Slug */}
+        <div className="col-12 md:col-6 lg:col-4">
+          <label htmlFor="slug" className="font-medium mb-2 block">Slug</label>
+          <Controller
+            name="slug"
+            control={control}
+            rules={{
+              required: 'Slug is required',
+              minLength: { value: 2, message: 'Slug must be at least 2 characters' },
+            }}
+            render={({ field }) => (
+              <InputText
+                id="slug"
+                {...field}
+                className={classNames({ 'p-invalid': !!errors.slug })}
+                placeholder="Field identifier"
+                autoComplete="slug"
+              />
+            )}
+          />
+          {errMsg('slug') && <small className="p-error">{errMsg('slug')}</small>}
+        </div>
+
+        {/* Name */}
+        <div className="col-12 md:col-6 lg:col-4">
+          <label htmlFor="name" className="font-medium mb-2 block">Name</label>
+          <Controller
+            name="name"
+            control={control}
+            rules={{
+              required: 'Name is required',
+              minLength: { value: 2, message: 'Name must be at least 2 characters' },
+            }}
+            render={({ field }) => (
+              <InputText
+                id="name"
+                {...field}
+                className={classNames({ 'p-invalid': !!errors.name })}
+                placeholder="Field name"
+                autoComplete="name"
+              />
+            )}
+          />
+          {errMsg('name') && <small className="p-error">{errMsg('name')}</small>}
+        </div>
+
+        {/* Data type */}
+        <div className="col-12 md:col-6 lg:col-4">
+          <label htmlFor="data_type" className="font-medium mb-2 block">Data Type</label>
+          <Controller
+            name="data_type"
+            control={control}
+            rules={{
+              required: 'Data type is required',
+            }}
+            render={({ field }) => (
+              <Dropdown
+                id="data_type"
+                {...field}
+                className={classNames({ 'p-invalid': !!errors.data_type })}
+                placeholder="Data type"
+                options={data_type_options}
+                autoComplete="data_type"
+              />
+            )}
+          />
+          {errMsg('data_type') && <small className="p-error">{errMsg('data_type')}</small>}
+        </div>
+
+        {/* Description */}
+        <div className="col-12 md:col-6">
+          <label htmlFor="description" className="font-medium mb-2 block">Description</label>
+          <Controller
+            name="description"
+            control={control}
+            render={({ field }) => (
+              <InputText
+                id="description"
+                {...field}
+                className={classNames({ 'p-invalid': !!errors.description })}
+                placeholder="Field description"
+                autoComplete="description"
+              />
+            )}
+          />
+          {errMsg('description') && <small className="p-error">{errMsg('description')}</small>}
+        </div>
+
+      </div>
+    </form>
   );
 }
