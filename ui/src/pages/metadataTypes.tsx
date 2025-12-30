@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { DataTable, type DataTableStateEvent } from 'primereact/datatable';
 import { Column } from 'primereact/column';
-
+import { Card } from 'primereact/card';
+import { Button } from 'primereact/button';
+import { InputText } from 'primereact/inputtext';
+import { FloatLabel } from 'primereact/floatlabel';
 
 import type { ListParams } from '../api';
 import { useMetadataTypes } from '../queries/useMetadataTypes';
@@ -32,7 +35,7 @@ export function ListMetadataTypes() {
   };
 
   return (
-    <div className="card">
+    <Card title="Metadata Types">
       <DataTable lazy value={data?.items}
           onPage={onPage} paginator={true} first={0} rows={data?.per_page} totalRecords={data?.total}
           loading={isPending || isFetching}
@@ -43,6 +46,33 @@ export function ListMetadataTypes() {
         <Column field="data_type" header="Data Type" sortable></Column>
         <Column field="description" header="Description" sortable></Column>
       </DataTable>
-    </div>
+    </Card>
+  );
+}
+
+export function NewMetadataType() {
+  const [metadataType, ] = useState<Partial<MetadataType>>({});
+  const footer = (
+    <>
+        <Button label="Save" icon="pi pi-check" />
+        <Button label="Cancel" severity="secondary" icon="pi pi-times" style={{ marginLeft: '0.5em' }} />
+    </>
+  );
+
+  return (
+    <Card title="New Metadata Type" footer={footer}>
+      <FloatLabel className="mb-4">
+        <InputText id="slug" value={metadataType.slug}></InputText>
+        <label htmlFor="slug">Slug</label>
+      </FloatLabel>
+      <FloatLabel className="mb-4">
+        <InputText id="name" value={metadataType.name}></InputText>
+        <label htmlFor="name">Name</label>
+      </FloatLabel>
+      <FloatLabel className="mb-4">
+        <InputText id="description" value={metadataType.description}></InputText>
+        <label htmlFor="description">Description</label>
+      </FloatLabel>
+    </Card>
   );
 }

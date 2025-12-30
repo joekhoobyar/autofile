@@ -1,13 +1,16 @@
 // framework
 import { createBrowserRouter, Outlet, RouterProvider } from 'react-router-dom';
 import { PrimeReactProvider } from 'primereact/api';
-import 'primereact/resources/themes/md-dark-indigo/theme.css';
-
+import 'bootstrap/scss/bootstrap.scss';
+import 'primereact/resources/themes/bootstrap4-dark-blue/theme.css';
+import 'primereact/resources/primereact.min.css';
+import 'primeicons/primeicons.css';
+        
 // app
 import Navigation from './navigation.tsx';
 import './App.scss'
 import { ListCabinets } from './pages/cabinets.tsx';
-import { ListMetadataTypes } from './pages/metadataTypes.tsx';
+import { ListMetadataTypes, NewMetadataType } from './pages/metadataTypes.tsx';
 
 export function Layout() {
   return (
@@ -32,6 +35,7 @@ const router = createBrowserRouter([
       { path: 'metadata-types', 
         children: [
           { index: true, element: <ListMetadataTypes/> },
+          { path: 'new', element: <NewMetadataType/> },
         ]
       }
     ],
