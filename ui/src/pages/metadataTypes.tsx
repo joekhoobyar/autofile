@@ -56,24 +56,16 @@ export function ListMetadataTypes() {
 }
 
 export function NewMetadataType() {
-  const [metadataType, ] = useState<Partial<MetadataType>>({});
-  const navigate = useNavigate();
-
-  const footer = (
-    <>
-        <Button label="Save" icon="pi pi-check" onClick={() => console.log(metadataType)} />
-        <Button label="Cancel" severity="secondary" icon="pi pi-times" style={{ marginLeft: '0.5em' }} onClick={() => navigate('/metadata-types')} />
-    </>
-  );
 
   return (
-    <Card title="New Metadata Type" footer={footer}>
+    <Card title="New Metadata Type">
       <MetadataTypeForm />
     </Card>
   );
 }
 
 function MetadataTypeForm() {
+  const navigate = useNavigate();
   const {
     control,
     handleSubmit,
@@ -106,8 +98,8 @@ function MetadataTypeForm() {
 
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="p-fluid">
-      <div className="grid">
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <div className="grid p-fluid">
 
         {/* Slug */}
         <div className="col-12 md:col-6 lg:col-4">
@@ -196,8 +188,12 @@ function MetadataTypeForm() {
           />
           {errMsg('description') && <small className="p-error">{errMsg('description')}</small>}
         </div>
-
       </div>
+
+      <br/>
+
+      <Button label="Save" type="submit" icon="pi pi-check" disabled={!isDirty || !isValid || isSubmitting} />
+      <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" style={{ marginLeft: '0.5em' }} onClick={() => navigate('/metadata-types')} />
     </form>
   );
 }
