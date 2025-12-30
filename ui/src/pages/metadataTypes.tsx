@@ -24,17 +24,18 @@ export function ListMetadataTypes() {
   }
 
   const onSort = (event: DataTableStateEvent) => {
-    const p = { 
-      ...listParams,
-      sf: event.sortField as string,
-      sd: event.sortOrder === -1,
-    };
-    setListParams(p);
+    setListParams({ ...listParams, sf: event.sortField as string, sd: event.sortOrder === -1 });
+  };
+
+  const onPage = (event: DataTableStateEvent) => {
+    setListParams({ ...listParams, page: event.page, per_page: event.rows });
   };
 
   return (
     <div className="card">
-      <DataTable lazy value={data?.items} rows={data?.items?.length} loading={isPending || isFetching}
+      <DataTable lazy value={data?.items}
+          onPage={onPage} paginator={true} first={0} rows={data?.per_page} totalRecords={data?.total}
+          loading={isPending || isFetching}
           onSort={onSort} sortField={listParams.sf} sortOrder={listParams.sd===true ? -1 : 1}
         >
         <Column field="slug" header="Slug" body={slugTemplate} sortable></Column>
