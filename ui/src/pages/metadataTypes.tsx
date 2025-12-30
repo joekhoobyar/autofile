@@ -61,15 +61,15 @@ export function NewMetadataType() {
 
   return (
     <Card title="New Metadata Type" footer={footer}>
-      <FloatLabel className="mb-4">
+      <FloatLabel className="mt-1">
         <InputText id="slug" value={metadataType.slug}></InputText>
         <label htmlFor="slug">Slug</label>
       </FloatLabel>
-      <FloatLabel className="mb-4">
+      <FloatLabel className="mt-4">
         <InputText id="name" value={metadataType.name}></InputText>
         <label htmlFor="name">Name</label>
       </FloatLabel>
-      <FloatLabel className="mb-4">
+      <FloatLabel className="mt-4">
         <InputText id="description" value={metadataType.description}></InputText>
         <label htmlFor="description">Description</label>
       </FloatLabel>
