@@ -10,24 +10,26 @@ import { InputText } from 'primereact/inputtext';
 import { classNames } from 'primereact/utils';
 
 import type { HttpError, ListParams } from '../api';
-import { useMetadataTypes, useSaveMetadataType } from '../queries/useMetadataTypes';
+import { useMetadataType, useMetadataTypes, useSaveMetadataType } from '../queries/useMetadataTypes';
 import { type MetadataType } from '../models/metadataType';
 import { Dropdown } from 'primereact/dropdown';
 import { Message } from 'primereact/message';
+import { useId } from '../util';
 
 export function ListMetadataTypes() {
   const [listParams, setListParams] = useState<ListParams>({});
+  const navigate = useNavigate();
   const { isPending, data, isFetching } = useMetadataTypes(listParams);
 
   const slugTemplate = (c: MetadataType) => {
     return (
-      <a className="title" onClick={() => console.log(c.slug)}>{c.slug}</a>
+      <a className="title" onClick={() => navigate(`${c.id}/edit`)}>{c.slug}</a>
     );
   }
 
   const nameTemplate = (c: MetadataType) => {
     return (
-      <a className="title" onClick={() => console.log(c.name)}>{c.name}</a>
+      <a className="title" onClick={() => navigate(`${c.id}/edit`)}>{c.name}</a>
     );
   }
 
@@ -51,6 +53,24 @@ export function ListMetadataTypes() {
         <Column field="data_type" header="Data Type" sortable></Column>
         <Column field="description" header="Description" sortable></Column>
       </DataTable>
+    </Card>
+  );
+}
+
+export function EditMetadataType() {
+  const id = useId('id');
+  const { isLoading, isError, data, error } = useMetadataType(id);
+
+  if (!id)
+    return <Message severity="error" text="Missing or invalid ID" />;
+  if (isError)
+    return <Message severity="error" text={error.message} />
+  if (isLoading)
+    return <div>Loading</div>;
+
+  return (
+    <Card title="Edit Metadata Type">
+      { !isLoading && !isError && <MetadataTypeForm data={data} /> }
     </Card>
   );
 }

@@ -11,7 +11,7 @@ import 'primeflex/primeflex.css';
 import Navigation from './navigation.tsx';
 import './App.scss'
 import { ListCabinets } from './pages/cabinets.tsx';
-import { ListMetadataTypes, NewMetadataType } from './pages/metadataTypes.tsx';
+import { EditMetadataType, ListMetadataTypes, NewMetadataType } from './pages/metadataTypes.tsx';
 
 export function Layout() {
   return (
@@ -37,6 +37,7 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <ListMetadataTypes/> },
           { path: 'new', element: <NewMetadataType/> },
+          { path: ':id/edit', element: <EditMetadataType/> },
         ]
       }
     ],
