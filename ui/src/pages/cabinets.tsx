@@ -1,58 +1,48 @@
-import { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
-import { DataTable, type DataTableStateEvent } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
 import { classNames } from 'primereact/utils';
 
-import type { HttpError, ListParams } from '../api';
-import { useCabinet, useCabinets, useSaveCabinet } from '../queries/useCabinets';
-import { type Cabinet } from '../models/cabinet';
+import type { HttpError } from '../api';
+import { useCabinet, useCabinets, useCabinetTree, useSaveCabinet } from '../queries/useCabinets';
+import { MAX_CABINETS, type Cabinet } from '../models/cabinet';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
+import { TreeTable } from 'primereact/treetable';
+import { Dropdown } from 'primereact/dropdown';
+import type { TreeNode } from 'primereact/treenode';
 
 export function ListCabinets() {
-  const [listParams, setListParams] = useState<ListParams>({});
   const navigate = useNavigate();
-  const { isPending, data, isFetching } = useCabinets(listParams);
+  const { isPending, data, isFetching } = useCabinetTree();
 
-  const slugTemplate = (c: Cabinet) => {
+  const slugTemplate = (c: TreeNode) => {
     return (
-      <a className="title" onClick={() => navigate(`${c.id}/edit`)}>{c.slug}</a>
+      <a className="title" onClick={() => navigate(`${c.data.id}/edit`)}>{c.data.slug}</a>
     );
   }
 
-  const nameTemplate = (c: Cabinet) => {
+  const nameTemplate = (c: TreeNode) => {
     return (
-      <a className="title" onClick={() => navigate(`${c.id}/edit`)}>{c.name}</a>
+      <a className="title" onClick={() => navigate(`${c.data.id}/edit`)}>{c.data.name}</a>
     );
   }
-
-  const onSort = (event: DataTableStateEvent) => {
-    setListParams({ ...listParams, sf: event.sortField as string, sd: event.sortOrder === -1 });
-  };
-
-  const onPage = (event: DataTableStateEvent) => {
-    setListParams({ ...listParams, page: event.page, per_page: event.rows });
-  };
 
   return (
     <>
     <Link to="new" style={{float: 'right', padding: '1.5rem'}}>New Cabinet &raquo;</Link>
     <Card title="Cabinets">
-      <DataTable lazy value={data?.items}
-          onPage={onPage} paginator={true} first={0} rows={data?.per_page} totalRecords={data?.total}
+      <TreeTable value={data}
           loading={isPending || isFetching}
-          onSort={onSort} sortField={listParams.sf} sortOrder={listParams.sd===true ? -1 : 1}
         >
-        <Column field="slug" header="Slug" body={slugTemplate} sortable></Column>
+        <Column field="slug" header="Slug" body={slugTemplate} sortable expander></Column>
         <Column field="name" header="Name" body={nameTemplate} sortable></Column>
         <Column field="description" header="Description" sortable></Column>
-      </DataTable>
+      </TreeTable>
     </Card>
     </>
   );
@@ -87,6 +77,7 @@ export function NewCabinet() {
 function CabinetForm({ data }: { data?: Partial<Cabinet> }) {
   const saveCabinet = useSaveCabinet();
   const navigate = useNavigate();
+
   const {
     control,
     handleSubmit,
@@ -109,6 +100,17 @@ function CabinetForm({ data }: { data?: Partial<Cabinet> }) {
   // PrimeReact-friendly error helper
   const errMsg = (name: keyof Partial<Cabinet>) =>
     errors[name]?.message ? String(errors[name]?.message) : null;
+
+  // Parent cabinet options
+  const {
+    data: parents, 
+    isLoading: isParentsLoading, 
+    isError: isParentsError, 
+  } = useCabinets({page:1, per_page: MAX_CABINETS});
+  let parent_id_options: Cabinet[] = [];
+  if (! isParentsLoading && ! isParentsError && parents?.items?.length) {
+    parent_id_options = parents.items.filter(c => c.id !== data?.id);
+  }
 
   return (
     <form onSubmit={handleSubmit(submitter)}>
@@ -149,6 +151,21 @@ function CabinetForm({ data }: { data?: Partial<Cabinet> }) {
             )}
           />
           {errMsg('name') && <small className="p-error">{errMsg('name')}</small>}
+        </div>
+
+        {/* Parent */}
+        <div className="col-12 md:col-6 lg:col-4">
+          <label htmlFor="parent_id" className="font-medium mb-2 block">Parent Cabinet</label>
+          <Controller name="parent_id" control={control}
+            render={({ field }) => (
+              <Dropdown id="parent_id" {...field}
+                optionLabel="name" optionValue="id"
+                className={classNames({ 'p-invalid': !!errors.parent_id })}
+                placeholder="Parent cabinet" options={parent_id_options} autoComplete="parent_id"
+              />
+            )}
+          />
+          {errMsg('parent_id') && <small className="p-error">{errMsg('parent_id')}</small>}
         </div>
 
         {/* Description */}
