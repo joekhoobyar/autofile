@@ -11,10 +11,11 @@ export function useMetadataTypes(params: ListParams): UseQueryResult<ResourceLis
   });
 }
 
-export function useMetadataType(id: string | number): UseQueryResult<MetadataType, HttpError> {
+export function useMetadataType(id: string | number, options = {}): UseQueryResult<MetadataType, HttpError> {
   return useQuery({
     queryKey: ['metadataType', 'get', {id}],
     enabled: !!id,
+    ...options,
     queryFn: () => apiFetch<MetadataType>(`metadata-types/${id}`),
   });
 }

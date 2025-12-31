@@ -55,10 +55,11 @@ export function useCabinetTree(): UseQueryResult<TreeNode[], HttpError> {
   });
 }
 
-export function useCabinet(id: string | number): UseQueryResult<Cabinet, HttpError> {
+export function useCabinet(id: string | number, options = {}): UseQueryResult<Cabinet, HttpError> {
   return useQuery({
     queryKey: ['cabinet', 'get', {id}],
     enabled: !!id,
+    ...options,
     queryFn: async () => {
       const cabinets = await apiFetch<Cabinet>(`cabinets/${id}`);
       return cabinets;

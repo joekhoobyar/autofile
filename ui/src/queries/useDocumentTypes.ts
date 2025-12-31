@@ -11,10 +11,11 @@ export function useDocumentTypes(params: ListParams): UseQueryResult<ResourceLis
   });
 }
 
-export function useDocumentType(id: string | number): UseQueryResult<DocumentType, HttpError> {
+export function useDocumentType(id: string | number, options = {}): UseQueryResult<DocumentType, HttpError> {
   return useQuery({
     queryKey: ['documentType', 'get', {id}],
     enabled: !!id,
+    ...options,
     queryFn: () => apiFetch<DocumentType>(`document-types/${id}`),
   });
 }

@@ -1,7 +1,10 @@
 import { useMemo } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-
 import type { MenuItem } from "primereact/menuitem";
+
+import { useCabinet } from "./queries/useCabinets";
+import { useDocumentType } from "./queries/useDocumentTypes";
+import { useMetadataType } from "./queries/useMetadataTypes";
 
 export type NavItem = {
   key: string;
@@ -17,10 +20,38 @@ export const NAV: NavItem[] = [
   { key: "metadata-types", label: "Metadata Types", icon: "pi pi-tags", to: "/metadata-types", matchPrefix: true },
 ];
 
+// useRouteResourceLabel.ts
+
+type LabelState = { label?: string; loading?: boolean };
+
+export function useRouteResourceLabel(): LabelState {
+  const { id } = useParams<{ id: string }>();
+  const { pathname } = useLocation();
+
+  const inCabinets = pathname.startsWith("/cabinets/");
+  const inDocTypes = pathname.startsWith("/document-types/");
+  const inMetaTypes = pathname.startsWith("/metadata-types/");
+
+  // Call *one* query hook based on route; keep others disabled
+  const cabinetQ = useCabinet(id!, { enabled: !!id && inCabinets });
+  const docTypeQ = useDocumentType(id!, { enabled: !!id && inDocTypes });
+  const metaTypeQ = useMetadataType(id!, { enabled: !!id && inMetaTypes });
+
+  if (!id) return {};
+
+  if (inCabinets) return { label: cabinetQ.data?.name, loading: cabinetQ.isLoading };
+  if (inDocTypes) return { label: docTypeQ.data?.name, loading: docTypeQ.isLoading };
+  if (inMetaTypes) return { label: metaTypeQ.data?.name, loading: metaTypeQ.isLoading };
+
+  return {};
+}
+
+
 export function useBreadcrumbs(): { home: MenuItem; model: MenuItem[] } {
   const navigate = useNavigate();
-  const location = useLocation();
-  const params = useParams(); // { id?: string } etc.
+  const { pathname } = useLocation();
+  const { id } = useParams<{ id: string }>();
+  const resource = useRouteResourceLabel();
 
   const home: MenuItem = useMemo(
     () => ({ icon: "pi pi-home", command: () => navigate("/") }),
@@ -28,28 +59,27 @@ export function useBreadcrumbs(): { home: MenuItem; model: MenuItem[] } {
   );
 
   const model = useMemo(() => {
-    const path = location.pathname;
-
-    // Find which top-level section we are in
-    const section = NAV.find(s => path === s.to || path.startsWith(s.to + "/"));
-
+    const section = NAV.find(s => pathname === s.to || pathname.startsWith(s.to + "/"));
     if (!section) return [];
 
-    const items: MenuItem[] = [
-      { label: section.label, command: () => navigate(section.to) },
-    ];
+    const items: MenuItem[] = [{ label: section.label, command: () => navigate(section.to) }];
 
-    // Simple CRUD-ish crumbs based on suffix
-    if (path.endsWith("/new")) {
+    if (pathname.endsWith("/new")) {
       items.push({ label: "New" });
-    } else if (path.endsWith("/edit")) {
-      // optional: insert resource id/name crumb
-      if (params.id) items.push({ label: params.id }); // replace w/ fetched name if desired
+      return items;
+    }
+
+    if (pathname.endsWith("/edit")) {
+      if (id) {
+        const label = resource.loading ? "Loading…" : (resource.label ?? id);
+        items.push({ label });
+      }
       items.push({ label: "Edit" });
+      return items;
     }
 
     return items;
-  }, [location.pathname, navigate, params.id]);
+  }, [pathname, navigate, id, resource.loading, resource.label]);
 
   return { home, model };
 }
