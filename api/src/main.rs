@@ -21,6 +21,7 @@ fn database_url(figment: &Figment, db_name: &str) -> Option<String> {
         .ok()
 }
 
+mod auth;
 mod schema;
 mod resource {
     pub mod cabinets;
@@ -47,7 +48,10 @@ fn rocket() -> _ {
         )
         .allow_credentials(true);
 
+    let secret = std::env::var("JWT_SECRET").expect("JWT_SECRET not set");
+
     rocket::build()
+        .manage(auth::JwtSecret(secret.into_bytes()))
         .attach(Db::init())
         .attach(cors.to_cors().unwrap())
         .attach(rocket::fairing::AdHoc::try_on_ignite("Diesel Migrations", run_migrations))

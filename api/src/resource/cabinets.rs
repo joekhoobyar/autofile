@@ -1,4 +1,5 @@
 use crate::Db;
+use crate::auth::AuthUser;
 use crate::schema::{cabinets};
 use crate::util::{ApiResult, ResourceList, FormFieldPresence, diesel_to_http, err, de_present_option};
 
@@ -84,7 +85,7 @@ pub struct ListCabinetsQuery {
 }
 
 #[get("/<id>")]
-pub async fn get(mut db: Connection<Db>, id: i64) -> ApiResult<Json<Cabinet>> {
+pub async fn get(mut db: Connection<Db>, _user: AuthUser, id: i64) -> ApiResult<Json<Cabinet>> {
     let row = cabinets::table
         .find(id)
         .select(Cabinet::as_select())
@@ -96,7 +97,7 @@ pub async fn get(mut db: Connection<Db>, id: i64) -> ApiResult<Json<Cabinet>> {
 }
 
 #[get("/by-slug/<slug>")]
-pub async fn get_by_slug(mut db: Connection<Db>, slug: &str) -> ApiResult<Json<Cabinet>> {
+pub async fn get_by_slug(mut db: Connection<Db>, _user: AuthUser, slug: &str) -> ApiResult<Json<Cabinet>> {
     let row = cabinets::table
         .filter(cabinets::slug.eq(slug))
         .select(Cabinet::as_select())
@@ -108,7 +109,7 @@ pub async fn get_by_slug(mut db: Connection<Db>, slug: &str) -> ApiResult<Json<C
 }
 
 #[post("/", format = "json", data = "<input>")]
-async fn create(mut db: Connection<Db>, input: Json<NewCabinet>) -> ApiResult<Json<Cabinet>> {
+async fn create(mut db: Connection<Db>, _user: AuthUser, input: Json<NewCabinet>) -> ApiResult<Json<Cabinet>> {
     if let Some(parent_id) = input.parent_id && parent_id <= 0 {
         return Err(err(
             rocket::http::Status::UnprocessableEntity,
@@ -127,7 +128,7 @@ async fn create(mut db: Connection<Db>, input: Json<NewCabinet>) -> ApiResult<Js
 }
 
 #[patch("/<id>", format = "json", data = "<input>")]
-async fn update(mut db: Connection<Db>, id: i64, input: Json<CabinetChangeset>) -> ApiResult<Json<Cabinet>> {
+async fn update(mut db: Connection<Db>, _user: AuthUser, id: i64, input: Json<CabinetChangeset>) -> ApiResult<Json<Cabinet>> {
     let patch = input.into_inner();
 
     // Common assignments (no parent_id here)
@@ -174,7 +175,7 @@ async fn update(mut db: Connection<Db>, id: i64, input: Json<CabinetChangeset>) 
 }
 
 #[delete("/<id>", format = "json")]
-async fn delete(mut db: Connection<Db>, id: i64) -> ApiResult<Json<()>> {
+async fn delete(mut db: Connection<Db>, _user: AuthUser, id: i64) -> ApiResult<Json<()>> {
 
     // Update + return the updated row in one round-trip.
     let affected = diesel::delete(cabinets::table.filter(cabinets::id.eq(id)))
@@ -190,7 +191,7 @@ async fn delete(mut db: Connection<Db>, id: i64) -> ApiResult<Json<()>> {
 }
 
 #[get("/?<params..>")]
-pub async fn list(mut db: Connection<Db>, params: ListCabinetsQuery) -> ApiResult<Json<ResourceList<Cabinet>>> {
+pub async fn list(mut db: Connection<Db>, _user: AuthUser, params: ListCabinetsQuery) -> ApiResult<Json<ResourceList<Cabinet>>> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
