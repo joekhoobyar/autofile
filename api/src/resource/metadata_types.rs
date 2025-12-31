@@ -133,8 +133,6 @@ async fn update(mut db: Connection<Db>, id: i64, input: Json<MetadataTypeChanges
 
 #[get("/?<params..>")]
 pub async fn list(mut db: Connection<Db>, params: ListMetadataTypesQuery) -> ApiResult<Json<ResourceList<MetadataType>>> {
-    println!("sort: {:?} dir: {:?} q: {:?}", params.sf, params.sd, params.q);
-
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { DataTable, type DataTableStateEvent } from 'primereact/datatable';
 import { Column } from 'primereact/column';
@@ -42,6 +42,8 @@ export function ListMetadataTypes() {
   };
 
   return (
+    <>
+    <Link to="new" style={{float: 'right', padding: '1.5rem'}}>New Metadata Type &raquo;</Link>
     <Card title="Metadata Types">
       <DataTable lazy value={data?.items}
           onPage={onPage} paginator={true} first={0} rows={data?.per_page} totalRecords={data?.total}
@@ -54,6 +56,7 @@ export function ListMetadataTypes() {
         <Column field="description" header="Description" sortable></Column>
       </DataTable>
     </Card>
+    </>
   );
 }
 
@@ -132,6 +135,7 @@ function MetadataTypeForm({ data }: { data?: Partial<MetadataType> }) {
             }}
             render={({ field }) => (
               <InputText id="slug" {...field}
+                disabled={!!data?.id}
                 className={classNames({ 'p-invalid': !!errors.slug })}
                 placeholder="identifier" autoComplete="slug"
               />
@@ -190,19 +194,14 @@ function MetadataTypeForm({ data }: { data?: Partial<MetadataType> }) {
         </div>
       </div>
 
-      <br/>
+      <div className="text-end">
+        {saveMetadataType.isError && (
+          <Message className="float-start" severity="error" text={(saveMetadataType.error as HttpError).message} />
+        )}
 
-      <Button label="Save" type="submit" icon="pi pi-check" disabled={!isDirty || !isValid || isSubmitting} />
-      <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" style={{ marginLeft: '0.5em' }} onClick={() => navigate('/metadata-types')} />
-
-      <br/>
-
-      {saveMetadataType.isError && (
-        <Message
-          severity="error"
-          text={(saveMetadataType.error as HttpError).message}
-        />
-      )}
+        <Button label="Save" type="submit" icon="pi pi-check" disabled={!isDirty || !isValid || isSubmitting} />
+        <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" style={{ marginLeft: '0.5em' }} onClick={() => navigate('/metadata-types')} />
+      </div>
     </form>
   );
 }
