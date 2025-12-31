@@ -12,6 +12,7 @@ import Navigation from './navigation.tsx';
 import './App.scss'
 import { ListCabinets } from './pages/cabinets.tsx';
 import { EditMetadataType, ListMetadataTypes, NewMetadataType } from './pages/metadataTypes.tsx';
+import { EditDocumentType, ListDocumentTypes, NewDocumentType } from './pages/documentTypes.tsx';
 
 export function Layout() {
   return (
@@ -31,6 +32,13 @@ const router = createBrowserRouter([
       { path: 'cabinets', 
         children: [
           { index: true, element: <ListCabinets/> },
+        ]
+      },
+      { path: 'document-types', 
+        children: [
+          { index: true, element: <ListDocumentTypes/> },
+          { path: 'new', element: <NewDocumentType/> },
+          { path: ':id/edit', element: <EditDocumentType/> },
         ]
       },
       { path: 'metadata-types', 

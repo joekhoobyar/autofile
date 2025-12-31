@@ -1,6 +1,6 @@
 use crate::Db;
 use crate::schema::{document_types};
-use crate::util::{diesel_to_http, err, ApiResult};
+use crate::util::{diesel_to_http, err, ApiResult, ResourceList};
 
 use serde::{Deserialize, Serialize};
 
@@ -43,6 +43,22 @@ struct DocumentTypeChangeset {
     updated_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Clone, Copy, FromFormField)]
+pub enum DocumentTypeSortField {
+    #[field(value="id")]
+    Id,
+    #[field(value="slug")]
+    Slug,
+    #[field(value="name")]
+    Name,
+    #[field(value="description")]
+    Description,
+    #[field(value="created_at")]
+    CreatedAt,
+    #[field(value="updated_at")]
+    UpdatedAt,
+}
+
 #[derive(FromForm)]
 pub struct ListDocumentTypesQuery {
     // 1-based page number
@@ -51,6 +67,10 @@ pub struct ListDocumentTypesQuery {
     pub per_page: Option<i64>,
     // optional substring search
     pub q: Option<String>,
+    // optional sort field
+    pub sf: Option<DocumentTypeSortField>,
+    // optional sort descending
+    pub sd: Option<bool>,
 }
 
 #[get("/<id>")]
@@ -107,26 +127,65 @@ async fn update(mut db: Connection<Db>, id: i64, input: Json<DocumentTypeChanges
 }
 
 #[get("/?<params..>")]
-pub async fn list(mut db: Connection<Db>, params: ListDocumentTypesQuery) -> ApiResult<Json<Vec<DocumentType>>> {
+pub async fn list(mut db: Connection<Db>, params: ListDocumentTypesQuery) -> ApiResult<Json<ResourceList<DocumentType>>> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
 
-    // Start with a boxed query so we can conditionally add filters.
-    let mut query = document_types::table.into_boxed();
+    let base_filter =  || -> document_types::BoxedQuery<'_, diesel::pg::Pg> {
+        // Start with a boxed query so we can conditionally add filters.
+        let query= document_types::table.into_boxed();
 
-    // Optional search: case-insensitive substring on slug/name/description
-    if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
-        let pattern = format!("%{}%", q);
-        query = query.filter(
-            document_types::slug.ilike(pattern.clone())
-                .or(document_types::name.ilike(pattern.clone()))
-                .or(document_types::description.ilike(pattern)),
-        );
-    }
+        // Optional search: case-insensitive substring on slug/name/description
+        if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
+            let pattern = format!("%{}%", q);
+            query.filter(
+                document_types::slug.ilike(pattern.clone())
+                    .or(document_types::name.ilike(pattern.clone()))
+                    .or(document_types::description.ilike(pattern)),
+            )
+        } else { 
+            query
+        }
+    };
 
-    let rows = query
-        .order(document_types::id.desc())
+
+    let total = base_filter()
+        .count()
+        .get_result::<i64>(&mut db)
+        .await
+        .map_err(|e| err(diesel_to_http(e), "failed to count document_types"))?;
+
+    let mut query: document_types::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
+    query = match (params.sf, params.sd) {
+        (Some(DocumentTypeSortField::Slug), Some(true)) =>
+            query.order((document_types::slug.desc(), document_types::id.asc())), // tie-breaker
+        (Some(DocumentTypeSortField::Slug), _) =>
+            query.order((document_types::slug.asc(), document_types::id.asc())), // tie-breaker
+        (Some(DocumentTypeSortField::Name), Some(true)) =>
+            query.order((document_types::name.desc(), document_types::id.asc())), // tie-breaker
+        (Some(DocumentTypeSortField::Name), _) =>
+            query.order((document_types::name.asc(), document_types::id.asc())), // tie-breaker
+        (Some(DocumentTypeSortField::Description), Some(true)) =>
+            query.order((document_types::description.desc(), document_types::id.asc())), // tie-breaker
+        (Some(DocumentTypeSortField::Description), _) =>
+            query.order((document_types::description.asc(), document_types::id.asc())), // tie-breaker
+        (Some(DocumentTypeSortField::CreatedAt), Some(true)) =>
+            query.order((document_types::created_at.desc(), document_types::id.asc())), // tie-breaker
+        (Some(DocumentTypeSortField::CreatedAt), _) =>
+            query.order((document_types::created_at.asc(), document_types::id.asc())), // tie-breaker
+        (Some(DocumentTypeSortField::UpdatedAt), Some(true)) =>
+            query.order((document_types::updated_at.desc(), document_types::id.asc())), // tie-breaker
+        (Some(DocumentTypeSortField::UpdatedAt), _) =>
+            query.order((document_types::updated_at.asc(), document_types::id.asc())), // tie-breaker
+
+        (Some(DocumentTypeSortField::Id), Some(true)) =>
+            query.order(document_types::id.desc()),
+        _ =>
+            query.order(document_types::id.asc()),
+    };
+
+    let items= query
         .limit(per_page)
         .offset(offset)
         .select(DocumentType::as_select())
@@ -134,7 +193,7 @@ pub async fn list(mut db: Connection<Db>, params: ListDocumentTypesQuery) -> Api
         .await
         .map_err(|e| err(diesel_to_http(e), "failed to list document_types"))?;
 
-    Ok(Json(rows))
+    Ok(Json(ResourceList { total, page, per_page, items }))
 }
 
 pub fn stage() -> rocket::fairing::AdHoc {
