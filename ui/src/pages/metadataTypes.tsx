@@ -9,10 +9,11 @@ import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
 import { classNames } from 'primereact/utils';
 
-import type { ListParams } from '../api';
+import type { HttpError, ListParams } from '../api';
 import { useMetadataTypes, useSaveMetadataType } from '../queries/useMetadataTypes';
 import { type MetadataType } from '../models/metadataType';
 import { Dropdown } from 'primereact/dropdown';
+import { Message } from 'primereact/message';
 
 export function ListMetadataTypes() {
   const [listParams, setListParams] = useState<ListParams>({});
@@ -55,20 +56,15 @@ export function ListMetadataTypes() {
 }
 
 export function NewMetadataType() {
-  const saveMetadataType = useSaveMetadataType();
-  const onSubmit = async (data: Partial<MetadataType>) => {
-    console.log('submit', data);
-    saveMetadataType.mutate(data);
-  };
-
   return (
     <Card title="New Metadata Type">
-      <MetadataTypeForm onSubmit={onSubmit} />
+      <MetadataTypeForm />
     </Card>
   );
 }
 
-function MetadataTypeForm({ data, onSubmit }: { data?: Partial<MetadataType>, onSubmit: (data: Partial<MetadataType>) => Promise<void> }) {
+function MetadataTypeForm({ data }: { data?: Partial<MetadataType> }) {
+  const saveMetadataType = useSaveMetadataType();
   const navigate = useNavigate();
   const {
     control,
@@ -82,7 +78,13 @@ function MetadataTypeForm({ data, onSubmit }: { data?: Partial<MetadataType>, on
     values: data ?? {},
   });
 
-  const submitter = async (data: Partial<MetadataType>) => await onSubmit(data);
+  const submitter = async (data: Partial<MetadataType>) => {
+    await saveMetadataType.mutateAsync(data, {
+      onSuccess: () => {
+        navigate('/metadata-types');
+      }
+    });
+  };
 
   // PrimeReact-friendly error helper
   const errMsg = (name: keyof Partial<MetadataType>) =>
@@ -172,6 +174,15 @@ function MetadataTypeForm({ data, onSubmit }: { data?: Partial<MetadataType>, on
 
       <Button label="Save" type="submit" icon="pi pi-check" disabled={!isDirty || !isValid || isSubmitting} />
       <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" style={{ marginLeft: '0.5em' }} onClick={() => navigate('/metadata-types')} />
+
+      <br/>
+
+      {saveMetadataType.isError && (
+        <Message
+          severity="error"
+          text={(saveMetadataType.error as HttpError).message}
+        />
+      )}
     </form>
   );
 }

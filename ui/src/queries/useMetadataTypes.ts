@@ -17,12 +17,12 @@ export function useSaveMetadataType(): UseMutationResult<MetadataType, HttpError
   return useMutation<MetadataType, HttpError, MetadataTypeInput>({
     mutationFn: async (input) => {
       if (input.id) {
-        return apiMutate<MetadataType, MetadataTypeInput>(`/metadata-types/${input.id}`, {
+        return apiMutate<MetadataType, MetadataTypeInput>(`metadata-types/${input.id}`, {
           method: "PUT",
           body: input,
         });
       }
-      return apiMutate<MetadataType, Omit<MetadataTypeInput, "id">>(`/metadata-types`, {
+      return apiMutate<MetadataType, Omit<MetadataTypeInput, "id">>(`metadata-types`, {
         method: "POST",
         body: input,
       });
