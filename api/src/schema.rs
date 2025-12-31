@@ -61,6 +61,8 @@ diesel::table! {
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
         email -> Varchar,
+        password_hash -> Text,
+        password_changed_at -> Timestamptz,
     }
 }
 

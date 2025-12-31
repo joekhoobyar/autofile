@@ -2,6 +2,36 @@ use serde::{Deserialize, Serialize};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, Algorithm, TokenData};
 use chrono::Utc;
 use rocket::{request::{FromRequest, Outcome}, http::Status, Request, State};
+use argon2::{
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    Argon2,
+};
+use rand_core::OsRng;
+
+pub fn hash_password(password: &str) -> Result<String, &'static str> {
+    if password.len() < 12 {
+        return Err("password too short");
+    }
+
+    let salt = SaltString::generate(&mut OsRng);
+
+    // Argon2id with reasonable defaults; you can tune parameters later.
+    let argon2 = Argon2::default();
+
+    let hash = argon2
+        .hash_password(password.as_bytes(), &salt)
+        .map_err(|_| "hashing failed")?
+        .to_string();
+
+    Ok(hash)
+}
+
+pub fn verify_password(password: &str, password_hash: &str) -> Result<bool, &'static str> {
+    let parsed = PasswordHash::new(password_hash).map_err(|_| "bad hash")?;
+    Ok(Argon2::default()
+        .verify_password(password.as_bytes(), &parsed)
+        .is_ok())
+}
 
 pub struct JwtSecret(pub Vec<u8>);
 
