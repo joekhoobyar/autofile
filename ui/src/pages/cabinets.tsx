@@ -32,6 +32,18 @@ export function ListCabinets() {
     );
   }
 
+  const actionTemplate = (c: TreeNode) => {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" icon="pi pi-pencil" severity="success" rounded aria-description="Edit"
+          onClick={() => navigate(`${c.data.id}/edit`)}
+        ></Button>
+        <Button type="button" icon="pi pi-trash" severity="danger" rounded aria-description="Delete"
+        ></Button>
+      </div>
+    );
+  };
+
   return (
     <>
     <Link to="new" style={{float: 'right', padding: '1.5rem'}}>New Cabinet &raquo;</Link>
@@ -39,9 +51,10 @@ export function ListCabinets() {
       <TreeTable value={data}
           loading={isPending || isFetching}
         >
-        <Column field="slug" header="Slug" body={slugTemplate} sortable expander></Column>
-        <Column field="name" header="Name" body={nameTemplate} sortable></Column>
+        <Column field="slug" header="Slug" body={slugTemplate} sortable expander headerClassName="w-20rem"></Column>
+        <Column field="name" header="Name" body={nameTemplate} sortable headerClassName="w-20rem"></Column>
         <Column field="description" header="Description" sortable></Column>
+        <Column body={actionTemplate} headerClassName="w-8rem" />
       </TreeTable>
     </Card>
     </>
