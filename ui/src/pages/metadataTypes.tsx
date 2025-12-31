@@ -1,17 +1,16 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
-import { data, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { DataTable, type DataTableStateEvent } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
-import { FloatLabel } from 'primereact/floatlabel';
 import { classNames } from 'primereact/utils';
 
 import type { ListParams } from '../api';
-import { useMetadataTypes } from '../queries/useMetadataTypes';
+import { useMetadataTypes, useSaveMetadataType } from '../queries/useMetadataTypes';
 import { type MetadataType } from '../models/metadataType';
 import { Dropdown } from 'primereact/dropdown';
 
@@ -56,33 +55,34 @@ export function ListMetadataTypes() {
 }
 
 export function NewMetadataType() {
+  const saveMetadataType = useSaveMetadataType();
+  const onSubmit = async (data: Partial<MetadataType>) => {
+    console.log('submit', data);
+    saveMetadataType.mutate(data);
+  };
 
   return (
     <Card title="New Metadata Type">
-      <MetadataTypeForm />
+      <MetadataTypeForm onSubmit={onSubmit} />
     </Card>
   );
 }
 
-function MetadataTypeForm() {
+function MetadataTypeForm({ data, onSubmit }: { data?: Partial<MetadataType>, onSubmit: (data: Partial<MetadataType>) => Promise<void> }) {
   const navigate = useNavigate();
   const {
     control,
     handleSubmit,
     formState: { errors, isSubmitting, isValid, isDirty },
-    reset,
   } = useForm<Partial<MetadataType>>({
     mode: 'onChange', // validate as user types
     defaultValues: {
-      name: '',
-      slug: '',
+      data_type: 'string',
     },
+    values: data ?? {},
   });
 
-  const onSubmit = async (data: Partial<MetadataType>) => {
-    // pretend API call
-    console.log('submit', data);
-  };
+  const submitter = async (data: Partial<MetadataType>) => await onSubmit(data);
 
   // PrimeReact-friendly error helper
   const errMsg = (name: keyof Partial<MetadataType>) =>
@@ -96,28 +96,22 @@ function MetadataTypeForm() {
     { label: 'Date', value: 'date' },
   ];
 
-
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form onSubmit={handleSubmit(submitter)}>
       <div className="grid p-fluid">
 
         {/* Slug */}
         <div className="col-12 md:col-6 lg:col-4">
           <label htmlFor="slug" className="font-medium mb-2 block">Slug</label>
-          <Controller
-            name="slug"
-            control={control}
+          <Controller name="slug" control={control}
             rules={{
               required: 'Slug is required',
               minLength: { value: 2, message: 'Slug must be at least 2 characters' },
             }}
             render={({ field }) => (
-              <InputText
-                id="slug"
-                {...field}
+              <InputText id="slug" {...field}
                 className={classNames({ 'p-invalid': !!errors.slug })}
-                placeholder="Field identifier"
-                autoComplete="slug"
+                placeholder="identifier" autoComplete="slug"
               />
             )}
           />
@@ -127,20 +121,15 @@ function MetadataTypeForm() {
         {/* Name */}
         <div className="col-12 md:col-6 lg:col-4">
           <label htmlFor="name" className="font-medium mb-2 block">Name</label>
-          <Controller
-            name="name"
-            control={control}
+          <Controller name="name" control={control}
             rules={{
               required: 'Name is required',
               minLength: { value: 2, message: 'Name must be at least 2 characters' },
             }}
             render={({ field }) => (
-              <InputText
-                id="name"
-                {...field}
+              <InputText id="name" {...field}
                 className={classNames({ 'p-invalid': !!errors.name })}
-                placeholder="Field name"
-                autoComplete="name"
+                placeholder="Short name" autoComplete="name"
               />
             )}
           />
@@ -150,20 +139,14 @@ function MetadataTypeForm() {
         {/* Data type */}
         <div className="col-12 md:col-6 lg:col-4">
           <label htmlFor="data_type" className="font-medium mb-2 block">Data Type</label>
-          <Controller
-            name="data_type"
-            control={control}
+          <Controller name="data_type" control={control}
             rules={{
               required: 'Data type is required',
             }}
             render={({ field }) => (
-              <Dropdown
-                id="data_type"
-                {...field}
+              <Dropdown id="data_type" {...field}
                 className={classNames({ 'p-invalid': !!errors.data_type })}
-                placeholder="Data type"
-                options={data_type_options}
-                autoComplete="data_type"
+                placeholder="Data type" options={data_type_options} autoComplete="data_type"
               />
             )}
           />
@@ -173,16 +156,11 @@ function MetadataTypeForm() {
         {/* Description */}
         <div className="col-12 md:col-6">
           <label htmlFor="description" className="font-medium mb-2 block">Description</label>
-          <Controller
-            name="description"
-            control={control}
+          <Controller name="description" control={control}
             render={({ field }) => (
-              <InputText
-                id="description"
-                {...field}
+              <InputText id="description" {...field}
                 className={classNames({ 'p-invalid': !!errors.description })}
-                placeholder="Field description"
-                autoComplete="description"
+                placeholder="Long name or description" autoComplete="description"
               />
             )}
           />
