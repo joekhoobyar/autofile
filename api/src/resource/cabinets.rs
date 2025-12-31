@@ -1,6 +1,6 @@
 use crate::Db;
 use crate::schema::{cabinets};
-use crate::util::{ApiResult, FormFieldPresence, diesel_to_http, err, de_present_option};
+use crate::util::{ApiResult, ResourceList, FormFieldPresence, diesel_to_http, err, de_present_option};
 
 use serde::{Deserialize, Serialize};
 
@@ -50,6 +50,24 @@ struct CabinetChangeset {
     updated_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Clone, Copy, FromFormField)]
+pub enum CabinetSortField {
+    #[field(value="id")]
+    Id,
+    #[field(value="slug")]
+    Slug,
+    #[field(value="name")]
+    Name,
+    #[field(value="description")]
+    Description,
+    #[field(value="parent_id")]
+    ParentId,
+    #[field(value="created_at")]
+    CreatedAt,
+    #[field(value="updated_at")]
+    UpdatedAt,
+}
+
 #[derive(FromForm)]
 pub struct ListCabinetsQuery {
     // 1-based page number
@@ -59,6 +77,10 @@ pub struct ListCabinetsQuery {
     // optional substring search
     pub q: Option<String>,
     pub parent_id: Option<FormFieldPresence<i64>>,
+    // optional sort field
+    pub sf: Option<CabinetSortField>,
+    // optional sort descending
+    pub sd: Option<bool>,
 }
 
 #[get("/<id>")]
@@ -168,36 +190,79 @@ async fn delete(mut db: Connection<Db>, id: i64) -> ApiResult<Json<()>> {
 }
 
 #[get("/?<params..>")]
-pub async fn list(mut db: Connection<Db>, params: ListCabinetsQuery) -> ApiResult<Json<Vec<Cabinet>>> {
+pub async fn list(mut db: Connection<Db>, params: ListCabinetsQuery) -> ApiResult<Json<ResourceList<Cabinet>>> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
 
-    // Start with a boxed query so we can conditionally add filters.
-    let mut query = cabinets::table.into_boxed();
+    let base_filter =  || -> cabinets::BoxedQuery<'_, diesel::pg::Pg> {
+        // Start with a boxed query so we can conditionally add filters.
+        let mut query = cabinets::table.into_boxed();
 
-    // Optional search: case-insensitive substring on slug/name/description
-    if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
-        let pattern = format!("%{}%", q);
-        query = query.filter(
-            cabinets::slug.ilike(pattern.clone())
-                .or(cabinets::name.ilike(pattern.clone()))
-                .or(cabinets::description.ilike(pattern)),
-        );
-    }
-
-    // Optional filter by parent
-    match params.parent_id {
-        Some(FormFieldPresence::Null) => { 
-            query = query.filter(cabinets::parent_id.is_null());
+        // Optional search: case-insensitive substring on slug/name/description
+        if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
+            let pattern = format!("%{}%", q);
+            query = query.filter(
+                cabinets::slug.ilike(pattern.clone())
+                    .or(cabinets::name.ilike(pattern.clone()))
+                    .or(cabinets::description.ilike(pattern)),
+            )
         }
-        Some(FormFieldPresence::Value(v)) => {
-            query = query.filter(cabinets::parent_id.eq(v));
-        }
-        None => ()
-    }
 
-    let rows = query
+        // Optional filter by parent
+        match params.parent_id {
+            Some(FormFieldPresence::Null) => { 
+                query = query.filter(cabinets::parent_id.is_null());
+            }
+            Some(FormFieldPresence::Value(v)) => {
+                query = query.filter(cabinets::parent_id.eq(v));
+            }
+            None => ()
+        }
+
+        query
+    };
+
+    let total = base_filter()
+        .count()
+        .get_result::<i64>(&mut db)
+        .await
+        .map_err(|e| err(diesel_to_http(e), "failed to count cabinets"))?;
+
+    let mut query: cabinets::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
+    query = match (params.sf, params.sd) {
+        (Some(CabinetSortField::Slug), Some(true)) =>
+            query.order((cabinets::slug.desc(), cabinets::id.asc())), // tie-breaker
+        (Some(CabinetSortField::Slug), _) =>
+            query.order((cabinets::slug.asc(), cabinets::id.asc())), // tie-breaker
+        (Some(CabinetSortField::Name), Some(true)) =>
+            query.order((cabinets::name.desc(), cabinets::id.asc())), // tie-breaker
+        (Some(CabinetSortField::Name), _) =>
+            query.order((cabinets::name.asc(), cabinets::id.asc())), // tie-breaker
+        (Some(CabinetSortField::Description), Some(true)) =>
+            query.order((cabinets::description.desc(), cabinets::id.asc())), // tie-breaker
+        (Some(CabinetSortField::Description), _) =>
+            query.order((cabinets::description.asc(), cabinets::id.asc())), // tie-breaker
+        (Some(CabinetSortField::ParentId), Some(true)) =>
+            query.order((cabinets::parent_id.desc(), cabinets::id.asc())), // tie-breaker
+        (Some(CabinetSortField::ParentId), _) =>
+            query.order((cabinets::parent_id.asc(), cabinets::id.asc())), // tie-breaker
+        (Some(CabinetSortField::CreatedAt), Some(true)) =>
+            query.order((cabinets::created_at.desc(), cabinets::id.asc())), // tie-breaker
+        (Some(CabinetSortField::CreatedAt), _) =>
+            query.order((cabinets::created_at.asc(), cabinets::id.asc())), // tie-breaker
+        (Some(CabinetSortField::UpdatedAt), Some(true)) =>
+            query.order((cabinets::updated_at.desc(), cabinets::id.asc())), // tie-breaker
+        (Some(CabinetSortField::UpdatedAt), _) =>
+            query.order((cabinets::updated_at.asc(), cabinets::id.asc())), // tie-breaker
+
+        (Some(CabinetSortField::Id), Some(true)) =>
+            query.order(cabinets::id.desc()),
+        _ =>
+            query.order(cabinets::id.asc()),
+    };
+
+    let items = query
         .order(cabinets::id.desc())
         .limit(per_page)
         .offset(offset)
@@ -206,7 +271,8 @@ pub async fn list(mut db: Connection<Db>, params: ListCabinetsQuery) -> ApiResul
         .await
         .map_err(|e| err(diesel_to_http(e), "failed to list cabinets"))?;
 
-    Ok(Json(rows))
+
+    Ok(Json(ResourceList { total, page, per_page, items }))
 }
 
 pub fn stage() -> rocket::fairing::AdHoc {

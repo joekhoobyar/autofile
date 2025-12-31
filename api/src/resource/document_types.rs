@@ -149,7 +149,6 @@ pub async fn list(mut db: Connection<Db>, params: ListDocumentTypesQuery) -> Api
         }
     };
 
-
     let total = base_filter()
         .count()
         .get_result::<i64>(&mut db)

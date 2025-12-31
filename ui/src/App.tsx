@@ -10,7 +10,7 @@ import 'primeflex/primeflex.css';
 // app
 import Navigation from './navigation.tsx';
 import './App.scss'
-import { ListCabinets } from './pages/cabinets.tsx';
+import { EditCabinet, ListCabinets, NewCabinet } from './pages/cabinets.tsx';
 import { EditMetadataType, ListMetadataTypes, NewMetadataType } from './pages/metadataTypes.tsx';
 import { EditDocumentType, ListDocumentTypes, NewDocumentType } from './pages/documentTypes.tsx';
 
@@ -32,6 +32,8 @@ const router = createBrowserRouter([
       { path: 'cabinets', 
         children: [
           { index: true, element: <ListCabinets/> },
+          { path: 'new', element: <NewCabinet/> },
+          { path: ':id/edit', element: <EditCabinet/> },
         ]
       },
       { path: 'document-types', 

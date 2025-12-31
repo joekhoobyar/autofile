@@ -1,24 +1,179 @@
-import { useCabinets } from '../queries/useCabinets';
-import { type Cabinet } from '../models/cabinet';
-import { DataTable } from 'primereact/datatable';
+import { useState } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { Link, useNavigate } from 'react-router-dom';
+
+import { DataTable, type DataTableStateEvent } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Card } from 'primereact/card';
+import { Button } from 'primereact/button';
+import { InputText } from 'primereact/inputtext';
+import { classNames } from 'primereact/utils';
+
+import type { HttpError, ListParams } from '../api';
+import { useCabinet, useCabinets, useSaveCabinet } from '../queries/useCabinets';
+import { type Cabinet } from '../models/cabinet';
+import { Message } from 'primereact/message';
+import { useId } from '../util';
 
 export function ListCabinets() {
-  const { isPending, data, isFetching } = useCabinets();
+  const [listParams, setListParams] = useState<ListParams>({});
+  const navigate = useNavigate();
+  const { isPending, data, isFetching } = useCabinets(listParams);
 
-  const nameTemplate = (c: Cabinet) => {
+  const slugTemplate = (c: Cabinet) => {
     return (
-      <a className="title" onClick={() => console.log(c.name)}>{c.name}</a>
+      <a className="title" onClick={() => navigate(`${c.id}/edit`)}>{c.slug}</a>
     );
   }
 
+  const nameTemplate = (c: Cabinet) => {
+    return (
+      <a className="title" onClick={() => navigate(`${c.id}/edit`)}>{c.name}</a>
+    );
+  }
+
+  const onSort = (event: DataTableStateEvent) => {
+    setListParams({ ...listParams, sf: event.sortField as string, sd: event.sortOrder === -1 });
+  };
+
+  const onPage = (event: DataTableStateEvent) => {
+    setListParams({ ...listParams, page: event.page, per_page: event.rows });
+  };
+
   return (
+    <>
+    <Link to="new" style={{float: 'right', padding: '1.5rem'}}>New Cabinet &raquo;</Link>
     <Card title="Cabinets">
-      <DataTable value={data} rows={data?.length} loading={isPending || isFetching}>
+      <DataTable lazy value={data?.items}
+          onPage={onPage} paginator={true} first={0} rows={data?.per_page} totalRecords={data?.total}
+          loading={isPending || isFetching}
+          onSort={onSort} sortField={listParams.sf} sortOrder={listParams.sd===true ? -1 : 1}
+        >
+        <Column field="slug" header="Slug" body={slugTemplate} sortable></Column>
         <Column field="name" header="Name" body={nameTemplate} sortable></Column>
         <Column field="description" header="Description" sortable></Column>
       </DataTable>
     </Card>
+    </>
+  );
+}
+
+export function EditCabinet() {
+  const id = useId('id');
+  const { isLoading, isError, data, error } = useCabinet(id);
+
+  if (!id)
+    return <Message severity="error" text="Missing or invalid ID" />;
+  if (isError)
+    return <Message severity="error" text={error.message} />
+  if (isLoading)
+    return <div>Loading</div>;
+
+  return (
+    <Card title="Edit Cabinet">
+      { !isLoading && !isError && <CabinetForm data={data} /> }
+    </Card>
+  );
+}
+
+export function NewCabinet() {
+  return (
+    <Card title="New Cabinet">
+      <CabinetForm />
+    </Card>
+  );
+}
+
+function CabinetForm({ data }: { data?: Partial<Cabinet> }) {
+  const saveCabinet = useSaveCabinet();
+  const navigate = useNavigate();
+  const {
+    control,
+    handleSubmit,
+    formState: { errors, isSubmitting, isValid, isDirty },
+  } = useForm<Partial<Cabinet>>({
+    mode: 'onChange', // validate as user types
+    defaultValues: {
+    },
+    values: data ?? {},
+  });
+
+  const submitter = async (data: Partial<Cabinet>) => {
+    await saveCabinet.mutateAsync(data, {
+      onSuccess: () => {
+        navigate('/cabinets');
+      }
+    });
+  };
+
+  // PrimeReact-friendly error helper
+  const errMsg = (name: keyof Partial<Cabinet>) =>
+    errors[name]?.message ? String(errors[name]?.message) : null;
+
+  return (
+    <form onSubmit={handleSubmit(submitter)}>
+      <div className="grid p-fluid">
+
+        {/* Slug */}
+        <div className="col-12 md:col-6 lg:col-4">
+          <label htmlFor="slug" className="font-medium mb-2 block">Slug</label>
+          <Controller name="slug" control={control}
+            rules={{
+              required: 'Slug is required',
+              minLength: { value: 2, message: 'Slug must be at least 2 characters' },
+            }}
+            render={({ field }) => (
+              <InputText id="slug" {...field}
+                disabled={!!data?.id}
+                className={classNames({ 'p-invalid': !!errors.slug })}
+                placeholder="identifier" autoComplete="slug"
+              />
+            )}
+          />
+          {errMsg('slug') && <small className="p-error">{errMsg('slug')}</small>}
+        </div>
+
+        {/* Name */}
+        <div className="col-12 md:col-6 lg:col-4">
+          <label htmlFor="name" className="font-medium mb-2 block">Name</label>
+          <Controller name="name" control={control}
+            rules={{
+              required: 'Name is required',
+              minLength: { value: 2, message: 'Name must be at least 2 characters' },
+            }}
+            render={({ field }) => (
+              <InputText id="name" {...field}
+                className={classNames({ 'p-invalid': !!errors.name })}
+                placeholder="Short name" autoComplete="name"
+              />
+            )}
+          />
+          {errMsg('name') && <small className="p-error">{errMsg('name')}</small>}
+        </div>
+
+        {/* Description */}
+        <div className="col-12 md:col-6">
+          <label htmlFor="description" className="font-medium mb-2 block">Description</label>
+          <Controller name="description" control={control}
+            render={({ field }) => (
+              <InputText id="description" {...field}
+                className={classNames({ 'p-invalid': !!errors.description })}
+                placeholder="Long name or description" autoComplete="description"
+              />
+            )}
+          />
+          {errMsg('description') && <small className="p-error">{errMsg('description')}</small>}
+        </div>
+      </div>
+
+      <div className="text-end">
+        {saveCabinet.isError && (
+          <Message className="float-start" severity="error" text={(saveCabinet.error as HttpError).message} />
+        )}
+
+        <Button label="Save" type="submit" icon="pi pi-check" disabled={!isDirty || !isValid || isSubmitting} />
+        <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" style={{ marginLeft: '0.5em' }} onClick={() => navigate('/cabinets')} />
+      </div>
+    </form>
   );
 }
