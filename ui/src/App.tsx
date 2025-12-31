@@ -1,4 +1,5 @@
 // framework
+import { useEffect, useRef, useState } from 'react';
 import { createBrowserRouter, Outlet, RouterProvider, NavLink, useLocation } from 'react-router-dom';
 import { PrimeReactProvider } from 'primereact/api';
 import 'bootstrap/scss/bootstrap.scss';
@@ -14,7 +15,7 @@ import { EditCabinet, ListCabinets, NewCabinet } from './pages/cabinets.tsx';
 import { EditMetadataType, ListMetadataTypes, NewMetadataType } from './pages/metadataTypes.tsx';
 import { EditDocumentType, ListDocumentTypes, NewDocumentType } from './pages/documentTypes.tsx';
 import { NAV, useBreadcrumbs } from './nav.ts';
-
+import { Button } from 'primereact/button';
 
 export function SideNav() {
   const location = useLocation();
@@ -45,18 +46,40 @@ export function SideNav() {
 
 function Layout() {
   const { home, model } = useBreadcrumbs();
+  const { pathname }= useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const prevPathRef = useRef(pathname);
+
+  useEffect(() => {
+    if (prevPathRef.current !== pathname) {
+      prevPathRef.current = pathname;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setMobileOpen(false);
+    }
+  }, [pathname, mobileOpen]);
 
   return (
-    <div className="app-body">
-      <aside className="app-nav">
-        <SideNav />
-      </aside>
-      <main className="app-main">
-        <BreadCrumb home={home} model={model} />
-        <div className="mt-3">
-          <Outlet />
-        </div>
-      </main>
+    <div className={`app-shell ${mobileOpen ? "nav-open" : ""}`}>
+      <header className="app-topbar">
+        <Button icon="pi pi-bars" text onClick={() => setMobileOpen(true)} />
+        <div className="app-topbar-title">Autofile</div>
+      </header>
+
+      {/* Backdrop for mobile */}
+      <div className="app-backdrop" onClick={() => setMobileOpen(false)} />
+
+      <div className="app-body">
+        <aside className="app-nav">
+          <SideNav />
+        </aside>
+
+        <main className="app-main">
+          <BreadCrumb home={home} model={model} />
+          <div className="mt-3">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
