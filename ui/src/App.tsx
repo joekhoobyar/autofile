@@ -1,25 +1,63 @@
 // framework
-import { createBrowserRouter, Outlet, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Outlet, RouterProvider, NavLink, useLocation } from 'react-router-dom';
 import { PrimeReactProvider } from 'primereact/api';
 import 'bootstrap/scss/bootstrap.scss';
 import 'primereact/resources/themes/bootstrap4-dark-blue/theme.css';
 import 'primereact/resources/primereact.min.css';
 import 'primeicons/primeicons.css';
 import 'primeflex/primeflex.css';
+import { BreadCrumb } from 'primereact/breadcrumb';
         
 // app
-import Navigation from './navigation.tsx';
 import './App.scss'
 import { EditCabinet, ListCabinets, NewCabinet } from './pages/cabinets.tsx';
 import { EditMetadataType, ListMetadataTypes, NewMetadataType } from './pages/metadataTypes.tsx';
 import { EditDocumentType, ListDocumentTypes, NewDocumentType } from './pages/documentTypes.tsx';
+import { NAV, useBreadcrumbs } from './nav.ts';
 
-export function Layout() {
+
+export function SideNav() {
+  const location = useLocation();
+
   return (
-    <>
-      <Navigation />
-      <Outlet />
-    </>
+    <nav className="side-nav">
+      {NAV.map(item => {
+        const isSectionActive = item.matchPrefix
+          ? location.pathname === item.to || location.pathname.startsWith(item.to + "/")
+          : location.pathname === item.to;
+
+        return (
+          <NavLink
+            key={item.key}
+            to={item.to}
+            className={({ isActive }) =>
+              "side-nav-item " + ((isActive || isSectionActive) ? "is-active" : "")
+            }
+          >
+            {item.icon && <i className={`${item.icon} mr-2`} />}
+            <span>{item.label}</span>
+          </NavLink>
+        );
+      })}
+    </nav>
+  );
+}
+
+function Layout() {
+  const { home, model } = useBreadcrumbs();
+
+  return (
+    <div className="app-body">
+      <aside className="app-nav">
+        <SideNav />
+      </aside>
+      <main className="app-main">
+        <BreadCrumb home={home} model={model} />
+        <div className="mt-3">
+          <Outlet />
+        </div>
+      </main>
+    </div>
   );
 }
 

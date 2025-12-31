@@ -2,6 +2,33 @@
   padding: 0.6rem;
 }
 
+/* app.css */
+.app-shell { height: 100vh; display: flex; flex-direction: column; }
+.app-topbar { display: none; align-items: center; gap: .5rem; padding: .5rem .75rem; border-bottom: 1px solid var(--surface-border); }
+.app-topbar-title { font-weight: 600; }
+
+.app-body { flex: 1; display: flex; min-height: 0; }
+.app-nav { width: 280px; border-right: 1px solid var(--surface-border); padding: .75rem; overflow: auto; }
+.app-main { flex: 1; min-width: 0; padding: .75rem; overflow: auto; }
+.app-content { margin-top: .75rem; }
+
+/* Mobile: collapse the left nav into Sidebar */
+@media (max-width: 900px) {
+  .app-topbar { display: flex; }
+  .app-nav { display: none; }
+}
+
+/* side-nav.css */
+.side-nav { display: flex; flex-direction: column; gap: .25rem; }
+.side-nav-item {
+  display: flex; align-items: center;
+  padding: .6rem .75rem; border-radius: 10px;
+  text-decoration: none; color: var(--text-color);
+}
+.side-nav-item:hover { background: var(--surface-hover); }
+.side-nav-item.is-active { background: var(--highlight-bg); font-weight: 600; }
+
+
 .p-button {
   border-radius: 6px;
 }

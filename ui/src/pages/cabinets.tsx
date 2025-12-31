@@ -51,8 +51,8 @@ export function ListCabinets() {
       <TreeTable value={data}
           loading={isPending || isFetching}
         >
-        <Column field="slug" header="Slug" body={slugTemplate} sortable expander headerClassName="w-20rem"></Column>
-        <Column field="name" header="Name" body={nameTemplate} sortable headerClassName="w-20rem"></Column>
+        <Column field="slug" header="Slug" body={slugTemplate} sortable expander></Column>
+        <Column field="name" header="Name" body={nameTemplate} sortable></Column>
         <Column field="description" header="Description" sortable></Column>
         <Column body={actionTemplate} headerClassName="w-8rem" />
       </TreeTable>
