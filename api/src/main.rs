@@ -1,5 +1,6 @@
 #[macro_use] extern crate rocket;
 
+use std::sync::OnceLock;
 use rocket::http::{Status, Method};
 use rocket::serde::json::Json;
 use rocket::figment::Figment;
@@ -10,6 +11,8 @@ use rocket_db_pools::{Connection, Database};
 use rocket_db_pools::diesel::{PgPool, prelude::*};
 
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+
+pub struct OurAllowedOrigins(pub Vec<String>);
 
 #[derive(Database)]
 #[database("autofile")]
@@ -53,6 +56,9 @@ fn rocket() -> _ {
 
     rocket::build()
         .manage(auth::JwtSecret(secret.into_bytes()))
+        .manage(OurAllowedOrigins(vec![
+            "http://localhost:5173".to_string(),
+        ]))
         .attach(Db::init())
         .attach(cors.to_cors().unwrap())
         .attach(rocket::fairing::AdHoc::try_on_ignite("Diesel Migrations", run_migrations))
@@ -111,4 +117,14 @@ async fn run_migrations(rocket: rocket::Rocket<rocket::Build>) -> rocket::fairin
         Ok(Ok(())) => Ok(rocket),
         _ => Err(rocket),
     }
+}
+
+static IS_PRODUCTION: OnceLock<bool> = OnceLock::new();
+
+pub fn is_production() -> bool {
+    *IS_PRODUCTION.get_or_init(|| {
+        std::env::var("APP_MODE")
+            .map(|v| v.eq_ignore_ascii_case("production"))
+            .unwrap_or(false)
+    })
 }

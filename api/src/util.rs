@@ -1,9 +1,13 @@
+use crate::{OurAllowedOrigins, is_production};
+
+use rocket::State;
+use rocket::request::{FromRequest, Outcome};
 use rocket::{http::Status, response::Responder, Request};
 use rocket::serde::json::Json;
+use rocket::serde::Deserialize;
 use rocket::response::status::Custom;
 use rocket::form::{self, FromFormField, ValueField};
-
-use rocket::serde::Deserialize;
+use rocket::http::{Cookie, CookieJar, SameSite};
 
 use diesel::result::{DatabaseErrorKind, Error as DieselError};
 
@@ -90,3 +94,28 @@ where
     Ok(Some(Option::<T>::deserialize(d)?))
 }
 
+pub struct SameOrigin;
+
+// Require that the request's Origin header matches the allowed origins.
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for SameOrigin {
+    type Error = ();
+
+    async fn from_request(req: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+        let allowed = match req.guard::<&State<OurAllowedOrigins>>().await {
+            Outcome::Success(s) => s,
+            _ => return Outcome::Error((Status::InternalServerError, ())),
+        };
+
+        let origin = match req.headers().get_one("Origin") {
+            Some(o) => o,
+            None => return Outcome::Error((Status::Forbidden, ())), // no Origin => reject
+        };
+
+        if allowed.0.iter().any(|a| a == origin) {
+            Outcome::Success(SameOrigin)
+        } else {
+            Outcome::Error((Status::Forbidden, ()))
+        }
+    }
+}
