@@ -1,4 +1,5 @@
 use crate::Db;
+use crate::auth::AuthUser;
 use crate::schema::{documents};
 use crate::util::{diesel_to_http, err, ApiResult};
 
@@ -54,7 +55,7 @@ pub struct ListDocumentsQuery {
 }
 
 #[get("/<id>")]
-pub async fn get(mut db: Connection<Db>, id: i64) -> ApiResult<Json<Document>> {
+pub async fn get(mut db: Connection<Db>, _user: AuthUser, id: i64) -> ApiResult<Json<Document>> {
     let row = documents::table
         .find(id)
         .select(Document::as_select())
@@ -66,7 +67,7 @@ pub async fn get(mut db: Connection<Db>, id: i64) -> ApiResult<Json<Document>> {
 }
 
 #[post("/", format = "json", data = "<input>")]
-async fn create(mut db: Connection<Db>, input: Json<NewDocument>) -> ApiResult<Json<Document>> {
+async fn create(mut db: Connection<Db>, _user: AuthUser, input: Json<NewDocument>) -> ApiResult<Json<Document>> {
     let inserted: Document = diesel::insert_into(documents::table)
         .values(&*input)
         .returning(Document::as_returning())
@@ -78,7 +79,7 @@ async fn create(mut db: Connection<Db>, input: Json<NewDocument>) -> ApiResult<J
 }
 
 #[patch("/<id>", format = "json", data = "<input>")]
-async fn update(mut db: Connection<Db>, id: i64, input: Json<DocumentChangeset>) -> ApiResult<Json<Document>> {
+async fn update(mut db: Connection<Db>, _user: AuthUser, id: i64, input: Json<DocumentChangeset>) -> ApiResult<Json<Document>> {
     let mut changes = input.into_inner();
     changes.updated_at = Some(Utc::now());
 
@@ -95,7 +96,7 @@ async fn update(mut db: Connection<Db>, id: i64, input: Json<DocumentChangeset>)
 }
 
 #[get("/?<params..>")]
-pub async fn list(mut db: Connection<Db>, params: ListDocumentsQuery) -> ApiResult<Json<Vec<Document>>> {
+pub async fn list(mut db: Connection<Db>, _user: AuthUser, params: ListDocumentsQuery) -> ApiResult<Json<Vec<Document>>> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;

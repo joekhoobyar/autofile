@@ -1,4 +1,5 @@
 use crate::Db;
+use crate::auth::AuthUser;
 use crate::schema::{metadata_types};
 use crate::util::{diesel_to_http, err, ApiResult, ResourceList};
 
@@ -79,7 +80,7 @@ pub struct ListMetadataTypesQuery {
 }
 
 #[get("/<id>")]
-pub async fn get(mut db: Connection<Db>, id: i64) -> ApiResult<Json<MetadataType>> {
+pub async fn get(mut db: Connection<Db>, _user: AuthUser, id: i64) -> ApiResult<Json<MetadataType>> {
     let row = metadata_types::table
         .find(id)
         .select(MetadataType::as_select())
@@ -91,7 +92,7 @@ pub async fn get(mut db: Connection<Db>, id: i64) -> ApiResult<Json<MetadataType
 }
 
 #[get("/by-slug/<slug>")]
-pub async fn get_by_slug(mut db: Connection<Db>, slug: &str) -> ApiResult<Json<MetadataType>> {
+pub async fn get_by_slug(mut db: Connection<Db>, _user: AuthUser, slug: &str) -> ApiResult<Json<MetadataType>> {
     let row = metadata_types::table
         .filter(metadata_types::slug.eq(slug))
         .select(MetadataType::as_select())
@@ -103,7 +104,7 @@ pub async fn get_by_slug(mut db: Connection<Db>, slug: &str) -> ApiResult<Json<M
 }
 
 #[post("/", format = "json", data = "<input>")]
-async fn create(mut db: Connection<Db>, input: Json<NewMetadataType>) -> ApiResult<Json<MetadataType>> {
+async fn create(mut db: Connection<Db>, _user: AuthUser, input: Json<NewMetadataType>) -> ApiResult<Json<MetadataType>> {
     let inserted: MetadataType = diesel::insert_into(metadata_types::table)
         .values(&*input)
         .returning(MetadataType::as_returning())
@@ -115,7 +116,7 @@ async fn create(mut db: Connection<Db>, input: Json<NewMetadataType>) -> ApiResu
 }
 
 #[patch("/<id>", format = "json", data = "<input>")]
-async fn update(mut db: Connection<Db>, id: i64, input: Json<MetadataTypeChangeset>) -> ApiResult<Json<MetadataType>> {
+async fn update(mut db: Connection<Db>, _user: AuthUser, id: i64, input: Json<MetadataTypeChangeset>) -> ApiResult<Json<MetadataType>> {
     let mut changes = input.into_inner();
     changes.updated_at = Some(Utc::now());
 
@@ -132,7 +133,7 @@ async fn update(mut db: Connection<Db>, id: i64, input: Json<MetadataTypeChanges
 }
 
 #[get("/?<params..>")]
-pub async fn list(mut db: Connection<Db>, params: ListMetadataTypesQuery) -> ApiResult<Json<ResourceList<MetadataType>>> {
+pub async fn list(mut db: Connection<Db>, _user: AuthUser, params: ListMetadataTypesQuery) -> ApiResult<Json<ResourceList<MetadataType>>> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;

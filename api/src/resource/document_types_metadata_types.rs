@@ -1,4 +1,5 @@
 use crate::Db;
+use crate::auth::AuthUser;
 use crate::schema::{document_types_metadata_types, metadata_types};
 use crate::util::{diesel_to_http, err, ApiResult};
 use crate::resource::document_types::{DocumentType};
@@ -53,7 +54,7 @@ pub struct ListDocumentTypesMetadataTypesQuery {
 }
 
 #[get("/<document_type_id>/<metadata_type_id>")]
-pub async fn get(mut db: Connection<Db>, document_type_id: i64, metadata_type_id: i64) -> ApiResult<Json<DocumentTypeMetadataType>> {
+pub async fn get(mut db: Connection<Db>, _user: AuthUser, document_type_id: i64, metadata_type_id: i64) -> ApiResult<Json<DocumentTypeMetadataType>> {
     let row = document_types_metadata_types::table
         .find((document_type_id, metadata_type_id))
         .select(DocumentTypeMetadataType::as_select())
@@ -65,7 +66,7 @@ pub async fn get(mut db: Connection<Db>, document_type_id: i64, metadata_type_id
 }
 
 #[post("/", format = "json", data = "<input>")]
-async fn create(mut db: Connection<Db>, input: Json<NewDocumentTypeMetadataType>) -> ApiResult<Json<DocumentTypeMetadataType>> {
+async fn create(mut db: Connection<Db>, _user: AuthUser, input: Json<NewDocumentTypeMetadataType>) -> ApiResult<Json<DocumentTypeMetadataType>> {
     let inserted: DocumentTypeMetadataType = diesel::insert_into(document_types_metadata_types::table)
         .values(&*input)
         .returning(DocumentTypeMetadataType::as_returning())
@@ -77,7 +78,7 @@ async fn create(mut db: Connection<Db>, input: Json<NewDocumentTypeMetadataType>
 }
 
 #[patch("/<document_type_id>/<metadata_type_id>", format = "json", data = "<input>")]
-async fn update(mut db: Connection<Db>, document_type_id: i64, metadata_type_id: i64, input: Json<DocumentTypeMetadataTypeChangeset>) -> ApiResult<Json<DocumentTypeMetadataType>> {
+async fn update(mut db: Connection<Db>, _user: AuthUser, document_type_id: i64, metadata_type_id: i64, input: Json<DocumentTypeMetadataTypeChangeset>) -> ApiResult<Json<DocumentTypeMetadataType>> {
     let changes = input.into_inner();
 
     // Update + return the updated row in one round-trip.
@@ -97,7 +98,7 @@ async fn update(mut db: Connection<Db>, document_type_id: i64, metadata_type_id:
 }
 
 #[delete("/<document_type_id>/<metadata_type_id>", format = "json")]
-async fn delete(mut db: Connection<Db>, document_type_id: i64, metadata_type_id: i64) -> ApiResult<Json<()>> {
+async fn delete(mut db: Connection<Db>, _user: AuthUser, document_type_id: i64, metadata_type_id: i64) -> ApiResult<Json<()>> {
 
     // Update + return the updated row in one round-trip.
     let affected = diesel::delete(
@@ -117,7 +118,7 @@ async fn delete(mut db: Connection<Db>, document_type_id: i64, metadata_type_id:
 }
 
 #[get("/?<params..>")]
-pub async fn list(mut db: Connection<Db>, params: ListDocumentTypesMetadataTypesQuery) -> ApiResult<Json<Vec<DocumentTypeMetadataType>>> {
+pub async fn list(mut db: Connection<Db>, _user: AuthUser, params: ListDocumentTypesMetadataTypesQuery) -> ApiResult<Json<Vec<DocumentTypeMetadataType>>> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;

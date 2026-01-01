@@ -1,4 +1,5 @@
 use crate::Db;
+use crate::auth::AuthUser;
 use crate::schema::{document_types};
 use crate::util::{diesel_to_http, err, ApiResult, ResourceList};
 
@@ -74,7 +75,7 @@ pub struct ListDocumentTypesQuery {
 }
 
 #[get("/<id>")]
-pub async fn get(mut db: Connection<Db>, id: i64) -> ApiResult<Json<DocumentType>> {
+pub async fn get(mut db: Connection<Db>, _user: AuthUser, id: i64) -> ApiResult<Json<DocumentType>> {
     let row = document_types::table
         .find(id)
         .select(DocumentType::as_select())
@@ -86,7 +87,7 @@ pub async fn get(mut db: Connection<Db>, id: i64) -> ApiResult<Json<DocumentType
 }
 
 #[get("/by-slug/<slug>")]
-pub async fn get_by_slug(mut db: Connection<Db>, slug: &str) -> ApiResult<Json<DocumentType>> {
+pub async fn get_by_slug(mut db: Connection<Db>, _user: AuthUser, slug: &str) -> ApiResult<Json<DocumentType>> {
     let row = document_types::table
         .filter(document_types::slug.eq(slug))
         .select(DocumentType::as_select())
@@ -98,7 +99,7 @@ pub async fn get_by_slug(mut db: Connection<Db>, slug: &str) -> ApiResult<Json<D
 }
 
 #[post("/", format = "json", data = "<input>")]
-async fn create(mut db: Connection<Db>, input: Json<NewDocumentType>) -> ApiResult<Json<DocumentType>> {
+async fn create(mut db: Connection<Db>, _user: AuthUser, input: Json<NewDocumentType>) -> ApiResult<Json<DocumentType>> {
     let inserted: DocumentType = diesel::insert_into(document_types::table)
         .values(&*input)
         .returning(DocumentType::as_returning())
@@ -110,7 +111,7 @@ async fn create(mut db: Connection<Db>, input: Json<NewDocumentType>) -> ApiResu
 }
 
 #[patch("/<id>", format = "json", data = "<input>")]
-async fn update(mut db: Connection<Db>, id: i64, input: Json<DocumentTypeChangeset>) -> ApiResult<Json<DocumentType>> {
+async fn update(mut db: Connection<Db>, _user: AuthUser, id: i64, input: Json<DocumentTypeChangeset>) -> ApiResult<Json<DocumentType>> {
     let mut changes = input.into_inner();
     changes.updated_at = Some(Utc::now());
 
@@ -127,7 +128,7 @@ async fn update(mut db: Connection<Db>, id: i64, input: Json<DocumentTypeChanges
 }
 
 #[get("/?<params..>")]
-pub async fn list(mut db: Connection<Db>, params: ListDocumentTypesQuery) -> ApiResult<Json<ResourceList<DocumentType>>> {
+pub async fn list(mut db: Connection<Db>, _user: AuthUser, params: ListDocumentTypesQuery) -> ApiResult<Json<ResourceList<DocumentType>>> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
