@@ -109,7 +109,7 @@ pub async fn login(
     Ok(Json(AccessTokenResponse { access_token, token_type: "Bearer", expires_in: ACCESS_TTL_SECONDS }))
 }
 
-#[post("/auth/logout")]
+#[post("/logout")]
 async fn logout(
     _origin_ok: SameOrigin,
     cookies: &CookieJar<'_>,
@@ -128,7 +128,7 @@ async fn logout(
     Ok(Status::NoContent)
 }
 
-#[post("/auth/refresh")]
+#[post("/refresh")]
 async fn refresh(
     _origin_ok: SameOrigin,
     cookies: &CookieJar<'_>,

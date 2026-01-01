@@ -1,3 +1,5 @@
+export const API_HOST = 'http://localhost:8000';
+
 export type ResourceBase = {
   id: number;
   createdAt: Date;
@@ -78,22 +80,64 @@ export async function apiFetchList<T>(url: string, params: ListParams): Promise<
   return apiFetch<ResourceList<T>>(`${url}${q}`);
 }
 
-export async function apiFetch<T>(url: string): Promise<T> {
-  const res = await fetch(`http://localhost:8000/${url}`, {
-    headers: {
-      Accept: "application/json",
-    }
-  });
+type FetchOptions = RequestInit & { retryOn401?: boolean };
 
-  if (!res.ok) {
-    throw await parseApiError(res);
-  }
+let accessToken: string | null = null;
 
-  return res.json();
+export function setAccessToken(token: string | null) {
+  accessToken = token;
 }
 
+export async function apiFetch<T>(url: string, init: FetchOptions = {}): Promise<T> {
+  const retryOn401 = init.retryOn401 ?? true;
 
-type ApiMutateOptions<TBody> = Omit<RequestInit, "body"> & {
+  const headers = new Headers(init.headers);
+  headers.set("Accept", "application/json");
+  if (init.body !== undefined)
+    headers.set("Content-Type", "application/json");
+  if (accessToken)
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  const res = await fetch(`${API_HOST}/${url}`, {
+    ...init,
+    headers,
+    credentials: "include"
+  });
+
+  if (res.ok) {
+    if (res.status === 204) return undefined as T;
+    return res.json();
+  }
+
+  // If access token expired, try refresh once, then retry original request
+  if (res.status === 401 && retryOn401) {
+    const refreshed = await tryRefresh();
+    if (refreshed) {
+      return apiFetch<T>(url, { ...init, retryOn401: false });
+    }
+  }
+
+  throw await parseApiError(res);
+}
+
+async function tryRefresh(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_HOST}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Accept": "application/json" },
+    });
+    if (!res.ok) return false;
+
+    const data = await res.json();
+    // expects { access_token, token_type, expires_in }
+    setAccessToken(data.access_token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+type ApiMutateOptions<TBody> = Omit<FetchOptions, "body"> & {
   body?: TBody;
 };
 
@@ -101,27 +145,9 @@ export async function apiMutate<TResponse, TBody = unknown>(
   url: string,
   options: ApiMutateOptions<TBody> = {}
 ): Promise<TResponse> {
-  const { body, headers, ...rest } = options;
-
-  const res = await fetch(`http://localhost:8000/${url}`, {
+  const { body, ...rest } = options;
+  return apiFetch(url, {
     ...rest,
-    headers: {
-      Accept: "application/json",
-      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-      ...(headers ?? {}),
-    },
-    ...options,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-
-  if (!res.ok) {
-    throw await parseApiError(res);
-  }
-
-  // Some endpoints return 204 No Content
-  if (res.status === 204) {
-    return undefined as TResponse;
-  }
-
-  return res.json();
 }

@@ -1,6 +1,6 @@
 // framework
 import { useEffect, useRef, useState } from 'react';
-import { createBrowserRouter, Outlet, RouterProvider, NavLink, useLocation } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, NavLink, useLocation } from 'react-router-dom';
 import { PrimeReactProvider } from 'primereact/api';
 import 'bootstrap/scss/bootstrap.scss';
 import 'primereact/resources/themes/bootstrap4-dark-blue/theme.css';
@@ -16,6 +16,8 @@ import { EditMetadataType, ListMetadataTypes, NewMetadataType } from './pages/me
 import { EditDocumentType, ListDocumentTypes, NewDocumentType } from './pages/documentTypes.tsx';
 import { NAV, useBreadcrumbs } from './nav.ts';
 import { Button } from 'primereact/button';
+import Login, { RequireAuth } from './pages/auth.tsx';
+import { AuthProvider } from './AuthProvider.tsx';
 
 export function SideNav() {
   const location = useLocation();
@@ -76,7 +78,7 @@ function Layout() {
         <main className="app-main">
           <BreadCrumb home={home} model={model} />
           <div className="mt-3">
-            <Outlet />
+            <RequireAuth />
           </div>
         </main>
       </div>
@@ -85,6 +87,9 @@ function Layout() {
 }
 
 const router = createBrowserRouter([
+  {
+    path: '/login', element: <Login />
+  },
   {
     path: '/',
     element: <Layout />,
@@ -118,7 +123,9 @@ const router = createBrowserRouter([
 export default function App() {
   return (
     <PrimeReactProvider>
-      <RouterProvider router={router} />
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>
     </PrimeReactProvider>
   )
 }
