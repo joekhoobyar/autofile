@@ -40,6 +40,7 @@ struct NewUser {
 #[diesel(table_name = users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct UserChangeset {
+    pub email: Option<String>,
     pub display_name: Option<String>,
     pub updated_at: Option<DateTime<Utc>>,
 }
