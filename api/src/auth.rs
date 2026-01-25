@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, Algorithm, TokenData};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, Algorithm};
 use chrono::Utc;
 use rocket::{request::{FromRequest, Outcome}, http::Status, Request, State};
 use argon2::{

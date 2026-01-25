@@ -20,6 +20,7 @@ pub struct User {
     pub username: String,
     pub email: String,
     pub display_name: String,
+    #[serde(skip_serializing)]
     pub password_hash: String,
     pub password_changed_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
@@ -33,7 +34,6 @@ struct NewUser {
     pub username: String,
     pub email: String,
     pub display_name: String,
-    pub password_hash: Option<String>,
 }
 
 #[derive(Debug, Deserialize, AsChangeset)]

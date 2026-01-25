@@ -1,4 +1,4 @@
-use crate::{OurAllowedOrigins, is_production};
+use crate::{OurAllowedOrigins};
 
 use rocket::State;
 use rocket::request::{FromRequest, Outcome};
@@ -7,7 +7,6 @@ use rocket::serde::json::Json;
 use rocket::serde::Deserialize;
 use rocket::response::status::Custom;
 use rocket::form::{self, FromFormField, ValueField};
-use rocket::http::{Cookie, CookieJar, SameSite};
 
 use diesel::result::{DatabaseErrorKind, Error as DieselError};
 
