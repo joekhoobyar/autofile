@@ -42,8 +42,12 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 #[launch]
 fn rocket() -> _ {
 
+    let allowed_origins = vec![
+        "http://localhost:5173".to_string(),
+    ];
+
     let cors = CorsOptions::default()
-        .allowed_origins(AllowedOrigins::all())
+        .allowed_origins(AllowedOrigins::some_exact(&allowed_origins))
         .allowed_methods(
             vec![Method::Get, Method::Post, Method::Put, Method::Patch, Method::Delete, Method::Options]
                 .into_iter()
@@ -56,9 +60,7 @@ fn rocket() -> _ {
 
     rocket::build()
         .manage(auth::JwtSecret(secret.into_bytes()))
-        .manage(OurAllowedOrigins(vec![
-            "http://localhost:5173".to_string(),
-        ]))
+        .manage(OurAllowedOrigins(allowed_origins))
         .attach(Db::init())
         .attach(cors.to_cors().unwrap())
         .attach(rocket::fairing::AdHoc::try_on_ignite("Diesel Migrations", run_migrations))
