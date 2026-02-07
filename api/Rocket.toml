@@ -1,0 +1,9 @@
+[default]
+# Data limits for file uploads
+[default.limits]
+# Increase form data limit to 50MB
+forms = "50 MiB"
+# Increase file upload limit to 50MB
+file = "50 MiB"
+# Overall data limit
+data-form = "50 MiB"

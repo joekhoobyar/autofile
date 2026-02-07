@@ -18,3 +18,7 @@ diesel_migrations = "2"
 
 rocket_db_pools = { version = "0.2.0", features = ["diesel_postgres"] }
 rocket_cors = "0.6.0"
+
+aws-config = "1.1"
+aws-sdk-s3 = "1.15"
+uuid = { version = "1.7", features = ["v4"] }

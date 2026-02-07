@@ -13,6 +13,24 @@ diesel::table! {
 }
 
 diesel::table! {
+    document_files (id) {
+        id -> Int8,
+        document_id -> Int8,
+        #[max_length = 36]
+        s3_prefix -> Varchar,
+        #[max_length = 512]
+        filename -> Varchar,
+        #[max_length = 255]
+        content_type -> Nullable<Varchar>,
+        size -> Int8,
+        created_at -> Timestamptz,
+        created_by -> Int8,
+        updated_at -> Timestamptz,
+        updated_by -> Int8,
+    }
+}
+
+diesel::table! {
     document_types (id) {
         id -> Int8,
         slug -> Varchar,
@@ -68,12 +86,14 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(document_files -> documents (document_id));
 diesel::joinable!(document_types_metadata_types -> document_types (document_type_id));
 diesel::joinable!(document_types_metadata_types -> metadata_types (metadata_type_id));
 diesel::joinable!(documents -> document_types (document_type_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     cabinets,
+    document_files,
     document_types,
     document_types_metadata_types,
     documents,
