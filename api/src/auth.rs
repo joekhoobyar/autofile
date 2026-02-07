@@ -99,6 +99,7 @@ pub fn verify_access(secret: &[u8], token: &str) -> Result<AccessClaims, jsonweb
     let mut v = Validation::new(Algorithm::HS256);
     v.set_issuer(&[ISS]);
     v.set_audience(&[AUD]);
+    v.validate_exp = true;
 
     let data = jsonwebtoken::decode::<AccessClaims>(
         token,
@@ -117,6 +118,7 @@ pub fn verify_refresh(secret: &[u8], token: &str) -> Result<RefreshClaims, jsonw
     let mut v = Validation::new(Algorithm::HS256);
     v.set_issuer(&[ISS]);
     v.set_audience(&[AUD]);
+    v.validate_exp = true;
 
     let data = jsonwebtoken::decode::<RefreshClaims>(
         token,
