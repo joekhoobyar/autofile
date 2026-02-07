@@ -38,6 +38,8 @@ diesel::table! {
         document_type_id -> Int8,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        created_by -> Int8,
+        updated_by -> Int8,
     }
 }
 

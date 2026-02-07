@@ -22,7 +22,9 @@ pub struct Document {
     title: String,
     document_type_id: i64,
 
+    created_by: i64,
     created_at: DateTime<Utc>,
+    updated_by: i64,
     updated_at: DateTime<Utc>,
 }
 
@@ -40,7 +42,6 @@ struct NewDocument {
 struct DocumentChangeset {
     title: Option<String>,
     document_type_id: Option<i64>,
-    updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(FromForm)]
@@ -67,9 +68,14 @@ pub async fn get(mut db: Connection<Db>, _user: AuthUser, id: i64) -> ApiResult<
 }
 
 #[post("/", format = "json", data = "<input>")]
-async fn create(mut db: Connection<Db>, _user: AuthUser, input: Json<NewDocument>) -> ApiResult<Json<Document>> {
+async fn create(mut db: Connection<Db>, user: AuthUser, input: Json<NewDocument>) -> ApiResult<Json<Document>> {
     let inserted: Document = diesel::insert_into(documents::table)
-        .values(&*input)
+        .values((
+            documents::title.eq(&input.title),
+            documents::document_type_id.eq(input.document_type_id),
+            documents::created_by.eq(user.user_id),
+            documents::updated_by.eq(user.user_id),
+        ))
         .returning(Document::as_returning())
         .get_result(&mut db)
         .await
@@ -79,14 +85,15 @@ async fn create(mut db: Connection<Db>, _user: AuthUser, input: Json<NewDocument
 }
 
 #[patch("/<id>", format = "json", data = "<input>")]
-async fn update(mut db: Connection<Db>, _user: AuthUser, id: i64, input: Json<DocumentChangeset>) -> ApiResult<Json<Document>> {
-    let mut changes = input.into_inner();
-    changes.updated_at = Some(Utc::now());
-
+async fn update(mut db: Connection<Db>, user: AuthUser, id: i64, input: Json<DocumentChangeset>) -> ApiResult<Json<Document>> {
     // Update + return the updated row in one round-trip.
     let updated: Document =
         diesel::update(documents::table.filter(documents::id.eq(id)))
-            .set(&changes)
+            .set((
+                &input.into_inner(),
+                documents::updated_by.eq(user.user_id),
+                documents::updated_at.eq(Utc::now()),
+            ))
             .returning(Document::as_returning())
             .get_result(&mut db)
             .await
