@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { InputText } from "primereact/inputtext";
 import { classNames } from "primereact/utils";
@@ -10,10 +10,7 @@ import { Button } from "primereact/button";
 import { HttpError } from "../api";
 import type { LoginRequest } from "../models/auth";
 import { Card } from "primereact/card";
-import { login } from "../auth";
-
-import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { useAuth } from "../auth";
+import { login, useAuth  } from "../auth";
 
 export function RequireAuth() {
   const auth = useAuth();
@@ -57,7 +54,7 @@ export default function Login() {
         <div className="p-fluid">
 
           {loginError && (
-            <Message severity="error" text={(loginError as HttpError).message} />
+            <Message severity="error" text={loginError.message} />
           )}
 
           {/* Username */}
