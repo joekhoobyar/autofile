@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -15,8 +16,11 @@ import { useId } from '../util';
 import { TreeTable } from 'primereact/treetable';
 import { Dropdown } from 'primereact/dropdown';
 import type { TreeNode } from 'primereact/treenode';
+import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
+import { Toast } from 'primereact/toast';
 
 export function ListCabinets() {
+  const toast = useRef(null);
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useCabinetTree();
 
@@ -39,9 +43,29 @@ export function ListCabinets() {
           onClick={() => navigate(`${c.data.id}/edit`)}
         ></Button>
         <Button type="button" icon="pi pi-trash" severity="danger" rounded aria-description="Delete"
+          onClick={() => confirmDeleteCabinet(c.data)}
         ></Button>
       </div>
     );
+  };
+
+  const deleteCabinet = (cabinet: Cabinet) => {
+    /*
+    if (toast.current) {
+      toast.current.show({ severity: 'info', summary: 'Confirmed', detail: 'You have accepted', life: 3000 });
+    }
+    */
+  }
+
+  const confirmDeleteCabinet = (cabinet: Cabinet) => {
+    confirmDialog({
+      message: 'Are you sure want to delete this cabinet?  No documents will be deleted.',
+      header: `Delete: ${cabinet.name}`,
+      icon: 'pi pi-trash',
+      defaultFocus: 'reject',
+      acceptClassName: 'p-button-danger',
+      accept: () => deleteCabinet(cabinet),
+    });
   };
 
   return (
@@ -57,6 +81,8 @@ export function ListCabinets() {
         <Column body={actionTemplate} headerClassName="w-8rem" />
       </TreeTable>
     </Card>
+    <Toast ref={toast} />
+    <ConfirmDialog />
     </>
   );
 }
