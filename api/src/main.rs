@@ -20,18 +20,17 @@ use diesel_async::{
 };
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 
-// Shared application state
-#[derive(Clone)]
-pub struct AppState {
-    pub db_pool: bb8::Pool<AsyncPgConnection>,
-    pub s3_client: Arc<aws_sdk_s3::Client>,
-    pub s3_bucket: Arc<String>,
-    pub jwt_secret: Arc<Vec<u8>>,
-    pub allowed_origins: Arc<Vec<String>>,
-}
-
 mod schema;
-mod resource {
+mod domain {
+    pub mod cabinets;
+    pub mod document_files;
+    pub mod document_types;
+    pub mod document_types_metadata_types;
+    pub mod documents;
+    pub mod metadata_types;
+    pub mod users;
+}
+mod api {
     pub mod auth;
     pub mod cabinets;
     pub mod document_types;
@@ -41,6 +40,7 @@ mod resource {
     pub mod users;
 }
 mod shared {
+    pub mod app_state;
     pub mod auth;
     pub mod extractors;
     pub mod s3;
@@ -49,6 +49,7 @@ mod shared {
 
 use shared::extractors::DbConn;
 
+use crate::shared::app_state::AppState;
 use crate::shared::util::ApiError;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
@@ -111,7 +112,6 @@ async fn main() {
         s3_client: Arc::new(s3_client),
         s3_bucket: Arc::new(s3_bucket),
         jwt_secret: Arc::new(jwt_secret),
-        allowed_origins: Arc::new(allowed_origins.clone()),
     };
 
     // Configure CORS
@@ -142,13 +142,13 @@ async fn main() {
     let app = Router::new()
         .route("/", get(index))
         .route("/health/ready", get(health_ready))
-        .nest("/auth", resource::auth::routes())
-        .nest("/cabinets", resource::cabinets::routes())
-        .nest("/document-types", resource::document_types::routes())
-        .nest("/document-types-metadata-types", resource::document_types_metadata_types::routes())
-        .nest("/documents", resource::documents::routes())
-        .nest("/metadata-types", resource::metadata_types::routes())
-        .nest("/users", resource::users::routes())
+        .nest("/auth", api::auth::routes())
+        .nest("/cabinets", api::cabinets::routes())
+        .nest("/document-types", api::document_types::routes())
+        .nest("/document-types-metadata-types", api::document_types_metadata_types::routes())
+        .nest("/documents", api::documents::routes())
+        .nest("/metadata-types", api::metadata_types::routes())
+        .nest("/users", api::users::routes())
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())

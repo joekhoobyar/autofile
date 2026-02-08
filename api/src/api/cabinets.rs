@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use crate::AppState;
 use crate::schema::cabinets;
+use crate::domain::cabinets::Cabinet;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http, de_present_option};
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use axum::{
     Router,
@@ -18,19 +19,6 @@ use axum::{
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use chrono::{DateTime, Utc};
-
-#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
-#[diesel(table_name = cabinets)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct Cabinet {
-    id: i64,
-    slug: String,
-    name: String,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-    description: Option<String>,
-    parent_id: Option<i64>
-}
 
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = cabinets)]

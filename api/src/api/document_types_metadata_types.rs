@@ -2,13 +2,12 @@ use std::sync::Arc;
 
 use crate::AppState;
 use crate::schema::{document_types_metadata_types, metadata_types};
+use crate::domain::document_types_metadata_types::DocumentTypeMetadataType;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{diesel_to_http, ApiError};
-use crate::resource::document_types::DocumentType;
-use crate::resource::metadata_types::MetadataType;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use axum::{
     Router,
@@ -18,18 +17,6 @@ use axum::{
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-
-#[derive(Debug, Serialize, Identifiable, Associations, Queryable, Selectable)]
-#[diesel(belongs_to(DocumentType))]
-#[diesel(belongs_to(MetadataType))]
-#[diesel(table_name = document_types_metadata_types)]
-#[diesel(primary_key(document_type_id, metadata_type_id))]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct DocumentTypeMetadataType {
-    document_type_id: i64,
-    metadata_type_id: i64,
-    required: bool,
-}
 
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = document_types_metadata_types)]

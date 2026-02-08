@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use crate::AppState;
 use crate::schema::document_types;
+use crate::domain::document_types::DocumentType;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{diesel_to_http, ApiError, ResourceList};
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use axum::{
     Router,
@@ -17,18 +18,6 @@ use axum::{
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use chrono::{DateTime, Utc};
-
-#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
-#[diesel(table_name = document_types)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct DocumentType {
-    id: i64,
-    slug: String,
-    name: String,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-    description: Option<String>
-}
 
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = document_types)]

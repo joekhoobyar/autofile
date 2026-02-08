@@ -2,12 +2,13 @@ use std::sync::Arc;
 
 use crate::AppState;
 use crate::schema::{documents, document_files};
+use crate::domain::documents::Document;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::s3::{delete_from_s3, upload_to_s3};
 use crate::shared::util::{diesel_to_http, ApiError};
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use axum::{
     Router,
@@ -17,21 +18,8 @@ use axum::{
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use uuid::Uuid;
-
-#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
-#[diesel(table_name = documents)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct Document {
-    id: i64,
-    title: String,
-    document_type_id: i64,
-    created_by: i64,
-    created_at: DateTime<Utc>,
-    updated_by: i64,
-    updated_at: DateTime<Utc>,
-}
 
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = documents)]
@@ -47,22 +35,6 @@ struct NewDocument {
 struct DocumentChangeset {
     title: Option<String>,
     document_type_id: Option<i64>,
-}
-
-#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
-#[diesel(table_name = document_files)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct DocumentFile {
-    id: i64,
-    document_id: i64,
-    s3_prefix: String,
-    filename: String,
-    content_type: Option<String>,
-    size: i64,
-    created_at: DateTime<Utc>,
-    created_by: i64,
-    updated_at: DateTime<Utc>,
-    updated_by: i64,
 }
 
 #[derive(Debug, Insertable)]
