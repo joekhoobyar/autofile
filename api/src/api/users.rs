@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
 use crate::AppState;
+use crate::domain::users::User;
 use crate::schema::users;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{diesel_to_http, ApiError};
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use axum::{
     Router,
@@ -17,21 +18,6 @@ use axum::{
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use chrono::{DateTime, Utc};
-
-#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
-#[diesel(table_name = users)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct User {
-    pub id: i64,
-    pub username: String,
-    pub email: String,
-    pub display_name: String,
-    #[serde(skip_serializing)]
-    pub password_hash: String,
-    pub password_changed_at: DateTime<Utc>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
 
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = users)]
