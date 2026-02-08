@@ -21,15 +21,6 @@ use diesel_async::{
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 
 mod schema;
-mod domain {
-    pub mod cabinets;
-    pub mod document_files;
-    pub mod document_types;
-    pub mod document_types_metadata_types;
-    pub mod documents;
-    pub mod metadata_types;
-    pub mod users;
-}
 mod api {
     pub mod auth;
     pub mod cabinets;
@@ -39,11 +30,22 @@ mod api {
     pub mod metadata_types;
     pub mod users;
 }
+mod domain {
+    pub mod cabinets;
+    pub mod document_files;
+    pub mod document_types;
+    pub mod document_types_metadata_types;
+    pub mod documents;
+    pub mod metadata_types;
+    pub mod users;
+}
+mod infrastructure {
+    pub mod s3;
+}
 mod shared {
     pub mod app_state;
     pub mod auth;
     pub mod extractors;
-    pub mod s3;
     pub mod util;
 }
 

@@ -3,9 +3,9 @@ use std::sync::Arc;
 use crate::AppState;
 use crate::schema::{documents, document_files};
 use crate::domain::documents::Document;
+use crate::infrastructure::s3::{delete_from_s3, upload_to_s3};
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::s3::{delete_from_s3, upload_to_s3};
 use crate::shared::util::{diesel_to_http, ApiError};
 
 use serde::Deserialize;
