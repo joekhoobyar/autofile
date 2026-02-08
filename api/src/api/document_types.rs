@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::AppState;
-use crate::schema::document_types;
+use crate::schema::{document_types_metadata_types, document_types, documents};
 use crate::domain::document_types::DocumentType;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
@@ -16,7 +16,7 @@ use axum::{
     extract::{Path, Query},
 };
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Deserialize, Insertable)]
@@ -128,6 +128,58 @@ async fn update(
     Ok(Json(updated))
 }
 
+async fn delete(
+    user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+) -> Result<Json<()>, ApiError> {
+    let document_type_id = id;
+
+    if id == 1 {
+        return Err(ApiError::bad_request("Cannot delete default document type"))
+    }
+
+    db.transaction::<_, diesel::result::Error, _>(move |conn| {
+        Box::pin(async move {
+            // Delete the join table records
+            diesel::delete(document_types_metadata_types::table.filter(document_types_metadata_types::document_type_id.eq(document_type_id)))
+                .execute(conn)
+                .await?;
+
+            // Update the documents
+            diesel::update(documents::table.filter(documents::document_type_id.eq(document_type_id)))
+                .set((
+                    documents::document_type_id.eq(1),
+                    documents::updated_by.eq(user.user_id),
+                    documents::updated_at.eq(Utc::now()),
+                ))
+                .execute(conn)
+                .await?;
+
+            // Delete the document type
+            let affected = diesel::delete(document_types::table.filter(document_types::id.eq(document_type_id)))
+                .execute(conn)
+                .await?;
+
+            if affected == 0 {
+                return Err(diesel::result::Error::NotFound);
+            }
+
+            Ok(())
+        })
+    })
+    .await
+    .map_err(|e| {
+        if matches!(e, diesel::result::Error::NotFound) {
+            ApiError::not_found("Document type not found")
+        } else {
+            ApiError::new(diesel_to_http(e), "Failed to delete document_type")
+        }
+    })?;
+
+    Ok(Json(()))
+}
+
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -203,6 +255,6 @@ pub async fn list(
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(list).post(create))
-        .route("/{id}", get(get_by_id).patch(update))
+        .route("/{id}", get(get_by_id).patch(update).delete(delete))
         .route("/by-slug/{slug}", get(get_by_slug))
 }

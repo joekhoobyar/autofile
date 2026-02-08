@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -10,12 +10,16 @@ import { InputText } from 'primereact/inputtext';
 import { classNames } from 'primereact/utils';
 
 import type { HttpError, ListParams } from '../api';
-import { useDocumentType, useDocumentTypes, useSaveDocumentType } from '../queries/useDocumentTypes';
+import { useDeleteDocumentType, useDocumentType, useDocumentTypes, useSaveDocumentType } from '../queries/useDocumentTypes';
 import { type DocumentType } from '../models/documentType';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
+import { Toast } from 'primereact/toast';
+import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 
 export function ListDocumentTypes() {
+  const toast = useRef(null);
+  const deleteDocumentType = useDeleteDocumentType();
   const [listParams, setListParams] = useState<ListParams>({});
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useDocumentTypes(listParams);
@@ -31,6 +35,43 @@ export function ListDocumentTypes() {
       <a className="title" onClick={() => navigate(`${c.id}/edit`)}>{c.name}</a>
     );
   }
+
+  const actionTemplate = (c: DocumentType) => {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" icon="pi pi-pencil" severity="success" rounded aria-description="Edit"
+          onClick={() => navigate(`${c.id}/edit`)}
+        ></Button>
+        <Button type="button" icon="pi pi-trash" severity="danger" rounded aria-description="Delete"
+          onClick={() => confirmDeleteDocumentType(c)}
+        ></Button>
+      </div>
+    );
+  };
+
+  const doDeleteDocumentType = async (c: DocumentType) => {
+    await deleteDocumentType.mutateAsync(c.id, {
+      onSuccess: () => {
+        navigate('/document-types');
+      }
+    });
+    /*
+    if (toast.current) {
+      toast.current.show({ severity: 'info', summary: 'Confirmed', detail: 'You have accepted', life: 3000 });
+    }
+    */
+  }
+
+  const confirmDeleteDocumentType = (c: DocumentType) => {
+    confirmDialog({
+      message: 'Are you sure want to delete this document type?  All related documents will be changed to the default type.',
+      header: `Delete: ${c.name}`,
+      icon: 'pi pi-trash',
+      defaultFocus: 'reject',
+      acceptClassName: 'p-button-danger',
+      accept: () => doDeleteDocumentType(c),
+    });
+  };
 
   const onSort = (event: DataTableStateEvent) => {
     setListParams({ ...listParams, sf: event.sortField as string, sd: event.sortOrder === -1 });
@@ -52,8 +93,11 @@ export function ListDocumentTypes() {
         <Column field="slug" header="Slug" body={slugTemplate} sortable></Column>
         <Column field="name" header="Name" body={nameTemplate} sortable></Column>
         <Column field="description" header="Description" sortable></Column>
+        <Column body={actionTemplate} headerClassName="w-8rem" />
       </DataTable>
     </Card>
+    <Toast ref={toast} />
+    <ConfirmDialog />
     </>
   );
 }

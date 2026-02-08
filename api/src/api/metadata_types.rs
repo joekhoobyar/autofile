@@ -140,6 +140,7 @@ async fn delete(
 
     db.transaction::<_, diesel::result::Error, _>(move |conn| {
         Box::pin(async move {
+            // Delete the join table records
             diesel::delete(document_types_metadata_types::table.filter(document_types_metadata_types::metadata_type_id.eq(metadata_type_id)))
                 .execute(conn)
                 .await?;

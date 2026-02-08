@@ -43,3 +43,20 @@ export function useSaveDocumentType(): UseMutationResult<DocumentType, HttpError
     },
   });
 }
+
+export function useDeleteDocumentType(): UseMutationResult<void, HttpError, number> {
+  const qc = useQueryClient();
+
+  return useMutation<void, HttpError, number>({
+    mutationFn: async (input) => {
+      return apiMutate<void, void>(`document-types/${input}`, {
+        method: "DELETE",
+      });
+    },
+
+    onSuccess: () => {
+      // invalidate by prefix (works with table params in the queryKey)
+      qc.invalidateQueries({ queryKey: ["documentType"] });
+    },
+  });
+}

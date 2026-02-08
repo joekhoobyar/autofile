@@ -73,6 +73,7 @@ export function ListMetadataTypes() {
       accept: () => doDeleteMetadataType(c),
     });
   };
+
   const onSort = (event: DataTableStateEvent) => {
     setListParams({ ...listParams, sf: event.sortField as string, sd: event.sortOrder === -1 });
   };
