@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use crate::AppState;
-use crate::auth::AuthUser;
 use crate::schema::users;
-use crate::util::{diesel_to_http, ApiError};
-use crate::extractors::DbConn;
+use crate::shared::auth::AuthUser;
+use crate::shared::extractors::DbConn;
+use crate::shared::util::{diesel_to_http, ApiError};
 
 use serde::{Deserialize, Serialize};
 

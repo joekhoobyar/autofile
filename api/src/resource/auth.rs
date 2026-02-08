@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use crate::{AppState, is_production};
-use crate::auth::{hash_password, sign_access, sign_refresh, verify_password, verify_refresh};
-use crate::util::{ApiError, diesel_to_http};
 use crate::schema::users;
 use crate::resource::users::User;
-use crate::extractors::DbConn;
+use crate::shared::auth::{hash_password, sign_access, sign_refresh, verify_password, verify_refresh};
+use crate::shared::extractors::DbConn;
+use crate::shared::util::{ApiError, diesel_to_http};
 
 use axum::{
     Router,

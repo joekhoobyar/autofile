@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
 use crate::AppState;
-use crate::auth::AuthUser;
 use crate::schema::{documents, document_files};
-use crate::util::{diesel_to_http, ApiError};
-use crate::extractors::DbConn;
+use crate::shared::auth::AuthUser;
+use crate::shared::extractors::DbConn;
+use crate::shared::s3::{delete_from_s3, upload_to_s3};
+use crate::shared::util::{diesel_to_http, ApiError};
 
 use serde::{Deserialize, Serialize};
 
@@ -163,7 +164,7 @@ async fn create(
         let s3_key = format!("{}/{}", s3_prefix, filename);
 
         // Upload to S3
-        crate::s3::upload_to_s3(
+        upload_to_s3(
             &state.s3_client,
             &state.s3_bucket,
             &s3_key,
@@ -224,7 +225,7 @@ async fn create(
             // On transaction failure, attempt S3 cleanup (best-effort)
             if let Some((s3_prefix, filename, _, _)) = file_info_for_cleanup {
                 let s3_key = format!("{}/{}", s3_prefix, filename);
-                let _ = crate::s3::delete_from_s3(
+                let _ = delete_from_s3(
                     &state.s3_client,
                     &state.s3_bucket,
                     &s3_key,

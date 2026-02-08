@@ -13,7 +13,7 @@ use argon2::{
 };
 use rand::rngs::OsRng;
 
-use crate::{AppState, util::ApiError};
+use crate::{AppState, shared::util::ApiError};
 
 const ISS: &str = "autofile-api";
 const AUD: &str = "autofile-spa";

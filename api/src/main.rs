@@ -30,7 +30,6 @@ pub struct AppState {
     pub allowed_origins: Arc<Vec<String>>,
 }
 
-mod auth;
 mod schema;
 mod resource {
     pub mod auth;
@@ -41,11 +40,16 @@ mod resource {
     pub mod metadata_types;
     pub mod users;
 }
-mod util;
-mod s3;
-mod extractors;
+mod shared {
+    pub mod auth;
+    pub mod extractors;
+    pub mod s3;
+    pub mod util;
+}
 
-use extractors::DbConn;
+use shared::extractors::DbConn;
+
+use crate::shared::util::ApiError;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
@@ -173,7 +177,7 @@ async fn index() -> &'static str {
     "Hello, world!"
 }
 
-async fn health_ready(DbConn(mut conn): DbConn) -> Result<Json<ReadyResponse>, util::ApiError> {
+async fn health_ready(DbConn(mut conn): DbConn) -> Result<Json<ReadyResponse>, ApiError> {
     // Minimal readiness check: can we run a trivial query?
     // SELECT 1
     use diesel_async::RunQueryDsl;
@@ -181,7 +185,7 @@ async fn health_ready(DbConn(mut conn): DbConn) -> Result<Json<ReadyResponse>, u
     let one: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>("1"))
         .get_result(&mut conn)
         .await
-        .map_err(|e| util::ApiError::internal_server_error(&format!("Database query failed: {}", e)))?;
+        .map_err(|e| ApiError::internal_server_error(&format!("Database query failed: {}", e)))?;
 
     let db_ok = one == 1;
 

@@ -9,7 +9,7 @@ use diesel_async::{
     AsyncPgConnection,
 };
 
-use crate::{AppState, util::ApiError};
+use crate::{AppState, shared::util::ApiError};
 
 // Database connection extractor
 pub struct DbConn(pub PooledConnection<'static, AsyncPgConnection>);
