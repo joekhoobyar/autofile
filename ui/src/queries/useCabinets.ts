@@ -90,3 +90,20 @@ export function useSaveCabinet(): UseMutationResult<Cabinet, HttpError, CabinetI
     },
   });
 }
+
+export function useDeleteCabinet(): UseMutationResult<void, HttpError, number> {
+  const qc = useQueryClient();
+
+  return useMutation<void, HttpError, number>({
+    mutationFn: async (input) => {
+      return apiMutate<void, void>(`cabinets/${input}`, {
+        method: "DELETE",
+      });
+    },
+
+    onSuccess: () => {
+      // invalidate by prefix (works with table params in the queryKey)
+      qc.invalidateQueries({ queryKey: ["cabinet"] });
+    },
+  });
+}

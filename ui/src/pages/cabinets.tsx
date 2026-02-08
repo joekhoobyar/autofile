@@ -9,7 +9,7 @@ import { InputText } from 'primereact/inputtext';
 import { classNames } from 'primereact/utils';
 
 import type { HttpError } from '../api';
-import { useCabinet, useCabinets, useCabinetTree, useSaveCabinet } from '../queries/useCabinets';
+import { useCabinet, useCabinets, useCabinetTree, useDeleteCabinet, useSaveCabinet } from '../queries/useCabinets';
 import { MAX_CABINETS, type Cabinet } from '../models/cabinet';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
@@ -21,6 +21,7 @@ import { Toast } from 'primereact/toast';
 
 export function ListCabinets() {
   const toast = useRef(null);
+  const deleteCabinet = useDeleteCabinet();
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useCabinetTree();
 
@@ -49,7 +50,12 @@ export function ListCabinets() {
     );
   };
 
-  const deleteCabinet = (cabinet: Cabinet) => {
+  const doDeleteCabinet = async (cabinet: Cabinet) => {
+    await deleteCabinet.mutateAsync(cabinet.id, {
+      onSuccess: () => {
+        navigate('/cabinets');
+      }
+    });
     /*
     if (toast.current) {
       toast.current.show({ severity: 'info', summary: 'Confirmed', detail: 'You have accepted', life: 3000 });
@@ -64,7 +70,7 @@ export function ListCabinets() {
       icon: 'pi pi-trash',
       defaultFocus: 'reject',
       acceptClassName: 'p-button-danger',
-      accept: () => deleteCabinet(cabinet),
+      accept: () => doDeleteCabinet(cabinet),
     });
   };
 
