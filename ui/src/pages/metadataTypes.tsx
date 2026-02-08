@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -10,13 +10,17 @@ import { InputText } from 'primereact/inputtext';
 import { classNames } from 'primereact/utils';
 
 import type { HttpError, ListParams } from '../api';
-import { useMetadataType, useMetadataTypes, useSaveMetadataType } from '../queries/useMetadataTypes';
+import { useMetadataType, useMetadataTypes, useSaveMetadataType, useDeleteMetadataType } from '../queries/useMetadataTypes';
 import { type MetadataType } from '../models/metadataType';
 import { Dropdown } from 'primereact/dropdown';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
+import { Toast } from 'primereact/toast';
+import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 
 export function ListMetadataTypes() {
+  const toast = useRef(null);
+  const deleteMetadataType = useDeleteMetadataType();
   const [listParams, setListParams] = useState<ListParams>({});
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useMetadataTypes(listParams);
@@ -33,6 +37,42 @@ export function ListMetadataTypes() {
     );
   }
 
+  const actionTemplate = (c: MetadataType) => {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" icon="pi pi-pencil" severity="success" rounded aria-description="Edit"
+          onClick={() => navigate(`${c.id}/edit`)}
+        ></Button>
+        <Button type="button" icon="pi pi-trash" severity="danger" rounded aria-description="Delete"
+          onClick={() => confirmDeleteMetadataType(c)}
+        ></Button>
+      </div>
+    );
+  };
+
+  const doDeleteMetadataType = async (c: MetadataType) => {
+    await deleteMetadataType.mutateAsync(c.id, {
+      onSuccess: () => {
+        navigate('/metadata-types');
+      }
+    });
+    /*
+    if (toast.current) {
+      toast.current.show({ severity: 'info', summary: 'Confirmed', detail: 'You have accepted', life: 3000 });
+    }
+    */
+  }
+
+  const confirmDeleteMetadataType = (c: MetadataType) => {
+    confirmDialog({
+      message: 'Are you sure want to delete this metadata type?  All related document metadata will be deleted.',
+      header: `Delete: ${c.name}`,
+      icon: 'pi pi-trash',
+      defaultFocus: 'reject',
+      acceptClassName: 'p-button-danger',
+      accept: () => doDeleteMetadataType(c),
+    });
+  };
   const onSort = (event: DataTableStateEvent) => {
     setListParams({ ...listParams, sf: event.sortField as string, sd: event.sortOrder === -1 });
   };
@@ -54,8 +94,11 @@ export function ListMetadataTypes() {
         <Column field="name" header="Name" body={nameTemplate} sortable></Column>
         <Column field="data_type" header="Data Type" sortable></Column>
         <Column field="description" header="Description" sortable></Column>
+        <Column body={actionTemplate} headerClassName="w-8rem" />
       </DataTable>
     </Card>
+    <Toast ref={toast} />
+    <ConfirmDialog />
     </>
   );
 }

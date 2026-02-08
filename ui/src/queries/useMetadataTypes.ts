@@ -43,3 +43,20 @@ export function useSaveMetadataType(): UseMutationResult<MetadataType, HttpError
     },
   });
 }
+
+export function useDeleteMetadataType(): UseMutationResult<void, HttpError, number> {
+  const qc = useQueryClient();
+
+  return useMutation<void, HttpError, number>({
+    mutationFn: async (input) => {
+      return apiMutate<void, void>(`metadata-types/${input}`, {
+        method: "DELETE",
+      });
+    },
+
+    onSuccess: () => {
+      // invalidate by prefix (works with table params in the queryKey)
+      qc.invalidateQueries({ queryKey: ["metadataType"] });
+    },
+  });
+}

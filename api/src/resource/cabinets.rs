@@ -134,7 +134,7 @@ async fn create(
     Ok(Json(inserted))
 }
 
-async fn update_cabinet(
+async fn update(
     _user: AuthUser,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
@@ -182,7 +182,7 @@ async fn update_cabinet(
     Ok(Json(updated))
 }
 
-async fn delete_cabinet(
+async fn delete(
     _user: AuthUser,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
@@ -286,6 +286,6 @@ pub async fn list(
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(list).post(create))
-        .route("/{id}", get(get_by_id).patch(update_cabinet).delete(delete_cabinet))
+        .route("/{id}", get(get_by_id).patch(update).delete(delete))
         .route("/by-slug/{slug}", get(get_by_slug))
 }

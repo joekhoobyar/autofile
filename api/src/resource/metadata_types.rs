@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::AppState;
 use crate::auth::AuthUser;
-use crate::schema::metadata_types;
+use crate::schema::{document_types_metadata_types, metadata_types};
 use crate::util::{diesel_to_http, ApiError, ResourceList};
 use crate::extractors::DbConn;
 
@@ -15,7 +15,7 @@ use axum::{
     extract::{Path, Query},
 };
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
@@ -143,6 +143,43 @@ async fn update(
     Ok(Json(updated))
 }
 
+async fn delete(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+) -> Result<Json<()>, ApiError> {
+    let metadata_type_id = id;
+
+    db.transaction::<_, diesel::result::Error, _>(move |conn| {
+        Box::pin(async move {
+            diesel::delete(document_types_metadata_types::table.filter(document_types_metadata_types::metadata_type_id.eq(metadata_type_id)))
+                .execute(conn)
+                .await?;
+
+            // Delete the metadata type
+            let affected = diesel::delete(metadata_types::table.filter(metadata_types::id.eq(metadata_type_id)))
+                .execute(conn)
+                .await?;
+
+            if affected == 0 {
+                return Err(diesel::result::Error::NotFound);
+            }
+
+            Ok(())
+        })
+    })
+    .await
+    .map_err(|e| {
+        if matches!(e, diesel::result::Error::NotFound) {
+            ApiError::not_found("Metadata type not found")
+        } else {
+            ApiError::new(diesel_to_http(e), "Failed to delete metadata_type")
+        }
+    })?;
+
+    Ok(Json(()))
+}
+
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -222,6 +259,6 @@ pub async fn list(
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(list).post(create))
-        .route("/{id}", get(get_by_id).patch(update))
+        .route("/{id}", get(get_by_id).patch(update).delete(delete))
         .route("/by-slug/{slug}", get(get_by_slug))
 }
