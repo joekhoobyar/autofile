@@ -1,16 +1,22 @@
-use crate::Db;
+use std::sync::Arc;
+
+use crate::AppState;
 use crate::auth::AuthUser;
-use crate::schema::{cabinets};
-use crate::util::{ApiResult, ResourceList, FormFieldPresence, diesel_to_http, err, de_present_option};
+use crate::schema::cabinets;
+use crate::util::{ApiError, ResourceList, diesel_to_http, de_present_option};
+use crate::extractors::DbConn;
 
 use serde::{Deserialize, Serialize};
 
-use rocket::serde::json::Json;
-use rocket::form::FromForm;
-
-use rocket_db_pools::Connection;
-use rocket_db_pools::diesel::prelude::*;
-
+use axum::{
+    Router,
+    routing::get,
+    Json,
+    http::StatusCode,
+    extract::{Path, Query},
+};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
@@ -18,7 +24,6 @@ use chrono::{DateTime, Utc};
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Cabinet {
     id: i64,
-
     slug: String,
     name: String,
     created_at: DateTime<Utc>,
@@ -38,7 +43,6 @@ struct NewCabinet {
 }
 
 #[derive(Debug, Deserialize, AsChangeset)]
-#[serde(crate = "rocket::serde")]
 #[diesel(table_name = cabinets)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct CabinetChangeset {
@@ -51,25 +55,19 @@ struct CabinetChangeset {
     updated_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Copy, FromFormField)]
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CabinetSortField {
-    #[field(value="id")]
     Id,
-    #[field(value="slug")]
     Slug,
-    #[field(value="name")]
     Name,
-    #[field(value="description")]
     Description,
-    #[field(value="parent_id")]
     ParentId,
-    #[field(value="created_at")]
     CreatedAt,
-    #[field(value="updated_at")]
     UpdatedAt,
 }
 
-#[derive(FromForm)]
+#[derive(Debug, Deserialize)]
 pub struct ListCabinetsQuery {
     // 1-based page number
     pub page: Option<i64>,
@@ -77,59 +75,72 @@ pub struct ListCabinetsQuery {
     pub per_page: Option<i64>,
     // optional substring search
     pub q: Option<String>,
-    pub parent_id: Option<FormFieldPresence<i64>>,
+    // Filter by parent_id: "null" for null, or numeric value
+    pub parent_id: Option<String>,
     // optional sort field
     pub sf: Option<CabinetSortField>,
     // optional sort descending
     pub sd: Option<bool>,
 }
 
-#[get("/<id>")]
-pub async fn get(mut db: Connection<Db>, _user: AuthUser, id: i64) -> ApiResult<Json<Cabinet>> {
+pub async fn get_by_id(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+) -> Result<Json<Cabinet>, ApiError> {
     let row = cabinets::table
         .find(id)
         .select(Cabinet::as_select())
         .first::<Cabinet>(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to fetch cabinet"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch cabinet"))?;
 
     Ok(Json(row))
 }
 
-#[get("/by-slug/<slug>")]
-pub async fn get_by_slug(mut db: Connection<Db>, _user: AuthUser, slug: &str) -> ApiResult<Json<Cabinet>> {
+pub async fn get_by_slug(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(slug): Path<String>,
+) -> Result<Json<Cabinet>, ApiError> {
     let row = cabinets::table
         .filter(cabinets::slug.eq(slug))
         .select(Cabinet::as_select())
         .first::<Cabinet>(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to fetch cabinet"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch cabinet"))?;
 
     Ok(Json(row))
 }
 
-#[post("/", format = "json", data = "<input>")]
-async fn create(mut db: Connection<Db>, _user: AuthUser, input: Json<NewCabinet>) -> ApiResult<Json<Cabinet>> {
-    if let Some(parent_id) = input.parent_id && parent_id <= 0 {
-        return Err(err(
-            rocket::http::Status::UnprocessableEntity,
-            "invalid parent cabinet",
-        ));
+async fn create(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Json(input): Json<NewCabinet>,
+) -> Result<Json<Cabinet>, ApiError> {
+    if let Some(parent_id) = input.parent_id {
+        if parent_id <= 0 {
+            return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "Invalid parent cabinet"));
+        }
     }
 
     let inserted: Cabinet = diesel::insert_into(cabinets::table)
-        .values(&*input)
+        .values(&input)
         .returning(Cabinet::as_returning())
         .get_result(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to create cabinet"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to create cabinet"))?;
 
     Ok(Json(inserted))
 }
 
-#[patch("/<id>", format = "json", data = "<input>")]
-async fn update(mut db: Connection<Db>, _user: AuthUser, id: i64, input: Json<CabinetChangeset>) -> ApiResult<Json<Cabinet>> {
-    let patch = input.into_inner();
+async fn update_cabinet(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+    Json(input): Json<CabinetChangeset>,
+) -> Result<Json<Cabinet>, ApiError> {
+    let patch = input;
 
     // Common assignments (no parent_id here)
     let common = (
@@ -149,10 +160,7 @@ async fn update(mut db: Connection<Db>, _user: AuthUser, id: i64, input: Json<Ca
         },
         Some(Some(parent_id)) => {
             if parent_id <= 0 || parent_id == id {
-                return Err(err(
-                    rocket::http::Status::UnprocessableEntity,
-                    "invalid parent cabinet",
-                ));
+                return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "Invalid parent cabinet"));
             }
             base.set((common, cabinets::parent_id.eq(parent_id)))
                 .returning(Cabinet::as_returning())
@@ -169,34 +177,38 @@ async fn update(mut db: Connection<Db>, _user: AuthUser, id: i64, input: Json<Ca
 
     // Update + return the updated row in one round-trip.
     let updated: Cabinet = base
-        .map_err(|e| err(diesel_to_http(e), "failed to update cabinet"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update cabinet"))?;
 
     Ok(Json(updated))
 }
 
-#[delete("/<id>", format = "json")]
-async fn delete(mut db: Connection<Db>, _user: AuthUser, id: i64) -> ApiResult<Json<()>> {
-
-    // Update + return the updated row in one round-trip.
+async fn delete_cabinet(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+) -> Result<Json<()>, ApiError> {
     let affected = diesel::delete(cabinets::table.filter(cabinets::id.eq(id)))
         .execute(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to delete cabinet"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete cabinet"))?;
 
     if affected == 0 {
-        return Err(err(rocket::http::Status::NotFound, "cabinet not found"));
+        return Err(ApiError::not_found("Cabinet not found"));
     }
 
     Ok(Json(()))
 }
 
-#[get("/?<params..>")]
-pub async fn list(mut db: Connection<Db>, _user: AuthUser, params: ListCabinetsQuery) -> ApiResult<Json<ResourceList<Cabinet>>> {
+pub async fn list(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Query(params): Query<ListCabinetsQuery>,
+) -> Result<Json<ResourceList<Cabinet>>, ApiError> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
 
-    let base_filter =  || -> cabinets::BoxedQuery<'_, diesel::pg::Pg> {
+    let base_filter = || -> cabinets::BoxedQuery<'_, diesel::pg::Pg> {
         // Start with a boxed query so we can conditionally add filters.
         let mut query = cabinets::table.into_boxed();
 
@@ -210,15 +222,13 @@ pub async fn list(mut db: Connection<Db>, _user: AuthUser, params: ListCabinetsQ
             )
         }
 
-        // Optional filter by parent
-        match params.parent_id {
-            Some(FormFieldPresence::Null) => { 
+        // Optional filter by parent: "null" for null values, or numeric string
+        if let Some(ref parent_id_str) = params.parent_id {
+            if parent_id_str == "null" {
                 query = query.filter(cabinets::parent_id.is_null());
+            } else if let Ok(parent_id) = parent_id_str.parse::<i64>() {
+                query = query.filter(cabinets::parent_id.eq(parent_id));
             }
-            Some(FormFieldPresence::Value(v)) => {
-                query = query.filter(cabinets::parent_id.eq(v));
-            }
-            None => ()
         }
 
         query
@@ -228,35 +238,34 @@ pub async fn list(mut db: Connection<Db>, _user: AuthUser, params: ListCabinetsQ
         .count()
         .get_result::<i64>(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to count cabinets"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count cabinets"))?;
 
     let mut query: cabinets::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
         (Some(CabinetSortField::Slug), Some(true)) =>
-            query.order((cabinets::slug.desc(), cabinets::id.asc())), // tie-breaker
+            query.order((cabinets::slug.desc(), cabinets::id.asc())),
         (Some(CabinetSortField::Slug), _) =>
-            query.order((cabinets::slug.asc(), cabinets::id.asc())), // tie-breaker
+            query.order((cabinets::slug.asc(), cabinets::id.asc())),
         (Some(CabinetSortField::Name), Some(true)) =>
-            query.order((cabinets::name.desc(), cabinets::id.asc())), // tie-breaker
+            query.order((cabinets::name.desc(), cabinets::id.asc())),
         (Some(CabinetSortField::Name), _) =>
-            query.order((cabinets::name.asc(), cabinets::id.asc())), // tie-breaker
+            query.order((cabinets::name.asc(), cabinets::id.asc())),
         (Some(CabinetSortField::Description), Some(true)) =>
-            query.order((cabinets::description.desc(), cabinets::id.asc())), // tie-breaker
+            query.order((cabinets::description.desc(), cabinets::id.asc())),
         (Some(CabinetSortField::Description), _) =>
-            query.order((cabinets::description.asc(), cabinets::id.asc())), // tie-breaker
+            query.order((cabinets::description.asc(), cabinets::id.asc())),
         (Some(CabinetSortField::ParentId), Some(true)) =>
-            query.order((cabinets::parent_id.desc(), cabinets::id.asc())), // tie-breaker
+            query.order((cabinets::parent_id.desc(), cabinets::id.asc())),
         (Some(CabinetSortField::ParentId), _) =>
-            query.order((cabinets::parent_id.asc(), cabinets::id.asc())), // tie-breaker
+            query.order((cabinets::parent_id.asc(), cabinets::id.asc())),
         (Some(CabinetSortField::CreatedAt), Some(true)) =>
-            query.order((cabinets::created_at.desc(), cabinets::id.asc())), // tie-breaker
+            query.order((cabinets::created_at.desc(), cabinets::id.asc())),
         (Some(CabinetSortField::CreatedAt), _) =>
-            query.order((cabinets::created_at.asc(), cabinets::id.asc())), // tie-breaker
+            query.order((cabinets::created_at.asc(), cabinets::id.asc())),
         (Some(CabinetSortField::UpdatedAt), Some(true)) =>
-            query.order((cabinets::updated_at.desc(), cabinets::id.asc())), // tie-breaker
+            query.order((cabinets::updated_at.desc(), cabinets::id.asc())),
         (Some(CabinetSortField::UpdatedAt), _) =>
-            query.order((cabinets::updated_at.asc(), cabinets::id.asc())), // tie-breaker
-
+            query.order((cabinets::updated_at.asc(), cabinets::id.asc())),
         (Some(CabinetSortField::Id), Some(true)) =>
             query.order(cabinets::id.desc()),
         _ =>
@@ -264,20 +273,19 @@ pub async fn list(mut db: Connection<Db>, _user: AuthUser, params: ListCabinetsQ
     };
 
     let items = query
-        .order(cabinets::id.desc())
         .limit(per_page)
         .offset(offset)
         .select(Cabinet::as_select())
         .load::<Cabinet>(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to list cabinets"))?;
-
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list cabinets"))?;
 
     Ok(Json(ResourceList { total, page, per_page, items }))
 }
 
-pub fn stage() -> rocket::fairing::AdHoc {
-    rocket::fairing::AdHoc::on_ignite("Autofile cabinets", |rocket| async {
-        rocket.mount("/cabinets", routes![list, get, get_by_slug, create, update, delete])
-    })
+pub fn routes() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/", get(list).post(create))
+        .route("/{id}", get(get_by_id).patch(update_cabinet).delete(delete_cabinet))
+        .route("/by-slug/{slug}", get(get_by_slug))
 }

@@ -1,13 +1,8 @@
-use crate::{OurAllowedOrigins};
-
-use rocket::State;
-use rocket::request::{FromRequest, Outcome};
-use rocket::{http::Status, response::Responder, Request};
-use rocket::serde::json::Json;
-use rocket::serde::Deserialize;
-use rocket::response::status::Custom;
-use rocket::form::{self, FromFormField, ValueField};
-
+use axum::{
+    response::{IntoResponse, Response},
+    http::StatusCode,
+    Json,
+};
 use diesel::result::{DatabaseErrorKind, Error as DieselError};
 
 #[derive(Debug, serde::Serialize)]
@@ -20,62 +15,52 @@ pub struct ResourceList<T> {
 
 #[derive(Debug, serde::Serialize)]
 pub struct ApiError {
-    pub status: Status,
+    pub status: u16,
     pub message: String,
 }
 
 impl ApiError {
-    pub fn new(status: Status, message: impl Into<String>) -> Self {
-        Self { status, message: message.into() }
+    pub fn new(status: StatusCode, message: impl Into<String>) -> Self {
+        Self {
+            status: status.as_u16(),
+            message: message.into(),
+        }
+    }
+
+    pub fn internal_server_error(message: &str) -> Self {
+        Self::new(StatusCode::INTERNAL_SERVER_ERROR, message)
+    }
+
+    pub fn bad_request(message: &str) -> Self {
+        Self::new(StatusCode::BAD_REQUEST, message)
+    }
+
+    pub fn not_found(message: &str) -> Self {
+        Self::new(StatusCode::NOT_FOUND, message)
+    }
+
+    pub fn unauthorized(message: &str) -> Self {
+        Self::new(StatusCode::UNAUTHORIZED, message)
     }
 }
 
-impl<'r> Responder<'r, 'static> for ApiError {
-    fn respond_to(self, rq: &'r Request<'_>) -> rocket::response::Result<'static> {
-        let status = self.status;
-        rocket::response::status::Custom(status, Json(self)).respond_to(rq)
-        // NOTE: Rocket requires a Request; easiest in practice is to return Custom<Json<_>> directly.
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        let status = StatusCode::from_u16(self.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        (status, Json(self)).into_response()
     }
-}
-
-pub type ApiResult<T> = Result<T, Custom<Json<ApiError>>>;
-
-pub fn err(status: Status, msg: impl Into<String>) -> Custom<Json<ApiError>> {
-    Custom(status, Json(ApiError::new(status, msg.into())))
 }
 
 // Map a Diesel error to an appropriate HTTP status code.
-pub fn diesel_to_http(e: DieselError) -> Status {
-    println!("Diesel error: {:?}", e);
+pub fn diesel_to_http(e: DieselError) -> StatusCode {
+    eprintln!("Diesel error: {:?}", e);
     match e {
-        DieselError::NotFound => Status::NotFound,
-        DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => Status::Conflict,
-        DieselError::DatabaseError(DatabaseErrorKind::NotNullViolation, _) => Status::UnprocessableEntity,
-        DieselError::DatabaseError(DatabaseErrorKind::ForeignKeyViolation, _) => Status::UnprocessableEntity,
-        DieselError::DatabaseError(DatabaseErrorKind::CheckViolation, _) => Status::UnprocessableEntity,
-        _ => {
-            Status::BadRequest
-        },
-    }
-}
-
-// A form field to use when distinguishing between "not present" and "present but empty".
-#[derive(Debug, Clone, Copy)]
-pub enum FormFieldPresence<T> {
-    Null,      // param present but empty
-    Value(T),
-}
-
-impl<'v, T> FromFormField<'v> for FormFieldPresence<T>
-where
-    T: FromFormField<'v>,
-{
-    fn from_value(field: ValueField<'v>) -> form::Result<'v, Self> {
-        if field.value.is_empty() {
-            Ok(FormFieldPresence::Null)
-        } else {
-            Ok(FormFieldPresence::Value(T::from_value(field)?))
-        }
+        DieselError::NotFound => StatusCode::NOT_FOUND,
+        DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => StatusCode::CONFLICT,
+        DieselError::DatabaseError(DatabaseErrorKind::NotNullViolation, _) => StatusCode::UNPROCESSABLE_ENTITY,
+        DieselError::DatabaseError(DatabaseErrorKind::ForeignKeyViolation, _) => StatusCode::UNPROCESSABLE_ENTITY,
+        DieselError::DatabaseError(DatabaseErrorKind::CheckViolation, _) => StatusCode::UNPROCESSABLE_ENTITY,
+        _ => StatusCode::BAD_REQUEST,
     }
 }
 
@@ -86,35 +71,10 @@ where
     D: serde::de::Deserializer<'de>,
     T: serde::Deserialize<'de>,
 {
+    use serde::Deserialize;
     // If the field is present:
     // - null -> Option<T>::None
     // - value -> Option<T>::Some(value)
     // Then we wrap it in Some(...) to record presence.
-    Ok(Some(Option::<T>::deserialize(d)?))
-}
-
-pub struct SameOrigin;
-
-// Require that the request's Origin header matches the allowed origins.
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for SameOrigin {
-    type Error = ();
-
-    async fn from_request(req: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        let allowed = match req.guard::<&State<OurAllowedOrigins>>().await {
-            Outcome::Success(s) => s,
-            _ => return Outcome::Error((Status::InternalServerError, ())),
-        };
-
-        let origin = match req.headers().get_one("Origin") {
-            Some(o) => o,
-            None => return Outcome::Error((Status::Forbidden, ())), // no Origin => reject
-        };
-
-        if allowed.0.iter().any(|a| a == origin) {
-            Outcome::Success(SameOrigin)
-        } else {
-            Outcome::Error((Status::Forbidden, ()))
-        }
-    }
+    Ok(Some(<Option<T>>::deserialize(d)?))
 }

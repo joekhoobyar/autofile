@@ -1,12 +1,19 @@
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, Algorithm};
 use chrono::Utc;
-use rocket::{request::{FromRequest, Outcome}, http::Status, Request, State};
+use axum::{
+    extract::FromRequestParts,
+    http::{request::Parts, StatusCode},
+};
 use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
 use rand::rngs::OsRng;
+
+use crate::{AppState, util::ApiError};
 
 const ISS: &str = "autofile-api";
 const AUD: &str = "autofile-spa";
@@ -35,8 +42,6 @@ pub fn verify_password(password: &str, password_hash: &str) -> Result<bool, &'st
         .verify_password(password.as_bytes(), &parsed)
         .is_ok())
 }
-
-pub struct JwtSecret(pub Vec<u8>);
 
 #[derive(Debug, Clone, Copy)]
 pub struct AuthUser {
@@ -133,29 +138,33 @@ pub fn verify_refresh(secret: &[u8], token: &str) -> Result<RefreshClaims, jsonw
     Ok(data.claims)
 }
 
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for AuthUser {
-    type Error = ();
+impl FromRequestParts<Arc<AppState>> for AuthUser {
+    type Rejection = ApiError;
 
-    async fn from_request(req: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        let secret = match req.guard::<&State<JwtSecret>>().await {
-            Outcome::Success(s) => s,
-            _ => return Outcome::Error((Status::InternalServerError, ())),
-        };
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<AppState>,
+    ) -> Result<Self, Self::Rejection> {
+        // Extract Authorization header
+        let auth_header = parts
+            .headers
+            .get("Authorization")
+            .and_then(|h| h.to_str().ok())
+            .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "Missing Authorization header"))?;
 
-        let auth = match req.headers().get_one("Authorization") {
-            Some(h) => h,
-            None => return Outcome::Error((Status::Unauthorized, ())),
-        };
+        // Extract Bearer token
+        let token = auth_header
+            .strip_prefix("Bearer ")
+            .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "Invalid Authorization header format"))?;
 
-        let token = auth.strip_prefix("Bearer ").unwrap_or("");
         if token.is_empty() {
-            return Outcome::Error((Status::Unauthorized, ()));
+            return Err(ApiError::new(StatusCode::UNAUTHORIZED, "Empty token"));
         }
 
-        match verify_access(&secret.0, token) {
-            Ok(data) => Outcome::Success(AuthUser { user_id: data.uid }),
-            Err(_) => Outcome::Error((Status::Unauthorized, ())),
+        // Verify the JWT
+        match verify_access(&state.jwt_secret, token) {
+            Ok(claims) => Ok(AuthUser { user_id: claims.uid }),
+            Err(_) => Err(ApiError::new(StatusCode::UNAUTHORIZED, "Invalid or expired token")),
         }
     }
 }

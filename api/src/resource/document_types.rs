@@ -1,16 +1,21 @@
-use crate::Db;
+use std::sync::Arc;
+
+use crate::AppState;
 use crate::auth::AuthUser;
-use crate::schema::{document_types};
-use crate::util::{diesel_to_http, err, ApiResult, ResourceList};
+use crate::schema::document_types;
+use crate::util::{diesel_to_http, ApiError, ResourceList};
+use crate::extractors::DbConn;
 
 use serde::{Deserialize, Serialize};
 
-use rocket::serde::json::Json;
-use rocket::form::FromForm;
-
-use rocket_db_pools::Connection;
-use rocket_db_pools::diesel::prelude::*;
-
+use axum::{
+    Router,
+    routing::get,
+    Json,
+    extract::{Path, Query},
+};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
@@ -18,7 +23,6 @@ use chrono::{DateTime, Utc};
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct DocumentType {
     id: i64,
-
     slug: String,
     name: String,
     created_at: DateTime<Utc>,
@@ -44,23 +48,18 @@ struct DocumentTypeChangeset {
     updated_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Copy, FromFormField)]
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DocumentTypeSortField {
-    #[field(value="id")]
     Id,
-    #[field(value="slug")]
     Slug,
-    #[field(value="name")]
     Name,
-    #[field(value="description")]
     Description,
-    #[field(value="created_at")]
     CreatedAt,
-    #[field(value="updated_at")]
     UpdatedAt,
 }
 
-#[derive(FromForm)]
+#[derive(Debug, Deserialize)]
 pub struct ListDocumentTypesQuery {
     // 1-based page number
     pub page: Option<i64>,
@@ -74,45 +73,58 @@ pub struct ListDocumentTypesQuery {
     pub sd: Option<bool>,
 }
 
-#[get("/<id>")]
-pub async fn get(mut db: Connection<Db>, _user: AuthUser, id: i64) -> ApiResult<Json<DocumentType>> {
+pub async fn get_by_id(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+) -> Result<Json<DocumentType>, ApiError> {
     let row = document_types::table
         .find(id)
         .select(DocumentType::as_select())
         .first::<DocumentType>(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to fetch document_type"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document_type"))?;
 
     Ok(Json(row))
 }
 
-#[get("/by-slug/<slug>")]
-pub async fn get_by_slug(mut db: Connection<Db>, _user: AuthUser, slug: &str) -> ApiResult<Json<DocumentType>> {
+pub async fn get_by_slug(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(slug): Path<String>,
+) -> Result<Json<DocumentType>, ApiError> {
     let row = document_types::table
         .filter(document_types::slug.eq(slug))
         .select(DocumentType::as_select())
         .first::<DocumentType>(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to fetch document_type"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document_type"))?;
 
     Ok(Json(row))
 }
 
-#[post("/", format = "json", data = "<input>")]
-async fn create(mut db: Connection<Db>, _user: AuthUser, input: Json<NewDocumentType>) -> ApiResult<Json<DocumentType>> {
+async fn create(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Json(input): Json<NewDocumentType>,
+) -> Result<Json<DocumentType>, ApiError> {
     let inserted: DocumentType = diesel::insert_into(document_types::table)
-        .values(&*input)
+        .values(&input)
         .returning(DocumentType::as_returning())
         .get_result(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to create document_type"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to create document_type"))?;
 
     Ok(Json(inserted))
 }
 
-#[patch("/<id>", format = "json", data = "<input>")]
-async fn update(mut db: Connection<Db>, _user: AuthUser, id: i64, input: Json<DocumentTypeChangeset>) -> ApiResult<Json<DocumentType>> {
-    let mut changes = input.into_inner();
+async fn update(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+    Json(input): Json<DocumentTypeChangeset>,
+) -> Result<Json<DocumentType>, ApiError> {
+    let mut changes = input;
     changes.updated_at = Some(Utc::now());
 
     // Update + return the updated row in one round-trip.
@@ -122,20 +134,23 @@ async fn update(mut db: Connection<Db>, _user: AuthUser, id: i64, input: Json<Do
             .returning(DocumentType::as_returning())
             .get_result(&mut db)
             .await
-            .map_err(|e| err(diesel_to_http(e), "failed to update document_type"))?;
+            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update document_type"))?;
 
     Ok(Json(updated))
 }
 
-#[get("/?<params..>")]
-pub async fn list(mut db: Connection<Db>, _user: AuthUser, params: ListDocumentTypesQuery) -> ApiResult<Json<ResourceList<DocumentType>>> {
+pub async fn list(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Query(params): Query<ListDocumentTypesQuery>,
+) -> Result<Json<ResourceList<DocumentType>>, ApiError> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
 
-    let base_filter =  || -> document_types::BoxedQuery<'_, diesel::pg::Pg> {
+    let base_filter = || -> document_types::BoxedQuery<'_, diesel::pg::Pg> {
         // Start with a boxed query so we can conditionally add filters.
-        let query= document_types::table.into_boxed();
+        let query = document_types::table.into_boxed();
 
         // Optional search: case-insensitive substring on slug/name/description
         if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
@@ -145,7 +160,7 @@ pub async fn list(mut db: Connection<Db>, _user: AuthUser, params: ListDocumentT
                     .or(document_types::name.ilike(pattern.clone()))
                     .or(document_types::description.ilike(pattern)),
             )
-        } else { 
+        } else {
             query
         }
     };
@@ -154,7 +169,7 @@ pub async fn list(mut db: Connection<Db>, _user: AuthUser, params: ListDocumentT
         .count()
         .get_result::<i64>(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to count document_types"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count document_types"))?;
 
     let mut query: document_types::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
@@ -185,19 +200,20 @@ pub async fn list(mut db: Connection<Db>, _user: AuthUser, params: ListDocumentT
             query.order(document_types::id.asc()),
     };
 
-    let items= query
+    let items = query
         .limit(per_page)
         .offset(offset)
         .select(DocumentType::as_select())
         .load::<DocumentType>(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to list document_types"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_types"))?;
 
     Ok(Json(ResourceList { total, page, per_page, items }))
 }
 
-pub fn stage() -> rocket::fairing::AdHoc {
-    rocket::fairing::AdHoc::on_ignite("Autofile document_types", |rocket| async {
-        rocket.mount("/document-types", routes![list, get, get_by_slug, create, update])
-    })
+pub fn routes() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/", get(list).post(create))
+        .route("/{id}", get(get_by_id).patch(update))
+        .route("/by-slug/{slug}", get(get_by_slug))
 }

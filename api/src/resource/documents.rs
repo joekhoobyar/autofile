@@ -1,32 +1,31 @@
-use crate::Db;
+use std::sync::Arc;
+
+use crate::AppState;
 use crate::auth::AuthUser;
 use crate::schema::{documents, document_files};
-use crate::util::{diesel_to_http, err, ApiResult};
+use crate::util::{diesel_to_http, ApiError};
+use crate::extractors::DbConn;
 
 use serde::{Deserialize, Serialize};
 
-use rocket::serde::json::Json;
-use rocket::form::{Form, FromForm};
-use rocket::fs::TempFile;
-use rocket::{State};
-use rocket::http::Status;
-
-use rocket_db_pools::Connection;
-use rocket_db_pools::diesel::prelude::*;
-
+use axum::{
+    Router,
+    routing::get,
+    Json,
+    extract::{Path, Query, Multipart, State},
+};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
-use tokio::io::AsyncReadExt;
 
 #[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
 #[diesel(table_name = documents)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Document {
     id: i64,
-
     title: String,
     document_type_id: i64,
-
     created_by: i64,
     created_at: DateTime<Utc>,
     updated_by: i64,
@@ -78,7 +77,7 @@ struct NewDocumentFile {
     updated_by: i64,
 }
 
-#[derive(FromForm)]
+#[derive(Debug, Deserialize)]
 pub struct ListDocumentsQuery {
     // 1-based page number
     pub page: Option<i64>,
@@ -89,50 +88,75 @@ pub struct ListDocumentsQuery {
     document_type_id: Option<i64>,
 }
 
-#[derive(FromForm)]
-pub struct DocumentFormData<'r> {
-    title: String,
-    document_type_id: i64,
-    file: Option<TempFile<'r>>,
-}
-
-#[get("/<id>")]
-pub async fn get(mut db: Connection<Db>, _user: AuthUser, id: i64) -> ApiResult<Json<Document>> {
+pub async fn get_by_id(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+) -> Result<Json<Document>, ApiError> {
     let row = documents::table
         .find(id)
         .select(Document::as_select())
         .first::<Document>(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to fetch document"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document"))?;
 
     Ok(Json(row))
 }
 
-#[post("/", data = "<form>")]
 async fn create(
-    mut db: Connection<Db>,
     user: AuthUser,
-    mut form: Form<DocumentFormData<'_>>,
-    s3_client: &State<aws_sdk_s3::Client>,
-    s3_bucket: &State<String>,
-) -> ApiResult<Json<Document>> {
-    // Handle optional file upload
-    let file_info = if let Some(ref mut file) = form.file {
-        // Extract file metadata
-        let filename = file.name()
-            .ok_or_else(|| err(Status::BadRequest, "file has no filename"))?
+    State(state): State<Arc<AppState>>,
+    DbConn(mut db): DbConn,
+    mut multipart: Multipart,
+) -> Result<Json<Document>, ApiError> {
+    // Parse multipart form fields
+    let mut title: Option<String> = None;
+    let mut document_type_id: Option<i64> = None;
+    let mut file_data: Option<(String, Vec<u8>, Option<String>)> = None;
+
+    while let Some(field) = multipart.next_field().await
+        .map_err(|e| ApiError::bad_request(&format!("Failed to read multipart field: {}", e)))? {
+
+        let field_name = field.name()
+            .ok_or_else(|| ApiError::bad_request("Field missing name"))?
             .to_string();
-        let content_type = file.content_type().map(|ct| ct.to_string());
 
-        // Read file content into memory
-        let mut file_data = Vec::new();
-        file.open().await
-            .map_err(|e| err(Status::InternalServerError, &format!("failed to open temp file: {}", e)))?
-            .read_to_end(&mut file_data)
-            .await
-            .map_err(|e| err(Status::InternalServerError, &format!("failed to read file: {}", e)))?;
+        match field_name.as_str() {
+            "title" => {
+                let value = field.text().await
+                    .map_err(|e| ApiError::bad_request(&format!("Failed to read title: {}", e)))?;
+                title = Some(value);
+            }
+            "document_type_id" => {
+                let value = field.text().await
+                    .map_err(|e| ApiError::bad_request(&format!("Failed to read document_type_id: {}", e)))?;
+                document_type_id = Some(value.parse::<i64>()
+                    .map_err(|_| ApiError::bad_request("Invalid document_type_id"))?);
+            }
+            "file" => {
+                let filename = field.file_name()
+                    .ok_or_else(|| ApiError::bad_request("File field missing filename"))?
+                    .to_string();
+                let content_type = field.content_type().map(|ct| ct.to_string());
+                let data = field.bytes().await
+                    .map_err(|e| ApiError::bad_request(&format!("Failed to read file data: {}", e)))?;
 
-        let file_size = file_data.len() as i64;
+                file_data = Some((filename, data.to_vec(), content_type));
+            }
+            _ => {
+                // Ignore unknown fields
+            }
+        }
+    }
+
+    // Validate required fields
+    let title = title.ok_or_else(|| ApiError::bad_request("Missing required field: title"))?;
+    let document_type_id = document_type_id
+        .ok_or_else(|| ApiError::bad_request("Missing required field: document_type_id"))?;
+
+    // Handle optional file upload
+    let file_info = if let Some((filename, data, content_type)) = file_data {
+        let file_size = data.len() as i64;
 
         // Generate UUID for s3_prefix
         let s3_prefix = Uuid::new_v4().to_string();
@@ -140,14 +164,14 @@ async fn create(
 
         // Upload to S3
         crate::s3::upload_to_s3(
-            s3_client.inner(),
-            s3_bucket.as_str(),
+            &state.s3_client,
+            &state.s3_bucket,
             &s3_key,
-            &file_data,
+            &data,
             content_type.as_deref(),
         )
         .await
-        .map_err(|e| err(Status::InternalServerError, &format!("S3 upload failed: {}", e)))?;
+        .map_err(|e| ApiError::internal_server_error(&format!("S3 upload failed: {}", e)))?;
 
         Some((s3_prefix, filename, content_type, file_size))
     } else {
@@ -164,8 +188,8 @@ async fn create(
                 // Insert document record
                 let inserted_document: Document = diesel::insert_into(documents::table)
                     .values((
-                        documents::title.eq(&form.title),
-                        documents::document_type_id.eq(form.document_type_id),
+                        documents::title.eq(&title),
+                        documents::document_type_id.eq(document_type_id),
                         documents::created_by.eq(user.user_id),
                         documents::updated_by.eq(user.user_id),
                     ))
@@ -201,36 +225,43 @@ async fn create(
             if let Some((s3_prefix, filename, _, _)) = file_info_for_cleanup {
                 let s3_key = format!("{}/{}", s3_prefix, filename);
                 let _ = crate::s3::delete_from_s3(
-                    s3_client.inner(),
-                    s3_bucket.as_str(),
+                    &state.s3_client,
+                    &state.s3_bucket,
                     &s3_key,
                 ).await;
             }
-            Err(err(diesel_to_http(e), "failed to create document"))
+            Err(ApiError::new(diesel_to_http(e), "Failed to create document"))
         }
     }
 }
 
-#[patch("/<id>", format = "json", data = "<input>")]
-async fn update(mut db: Connection<Db>, user: AuthUser, id: i64, input: Json<DocumentChangeset>) -> ApiResult<Json<Document>> {
+async fn update(
+    user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+    Json(input): Json<DocumentChangeset>,
+) -> Result<Json<Document>, ApiError> {
     // Update + return the updated row in one round-trip.
     let updated: Document =
         diesel::update(documents::table.filter(documents::id.eq(id)))
             .set((
-                &input.into_inner(),
+                &input,
                 documents::updated_by.eq(user.user_id),
                 documents::updated_at.eq(Utc::now()),
             ))
             .returning(Document::as_returning())
             .get_result(&mut db)
             .await
-            .map_err(|e| err(diesel_to_http(e), "failed to update document"))?;
+            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update document"))?;
 
     Ok(Json(updated))
 }
 
-#[get("/?<params..>")]
-pub async fn list(mut db: Connection<Db>, _user: AuthUser, params: ListDocumentsQuery) -> ApiResult<Json<Vec<Document>>> {
+pub async fn list(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Query(params): Query<ListDocumentsQuery>,
+) -> Result<Json<Vec<Document>>, ApiError> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
@@ -238,7 +269,7 @@ pub async fn list(mut db: Connection<Db>, _user: AuthUser, params: ListDocuments
     // Start with a boxed query so we can conditionally add filters.
     let mut query = documents::table.into_boxed();
 
-    // Optional search: case-insensitive substring on slug/name/description
+    // Optional search: case-insensitive substring on title
     if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
         let pattern = format!("%{}%", q);
         query = query.filter(
@@ -258,13 +289,13 @@ pub async fn list(mut db: Connection<Db>, _user: AuthUser, params: ListDocuments
         .select(Document::as_select())
         .load::<Document>(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to list documents"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list documents"))?;
 
     Ok(Json(rows))
 }
 
-pub fn stage() -> rocket::fairing::AdHoc {
-    rocket::fairing::AdHoc::on_ignite("Autofile documents", |rocket| async {
-        rocket.mount("/documents", routes![list, get, create, update])
-    })
+pub fn routes() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/", get(list).post(create))
+        .route("/{id}", get(get_by_id).patch(update))
 }

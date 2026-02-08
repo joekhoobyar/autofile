@@ -1,15 +1,21 @@
-use crate::Db;
-use crate::schema::{users};
-use crate::util::{diesel_to_http, err, ApiResult};
+use std::sync::Arc;
+
+use crate::AppState;
+use crate::auth::AuthUser;
+use crate::schema::users;
+use crate::util::{diesel_to_http, ApiError};
+use crate::extractors::DbConn;
 
 use serde::{Deserialize, Serialize};
 
-use rocket::serde::json::Json;
-use rocket::form::FromForm;
-
-use rocket_db_pools::Connection;
-use rocket_db_pools::diesel::prelude::*;
-
+use axum::{
+    Router,
+    routing::get,
+    Json,
+    extract::{Path, Query},
+};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
@@ -30,7 +36,7 @@ pub struct User {
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
-struct NewUser {
+pub struct NewUser {
     pub username: String,
     pub email: String,
     pub display_name: String,
@@ -39,13 +45,13 @@ struct NewUser {
 #[derive(Debug, Deserialize, AsChangeset)]
 #[diesel(table_name = users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
-struct UserChangeset {
+pub struct UserChangeset {
     pub email: Option<String>,
     pub display_name: Option<String>,
     pub updated_at: Option<DateTime<Utc>>,
 }
 
-#[derive(FromForm)]
+#[derive(Debug, Deserialize)]
 pub struct ListUsersQuery {
     // 1-based page number
     pub page: Option<i64>,
@@ -55,45 +61,58 @@ pub struct ListUsersQuery {
     pub q: Option<String>,
 }
 
-#[get("/<id>")]
-pub async fn get(mut db: Connection<Db>, id: i64) -> ApiResult<Json<User>> {
+pub async fn get_by_id(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+) -> Result<Json<User>, ApiError> {
     let row = users::table
         .find(id)
         .select(User::as_select())
         .first::<User>(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to fetch user"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch user"))?;
 
     Ok(Json(row))
 }
 
-#[get("/by-username/<username>")]
-pub async fn get_by_username(mut db: Connection<Db>, username: &str) -> ApiResult<Json<User>> {
+pub async fn get_by_username(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(username): Path<String>,
+) -> Result<Json<User>, ApiError> {
     let row = users::table
         .filter(users::username.eq(username))
         .select(User::as_select())
         .first::<User>(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to fetch user"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch user"))?;
 
     Ok(Json(row))
 }
 
-#[post("/", format = "json", data = "<input>")]
-async fn create(mut db: Connection<Db>, input: Json<NewUser>) -> ApiResult<Json<User>> {
+async fn create(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Json(input): Json<NewUser>,
+) -> Result<Json<User>, ApiError> {
     let inserted: User = diesel::insert_into(users::table)
-        .values(&*input)
+        .values(&input)
         .returning(User::as_returning())
         .get_result(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to create user"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to create user"))?;
 
     Ok(Json(inserted))
 }
 
-#[patch("/<id>", format = "json", data = "<input>")]
-async fn update(mut db: Connection<Db>, id: i64, input: Json<UserChangeset>) -> ApiResult<Json<User>> {
-    let mut changes = input.into_inner();
+async fn update(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+    Json(input): Json<UserChangeset>,
+) -> Result<Json<User>, ApiError> {
+    let mut changes = input;
     changes.updated_at = Some(Utc::now());
 
     // Update + return the updated row in one round-trip.
@@ -103,13 +122,16 @@ async fn update(mut db: Connection<Db>, id: i64, input: Json<UserChangeset>) -> 
             .returning(User::as_returning())
             .get_result(&mut db)
             .await
-            .map_err(|e| err(diesel_to_http(e), "failed to update user"))?;
+            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update user"))?;
 
     Ok(Json(updated))
 }
 
-#[get("/?<params..>")]
-pub async fn list(mut db: Connection<Db>, params: ListUsersQuery) -> ApiResult<Json<Vec<User>>> {
+pub async fn list(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Query(params): Query<ListUsersQuery>,
+) -> Result<Json<Vec<User>>, ApiError> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
@@ -132,13 +154,14 @@ pub async fn list(mut db: Connection<Db>, params: ListUsersQuery) -> ApiResult<J
         .select(User::as_select())
         .load::<User>(&mut db)
         .await
-        .map_err(|e| err(diesel_to_http(e), "failed to list users"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list users"))?;
 
     Ok(Json(rows))
 }
 
-pub fn stage() -> rocket::fairing::AdHoc {
-    rocket::fairing::AdHoc::on_ignite("Autofile Users", |rocket| async {
-        rocket.mount("/users", routes![list, get, get_by_username, create, update])
-    })
+pub fn routes() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/", get(list).post(create))
+        .route("/{id}", get(get_by_id).patch(update))
+        .route("/by-username/{username}", get(get_by_username))
 }
