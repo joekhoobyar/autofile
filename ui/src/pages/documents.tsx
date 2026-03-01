@@ -75,7 +75,7 @@ export function ListDocuments() {
   return (
     <>
     <Link to="new" style={{float: 'right', padding: '1.5rem'}}>New Document &raquo;</Link>
-    <Card title="Document">
+    <Card title="Documents">
       <DataView value={data?.items ?? []}
           loading={isPending || isFetching}
           onPage={onPage} paginator={true} first={0} rows={data?.per_page} totalRecords={data?.total}
