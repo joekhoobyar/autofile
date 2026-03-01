@@ -9,7 +9,7 @@ use crate::infrastructure::s3::{delete_from_s3, upload_to_s3};
 use crate::infrastructure::thumbnail::GenerateThumbnail;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{diesel_to_http, ApiError};
+use crate::shared::util::{diesel_to_http, ApiError, ResourceList};
 
 use aws_sdk_s3::primitives::ByteStream;
 use serde::Deserialize;
@@ -57,6 +57,16 @@ struct NewDocumentFile {
     updated_by: i64,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentSortField {
+    Id,
+    Title,
+    CreatedAt,
+    UpdatedAt,
+}
+
+
 #[derive(Debug, Deserialize)]
 pub struct ListDocumentsQuery {
     // 1-based page number
@@ -65,7 +75,12 @@ pub struct ListDocumentsQuery {
     pub per_page: Option<i64>,
     // optional substring search
     pub q: Option<String>,
-    document_type_id: Option<i64>,
+    // optional document type search
+    pub document_type_id: Option<i64>,
+    // optional sort field
+    pub sf: Option<DocumentSortField>,
+    // optional sort descending
+    pub sd: Option<bool>,
 }
 
 pub async fn get_by_id(
@@ -275,29 +290,58 @@ pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
     Query(params): Query<ListDocumentsQuery>,
-) -> Result<Json<Vec<Document>>, ApiError> {
+) -> Result<Json<ResourceList<Document>>, ApiError> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
 
-    // Start with a boxed query so we can conditionally add filters.
-    let mut query = documents::table.into_boxed();
+    let base_filter = || -> documents::BoxedQuery<'_, diesel::pg::Pg> {
+        // Start with a boxed query so we can conditionally add filters.
+        let mut query = documents::table.into_boxed();
 
-    // Optional search: case-insensitive substring on title
-    if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
-        let pattern = format!("%{}%", q);
-        query = query.filter(
-            documents::title.ilike(pattern)
-        );
-    }
+        // Optional search: case-insensitive substring on title
+        if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
+            let pattern = format!("%{}%", q);
+            query = query.filter(
+                documents::title.ilike(pattern)
+            );
+        }
 
-    // Filter by document type
-    if let Some(id) = params.document_type_id {
-        query = query.filter(documents::document_type_id.eq(id));
-    }
+        // Filter by document type
+        if let Some(id) = params.document_type_id {
+            query = query.filter(documents::document_type_id.eq(id));
+        }
 
-    let rows = query
-        .order(documents::id.desc())
+        query
+    };
+
+    let total = base_filter()
+        .count()
+        .get_result::<i64>(&mut db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count document_types"))?;
+
+    let mut query: documents::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
+    query = match (params.sf, params.sd) {
+        (Some(DocumentSortField::Title), Some(true)) =>
+            query.order((documents::title.desc(), documents::id.asc())), // tie-breaker
+        (Some(DocumentSortField::Title), _) =>
+            query.order((documents::title.asc(), documents::id.asc())), // tie-breaker
+        (Some(DocumentSortField::CreatedAt), Some(true)) =>
+            query.order((documents::created_at.desc(), documents::id.asc())), // tie-breaker
+        (Some(DocumentSortField::CreatedAt), _) =>
+            query.order((documents::created_at.asc(), documents::id.asc())), // tie-breaker
+        (Some(DocumentSortField::UpdatedAt), Some(true)) =>
+            query.order((documents::updated_at.desc(), documents::id.asc())), // tie-breaker
+        (Some(DocumentSortField::UpdatedAt), _) =>
+            query.order((documents::updated_at.asc(), documents::id.asc())), // tie-breaker
+
+        (Some(DocumentSortField::Id), Some(true)) =>
+            query.order(documents::id.desc()),
+        _ =>
+            query.order(documents::id.asc()),
+    };
+    let items = query
         .limit(per_page)
         .offset(offset)
         .select(Document::as_select())
@@ -305,7 +349,7 @@ pub async fn list(
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list documents"))?;
 
-    Ok(Json(rows))
+    Ok(Json(ResourceList { total, page, per_page, items }))
 }
 
 pub fn routes() -> Router<Arc<AppState>> {
