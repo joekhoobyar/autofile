@@ -19,6 +19,11 @@ use diesel_async::{
     AsyncPgConnection,
 };
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use tokio::time::{timeout, Duration};
+use redis::AsyncCommands;
+
+use apalis::prelude::*;
+use apalis_redis::RedisStorage;
 
 mod schema;
 mod api {
@@ -41,6 +46,7 @@ mod domain {
 }
 mod infrastructure {
     pub mod s3;
+    pub mod thumbnail;
 }
 mod shared {
     pub mod app_state;
@@ -53,6 +59,7 @@ use shared::extractors::DbConn;
 
 use crate::shared::app_state::AppState;
 use crate::shared::util::ApiError;
+use crate::infrastructure::thumbnail::{GenerateThumbnail, generate_thumbnail};
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
@@ -64,6 +71,26 @@ async fn main() {
             tracing_subscriber::EnvFilter::from_default_env()
         )
         .init();
+
+    // Redis storage (queue) for thumbnail generation.
+    let redis_url = std::env::var("REDIS_URL")
+        .unwrap_or_else(|_| "redis://127.0.0.1:6379/?connect_timeout=2&timeout=2".to_string());
+    check_redis(&redis_url).await.expect("Redis not reachable");
+    let redis_conn = apalis_redis::connect(redis_url).await.expect("Could not connect to Redis");
+    let thumb_storage: RedisStorage<GenerateThumbnail> = RedisStorage::new(redis_conn);
+
+    // Spawn apalis workers (in-process).
+    let monitor = Monitor::new()
+        .register({
+            // One or more workers pulling from Redis
+            WorkerBuilder::new("thumb-worker")
+                .concurrency(2) // Adjust concurrency as needed
+                .backend(thumb_storage.clone())
+                .build_fn(generate_thumbnail)
+        });
+    tokio::spawn(async move {
+        monitor.run().await.expect("Background worker failed");
+    });
 
     // Get database URL from environment
     let database_url = std::env::var("DATABASE_URL")
@@ -114,6 +141,7 @@ async fn main() {
         s3_client: Arc::new(s3_client),
         s3_bucket: Arc::new(s3_bucket),
         jwt_secret: Arc::new(jwt_secret),
+        thumb_jobs: Arc::new(thumb_storage),
     };
 
     // Configure CORS
@@ -175,6 +203,20 @@ async fn main() {
     axum::serve(listener, app)
         .await
         .expect("Server failed");
+}
+
+async fn check_redis(redis_url: &str) -> anyhow::Result<()> {
+    let client = redis::Client::open(redis_url)?;
+    let mut conn = timeout(
+        Duration::from_secs(3),
+        client.get_multiplexed_async_connection(),
+    )
+    .await??;
+
+    timeout(Duration::from_secs(3), conn.ping::<String>())
+        .await??;
+
+    Ok(())
 }
 
 async fn health_ready(DbConn(mut conn): DbConn) -> Result<Json<ReadyResponse>, ApiError> {

@@ -1,9 +1,12 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::AppState;
 use crate::schema::{documents, document_files};
 use crate::domain::documents::Document;
+use crate::domain::document_files::DocumentFile;
 use crate::infrastructure::s3::{delete_from_s3, upload_to_s3};
+use crate::infrastructure::thumbnail::GenerateThumbnail;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{diesel_to_http, ApiError};
@@ -14,12 +17,15 @@ use axum::{
     Router,
     routing::get,
     Json,
+    http::StatusCode,
     extract::{Path, Query, Multipart, State},
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use chrono::Utc;
 use uuid::Uuid;
+
+use apalis::prelude::*;
 
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = documents)]
@@ -154,10 +160,16 @@ async fn create(
     // Clone file_info for potential cleanup in error path
     let file_info_for_cleanup = file_info.clone();
 
+    // Clone the thumbnail job queue handle for use inside the transaction closure
+    let thumb_jobs = state.thumb_jobs.as_ref().clone();
+    let thumb_enqueue_failed = Arc::new(AtomicBool::new(false));
+    let thumb_enqueue_failed_for_tx = Arc::clone(&thumb_enqueue_failed);
+
     // Begin database transaction
     let result = db.build_transaction()
         .run::<_, diesel::result::Error, _>(|conn| {
             Box::pin(async move {
+                let mut thumb_jobs = thumb_jobs;
                 // Insert document record
                 let inserted_document: Document = diesel::insert_into(documents::table)
                     .values((
@@ -172,7 +184,7 @@ async fn create(
 
                 // If file was uploaded, insert document_files record
                 if let Some((s3_prefix, filename, content_type, file_size)) = file_info {
-                    diesel::insert_into(document_files::table)
+                    let inserted_file = diesel::insert_into(document_files::table)
                         .values(&NewDocumentFile {
                             document_id: inserted_document.id,
                             s3_prefix,
@@ -182,8 +194,21 @@ async fn create(
                             created_by: user.user_id,
                             updated_by: user.user_id,
                         })
-                        .execute(conn)
+                        .returning(DocumentFile::as_returning())
+                        .get_result(conn)
                         .await?;
+
+                    if let Err(_) = thumb_jobs
+                        .push(GenerateThumbnail {
+                            document_file_id: inserted_file.id,
+                            page: 1,
+                            width: 320,
+                        })
+                        .await
+                    {
+                        thumb_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
+                        return Err(diesel::result::Error::RollbackTransaction);
+                    }
                 }
 
                 Ok(inserted_document)
@@ -203,7 +228,16 @@ async fn create(
                     &s3_key,
                 ).await;
             }
-            Err(ApiError::new(diesel_to_http(e), "Failed to create document"))
+            if matches!(e, diesel::result::Error::RollbackTransaction)
+                && thumb_enqueue_failed.as_ref().load(Ordering::Relaxed)
+            {
+                Err(ApiError::new(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to enqueue thumbnail job",
+                ))
+            } else {
+                Err(ApiError::new(diesel_to_http(e), "Failed to create document"))
+            }
         }
     }
 }

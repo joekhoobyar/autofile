@@ -19,6 +19,7 @@ rand = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 async-trait = "0.1"
+anyhow = "1"
 
 diesel = { version = "2", features = ["postgres", "chrono"] }
 diesel-async = { version = "0.4.1", features = ["postgres", "async-connection-wrapper", "bb8"] }
@@ -28,3 +29,8 @@ bb8 = "0.8"
 aws-config = "1.1"
 aws-sdk-s3 = "1.15"
 uuid = { version = "1.7", features = ["v4"] }
+
+apalis = { version = "0.7", features = ["limit"] }
+apalis-redis = "0.7"
+redis = { version = "0.32", features = ["tokio-comp"] }
+
