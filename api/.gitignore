@@ -1,5 +1,6 @@
 # Data
-test.pdf
+test*.pdf
+test*.png
 
 # Logs
 logs

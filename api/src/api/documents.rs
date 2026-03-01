@@ -11,6 +11,7 @@ use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{diesel_to_http, ApiError};
 
+use aws_sdk_s3::primitives::ByteStream;
 use serde::Deserialize;
 
 use axum::{
@@ -113,12 +114,17 @@ async fn create(
                     .map_err(|_| ApiError::bad_request("Invalid document_type_id"))?);
             }
             "file" => {
-                let filename = field.file_name()
+                let mut filename = field.file_name()
                     .ok_or_else(|| ApiError::bad_request("File field missing filename"))?
                     .to_string();
                 let content_type = field.content_type().map(|ct| ct.to_string());
                 let data = field.bytes().await
                     .map_err(|e| ApiError::bad_request(&format!("Failed to read file data: {}", e)))?;
+
+                // Normalize filename to prevent clashes with existing thumbnails
+                if filename == "_thumb.png" {
+                    filename = "thumb.png".to_string();
+                }
 
                 file_data = Some((filename, data.to_vec(), content_type));
             }
@@ -142,11 +148,12 @@ async fn create(
         let s3_key = format!("{}/{}", s3_prefix, filename);
 
         // Upload to S3
+        let body = ByteStream::from(data.to_vec());
         upload_to_s3(
             &state.s3_client,
             &state.s3_bucket,
             &s3_key,
-            &data,
+            body,
             content_type.as_deref(),
         )
         .await
@@ -202,7 +209,7 @@ async fn create(
                         .push(GenerateThumbnail {
                             document_file_id: inserted_file.id,
                             page: 1,
-                            width: 320,
+                            width: 800,
                         })
                         .await
                     {

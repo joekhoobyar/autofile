@@ -16,11 +16,9 @@ pub async fn upload_to_s3(
     client: &S3Client,
     bucket: &str,
     s3_key: &str,
-    file_data: &[u8],
+    body: ByteStream,
     content_type: Option<&str>,
 ) -> Result<(), S3Error> {
-    let body = ByteStream::from(file_data.to_vec());
-
     let mut request = client
         .put_object()
         .bucket(bucket)

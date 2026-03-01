@@ -79,19 +79,6 @@ async fn main() {
     let redis_conn = apalis_redis::connect(redis_url).await.expect("Could not connect to Redis");
     let thumb_storage: RedisStorage<GenerateThumbnail> = RedisStorage::new(redis_conn);
 
-    // Spawn apalis workers (in-process).
-    let monitor = Monitor::new()
-        .register({
-            // One or more workers pulling from Redis
-            WorkerBuilder::new("thumb-worker")
-                .concurrency(2) // Adjust concurrency as needed
-                .backend(thumb_storage.clone())
-                .build_fn(generate_thumbnail)
-        });
-    tokio::spawn(async move {
-        monitor.run().await.expect("Background worker failed");
-    });
-
     // Get database URL from environment
     let database_url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set");
@@ -136,13 +123,27 @@ async fn main() {
         .into_bytes();
 
     // Build shared application state
-    let app_state = AppState {
+    let app_state = Arc::new(AppState {
         db_pool,
         s3_client: Arc::new(s3_client),
         s3_bucket: Arc::new(s3_bucket),
         jwt_secret: Arc::new(jwt_secret),
         thumb_jobs: Arc::new(thumb_storage),
-    };
+    });
+
+    // Spawn apalis workers (in-process).
+    let monitor = Monitor::new()
+        .register({
+            // One or more workers pulling from Redis
+            WorkerBuilder::new("thumb-worker")
+                .concurrency(2) // Adjust concurrency as needed
+                .data(app_state.clone())
+                .backend(app_state.thumb_jobs.as_ref().clone())
+                .build_fn(generate_thumbnail)
+        });
+    tokio::spawn(async move {
+        monitor.run().await.expect("Background worker failed");
+    });
 
     // Configure CORS
     use axum::http::header;
@@ -187,7 +188,7 @@ async fn main() {
                 .layer(CookieManagerLayer::new())
                 .layer(cors)
         )
-        .with_state(Arc::new(app_state));
+        .with_state(app_state.clone());
 
     // Get bind address from environment or use default
     let bind_addr = std::env::var("BIND_ADDR")
