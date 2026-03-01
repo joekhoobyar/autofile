@@ -140,16 +140,19 @@ async fn main() {
             header::ACCEPT,
         ]);
 
+    let api_v1= Router::new()
+        .route("/health/ready", get(health_ready))
+        .nest("/auth", api::auth::routes())
+        .nest("/cabinets", api::cabinets::routes())
+        .nest("/document-types", api::document_types::routes())
+        .nest("/document-types-metadata-types", api::document_types_metadata_types::routes())
+        .nest("/documents", api::documents::routes())
+        .nest("/metadata-types", api::metadata_types::routes())
+        .nest("/users", api::users::routes());
+
     // Build the router (wrap state in Arc for efficient sharing)
     let app = Router::new()
-        .route("/api/v1/health/ready", get(health_ready))
-        .nest("/api/v1/auth", api::auth::routes())
-        .nest("/api/v1/cabinets", api::cabinets::routes())
-        .nest("/api/v1/document-types", api::document_types::routes())
-        .nest("/api/v1/document-types-metadata-types", api::document_types_metadata_types::routes())
-        .nest("/api/v1/documents", api::documents::routes())
-        .nest("/api/v1/metadata-types", api::metadata_types::routes())
-        .nest("/api/v1/users", api::users::routes())
+        .nest("/api/v1", api_v1)
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
