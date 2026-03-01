@@ -7,7 +7,7 @@ export type DocumentTypeInput = ResourceInput<DocumentType>;
 export function useDocumentTypes(params: ListParams): UseQueryResult<ResourceList<DocumentType>, HttpError> {
   return useQuery({
     queryKey: ['documentType', 'list', params],
-    queryFn: () => apiFetchList<DocumentType>('document-types', params),
+    queryFn: () => apiFetchList<DocumentType>('api/v1/document-types', params),
   });
 }
 
@@ -16,7 +16,7 @@ export function useDocumentType(id: string | number, options = {}): UseQueryResu
     queryKey: ['documentType', 'get', {id}],
     enabled: !!id,
     ...options,
-    queryFn: () => apiFetch<DocumentType>(`document-types/${id}`),
+    queryFn: () => apiFetch<DocumentType>(`api/v1/document-types/${id}`),
   });
 }
 
@@ -26,12 +26,12 @@ export function useSaveDocumentType(): UseMutationResult<DocumentType, HttpError
   return useMutation<DocumentType, HttpError, DocumentTypeInput>({
     mutationFn: async (input) => {
       if (input.id) {
-        return apiMutate<DocumentType, DocumentTypeInput>(`document-types/${input.id}`, {
+        return apiMutate<DocumentType, DocumentTypeInput>(`api/v1/document-types/${input.id}`, {
           method: "PATCH",
           body: input,
         });
       }
-      return apiMutate<DocumentType, Omit<DocumentTypeInput, "id">>(`document-types`, {
+      return apiMutate<DocumentType, Omit<DocumentTypeInput, "id">>(`api/v1/document-types`, {
         method: "POST",
         body: input,
       });
@@ -49,7 +49,7 @@ export function useDeleteDocumentType(): UseMutationResult<void, HttpError, numb
 
   return useMutation<void, HttpError, number>({
     mutationFn: async (input) => {
-      return apiMutate<void, void>(`document-types/${input}`, {
+      return apiMutate<void, void>(`api/v1/document-types/${input}`, {
         method: "DELETE",
       });
     },

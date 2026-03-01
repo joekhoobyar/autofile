@@ -102,7 +102,7 @@ pub async fn login(
     cookie.set_http_only(true);
     cookie.set_secure(is_production());
     cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
-    cookie.set_path("/auth");
+    cookie.set_path("/api/v1/auth");
     cookies.add(cookie);
 
     Ok(Json(AccessTokenResponse {

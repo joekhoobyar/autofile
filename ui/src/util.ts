@@ -10,7 +10,7 @@ export function useId(name: string): number {
 
   const id = Number(value)
   if (Number.isNaN(id)) {
-    throw new Error(`Invalid route param: ${name}`);
+    throw new TypeError(`Invalid route param: ${name}`);
   }
 
   return id;

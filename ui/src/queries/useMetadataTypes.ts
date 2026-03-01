@@ -7,7 +7,7 @@ export type MetadataTypeInput = ResourceInput<MetadataType>;
 export function useMetadataTypes(params: ListParams): UseQueryResult<ResourceList<MetadataType>, HttpError> {
   return useQuery({
     queryKey: ['metadataType', 'list', params],
-    queryFn: () => apiFetchList<MetadataType>('metadata-types', params),
+    queryFn: () => apiFetchList<MetadataType>('api/v1/metadata-types', params),
   });
 }
 
@@ -16,7 +16,7 @@ export function useMetadataType(id: string | number, options = {}): UseQueryResu
     queryKey: ['metadataType', 'get', {id}],
     enabled: !!id,
     ...options,
-    queryFn: () => apiFetch<MetadataType>(`metadata-types/${id}`),
+    queryFn: () => apiFetch<MetadataType>(`api/v1/metadata-types/${id}`),
   });
 }
 
@@ -26,12 +26,12 @@ export function useSaveMetadataType(): UseMutationResult<MetadataType, HttpError
   return useMutation<MetadataType, HttpError, MetadataTypeInput>({
     mutationFn: async (input) => {
       if (input.id) {
-        return apiMutate<MetadataType, MetadataTypeInput>(`metadata-types/${input.id}`, {
+        return apiMutate<MetadataType, MetadataTypeInput>(`api/v1/metadata-types/${input.id}`, {
           method: "PATCH",
           body: input,
         });
       }
-      return apiMutate<MetadataType, Omit<MetadataTypeInput, "id">>(`metadata-types`, {
+      return apiMutate<MetadataType, Omit<MetadataTypeInput, "id">>(`api/v1/metadata-types`, {
         method: "POST",
         body: input,
       });
@@ -49,7 +49,7 @@ export function useDeleteMetadataType(): UseMutationResult<void, HttpError, numb
 
   return useMutation<void, HttpError, number>({
     mutationFn: async (input) => {
-      return apiMutate<void, void>(`metadata-types/${input}`, {
+      return apiMutate<void, void>(`api/v1/metadata-types/${input}`, {
         method: "DELETE",
       });
     },

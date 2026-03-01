@@ -121,7 +121,7 @@ export async function apiFetch<T>(url: string, init: FetchOptions = {}): Promise
 
 async function tryRefresh(): Promise<boolean> {
   try {
-    const res = await fetch(`${API_HOST}/auth/refresh`, {
+    const res = await fetch(`${API_HOST}/api/v1/auth/refresh`, {
       method: "POST",
       credentials: "include",
       headers: { "Accept": "application/json" },

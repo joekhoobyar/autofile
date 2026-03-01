@@ -3,7 +3,7 @@ import { apiMutate, setAccessToken } from "./api";
 import type { LoginRequest } from "./models/auth";
 
 export async function login(user: LoginRequest) {
-  const data = await apiMutate<{ access_token: string }>("auth/login", {
+  const data = await apiMutate<{ access_token: string }>("api/v1/auth/login", {
     method: 'POST',
     body: user,
     retryOn401: false,
@@ -12,7 +12,7 @@ export async function login(user: LoginRequest) {
 }
 
 export async function logout() {
-  await apiMutate<void>("auth/logout", {
+  await apiMutate<void>("api/v1/auth/logout", {
     method: 'POST',
     retryOn401: false,
   });

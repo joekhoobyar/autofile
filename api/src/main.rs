@@ -142,15 +142,14 @@ async fn main() {
 
     // Build the router (wrap state in Arc for efficient sharing)
     let app = Router::new()
-        .route("/", get(index))
-        .route("/health/ready", get(health_ready))
-        .nest("/auth", api::auth::routes())
-        .nest("/cabinets", api::cabinets::routes())
-        .nest("/document-types", api::document_types::routes())
-        .nest("/document-types-metadata-types", api::document_types_metadata_types::routes())
-        .nest("/documents", api::documents::routes())
-        .nest("/metadata-types", api::metadata_types::routes())
-        .nest("/users", api::users::routes())
+        .route("/api/v1/health/ready", get(health_ready))
+        .nest("/api/v1/auth", api::auth::routes())
+        .nest("/api/v1/cabinets", api::cabinets::routes())
+        .nest("/api/v1/document-types", api::document_types::routes())
+        .nest("/api/v1/document-types-metadata-types", api::document_types_metadata_types::routes())
+        .nest("/api/v1/documents", api::documents::routes())
+        .nest("/api/v1/metadata-types", api::metadata_types::routes())
+        .nest("/api/v1/users", api::users::routes())
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
@@ -173,10 +172,6 @@ async fn main() {
     axum::serve(listener, app)
         .await
         .expect("Server failed");
-}
-
-async fn index() -> &'static str {
-    "Hello, world!"
 }
 
 async fn health_ready(DbConn(mut conn): DbConn) -> Result<Json<ReadyResponse>, ApiError> {

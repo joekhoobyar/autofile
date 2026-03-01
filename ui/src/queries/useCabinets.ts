@@ -8,7 +8,7 @@ export type CabinetInput = ResourceInput<Cabinet>;
 export function useCabinets(params: ListParams): UseQueryResult<ResourceList<Cabinet>, HttpError> {
   return useQuery({
     queryKey: ['cabinet', 'list', params],
-    queryFn: () => apiFetchList<Cabinet>('cabinets', params),
+    queryFn: () => apiFetchList<Cabinet>('api/v1/cabinets', params),
   });
 }
 
@@ -16,7 +16,7 @@ export function useCabinetTree(): UseQueryResult<TreeNode[], HttpError> {
   return useQuery({
     queryKey: ['cabinet', 'tree'],
     queryFn: async () => {
-      const response = await apiFetchList<Cabinet>('cabinets', {page:1, per_page: MAX_CABINETS});
+      const response = await apiFetchList<Cabinet>('api/v1/cabinets', {page:1, per_page: MAX_CABINETS});
 
       // Convert Cabinet to CabinetNode
       const nodeMap = new Map<number, TreeNode>();
@@ -61,7 +61,7 @@ export function useCabinet(id: string | number, options = {}): UseQueryResult<Ca
     enabled: !!id,
     ...options,
     queryFn: async () => {
-      const cabinets = await apiFetch<Cabinet>(`cabinets/${id}`);
+      const cabinets = await apiFetch<Cabinet>(`api/v1/cabinets/${id}`);
       return cabinets;
     },
   });
@@ -73,12 +73,12 @@ export function useSaveCabinet(): UseMutationResult<Cabinet, HttpError, CabinetI
   return useMutation<Cabinet, HttpError, CabinetInput>({
     mutationFn: async (input) => {
       if (input.id) {
-        return apiMutate<Cabinet, CabinetInput>(`cabinets/${input.id}`, {
+        return apiMutate<Cabinet, CabinetInput>(`api/v1/cabinets/${input.id}`, {
           method: "PATCH",
           body: input,
         });
       }
-      return apiMutate<Cabinet, Omit<CabinetInput, "id">>(`cabinets`, {
+      return apiMutate<Cabinet, Omit<CabinetInput, "id">>(`api/v1/cabinets`, {
         method: "POST",
         body: input,
       });
@@ -96,7 +96,7 @@ export function useDeleteCabinet(): UseMutationResult<void, HttpError, number> {
 
   return useMutation<void, HttpError, number>({
     mutationFn: async (input) => {
-      return apiMutate<void, void>(`cabinets/${input}`, {
+      return apiMutate<void, void>(`api/v1/cabinets/${input}`, {
         method: "DELETE",
       });
     },
