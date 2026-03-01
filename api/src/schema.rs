@@ -58,6 +58,8 @@ diesel::table! {
         updated_at -> Timestamptz,
         created_by -> Int8,
         updated_by -> Int8,
+        #[max_length = 64]
+        s3_thumbnail -> Nullable<Varchar>,
     }
 }
 

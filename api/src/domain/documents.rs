@@ -11,6 +11,7 @@ pub struct Document {
     pub id: i64,
     pub title: String,
     pub document_type_id: i64,
+    pub s3_thumbnail: Option<String>,
     pub created_by: i64,
     pub created_at: DateTime<Utc>,
     pub updated_by: i64,

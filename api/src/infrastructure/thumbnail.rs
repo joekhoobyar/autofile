@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::domain::document_files::DocumentFile;
 use crate::infrastructure::s3::upload_to_s3;
+use crate::schema::documents;
 use crate::schema::document_files;
 use crate::shared::app_state::AppState;
 
@@ -110,6 +111,19 @@ pub async fn generate_thumbnail(
     )
     .await
     .map_err(to_job_error)?;
+
+    // Store the thumbnail in the documents table
+    let updated: usize =
+        diesel::update(documents::table.filter(documents::id.eq(document_file.document_id)))
+            .set((
+                documents::s3_thumbnail.eq(thumb_key),
+            ))
+            .execute(&mut db)
+            .await
+            .map_err(to_job_error)?;
+    if updated == 0 {
+        tracing::warn!("Document {} not found when updating thumbnail", document_file.document_id);
+    }
 
     let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
 
