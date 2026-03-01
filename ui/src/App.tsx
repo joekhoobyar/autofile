@@ -2,9 +2,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBrowserRouter, RouterProvider, NavLink, useLocation } from 'react-router-dom';
 import { PrimeReactProvider } from 'primereact/api';
-import 'bootstrap/scss/bootstrap.scss';
-import 'primereact/resources/themes/bootstrap4-dark-blue/theme.css';
+// import 'bootstrap/scss/bootstrap.scss';
 import 'primereact/resources/primereact.min.css';
+import 'primereact/resources/themes/bootstrap4-dark-blue/theme.css';
 import 'primeicons/primeicons.css';
 import 'primeflex/primeflex.css';
 import { BreadCrumb } from 'primereact/breadcrumb';
