@@ -15,14 +15,15 @@ pub struct ResourceList<T> {
 
 #[derive(Debug, serde::Serialize)]
 pub struct ApiError {
-    pub status: u16,
+    #[serde(skip_serializing)]
+    pub status: StatusCode,
     pub message: String,
 }
 
 impl ApiError {
     pub fn new(status: StatusCode, message: impl Into<String>) -> Self {
         Self {
-            status: status.as_u16(),
+            status,
             message: message.into(),
         }
     }
@@ -46,8 +47,7 @@ impl ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let status = StatusCode::from_u16(self.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-        (status, Json(self)).into_response()
+        (self.status, Json(self)).into_response()
     }
 }
 
