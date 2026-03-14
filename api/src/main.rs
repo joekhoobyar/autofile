@@ -29,6 +29,7 @@ mod schema;
 mod api {
     pub mod auth;
     pub mod cabinets;
+    pub mod document_metadatas;
     pub mod document_types;
     pub mod document_types_metadata_types;
     pub mod documents;
@@ -38,6 +39,7 @@ mod api {
 mod domain {
     pub mod cabinets;
     pub mod document_files;
+    pub mod document_metadatas;
     pub mod document_types;
     pub mod document_types_metadata_types;
     pub mod documents;
@@ -176,6 +178,7 @@ async fn main() {
         .nest("/document-types", api::document_types::routes())
         .nest("/document-types-metadata-types", api::document_types_metadata_types::routes())
         .nest("/documents", api::documents::routes())
+        .nest("/documents", api::document_metadatas::routes())
         .nest("/metadata-types", api::metadata_types::routes())
         .nest("/users", api::users::routes());
 

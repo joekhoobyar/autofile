@@ -31,6 +31,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    document_metadatas (document_id, metadata_type_id) {
+        document_id -> Int8,
+        metadata_type_id -> Int8,
+        value -> Varchar,
+        created_at -> Timestamptz,
+        created_by -> Int8,
+        updated_at -> Timestamptz,
+        updated_by -> Int8,
+    }
+}
+
+diesel::table! {
     document_types (id) {
         id -> Int8,
         slug -> Varchar,
@@ -89,6 +101,8 @@ diesel::table! {
 }
 
 diesel::joinable!(document_files -> documents (document_id));
+diesel::joinable!(document_metadatas -> documents (document_id));
+diesel::joinable!(document_metadatas -> metadata_types (metadata_type_id));
 diesel::joinable!(document_types_metadata_types -> document_types (document_type_id));
 diesel::joinable!(document_types_metadata_types -> metadata_types (metadata_type_id));
 diesel::joinable!(documents -> document_types (document_type_id));
@@ -96,6 +110,7 @@ diesel::joinable!(documents -> document_types (document_type_id));
 diesel::allow_tables_to_appear_in_same_query!(
     cabinets,
     document_files,
+    document_metadatas,
     document_types,
     document_types_metadata_types,
     documents,
