@@ -3,6 +3,7 @@ import { apiFetchList, type ListParams, type ResourceList, type ResourceInput, H
 import { type DocumentType } from '../models/documentType';
 
 export type DocumentTypeInput = ResourceInput<DocumentType>;
+export type DocumentTypesMap = Record<string, DocumentType>;
 
 export function useDocumentTypes(params: ListParams): UseQueryResult<ResourceList<DocumentType>, HttpError> {
   return useQuery({
@@ -17,6 +18,37 @@ export function useDocumentType(id: string | number, options = {}): UseQueryResu
     enabled: !!id,
     ...options,
     queryFn: () => apiFetch<DocumentType>(`api/v1/document-types/${id}`),
+  });
+}
+
+export function useDocumentTypesMap(options = {}): UseQueryResult<DocumentTypesMap, HttpError> {
+  return useQuery({
+    queryKey: ['documentType', 'map', 'id'],
+    ...options,
+    queryFn: async () => {
+      const per_page = 200;
+      let page = 1;
+      let total = 0;
+      let items: DocumentType[] = [];
+
+      while (true) {
+        const res = await apiFetchList<DocumentType>('api/v1/document-types', { page, per_page });
+        total = res.total ?? total;
+        if (res.items?.length) {
+          items = items.concat(res.items);
+        }
+
+        if (!res.items?.length) break;
+        if (items.length >= res.total) break;
+        if (res.page && res.per_page && res.page * res.per_page >= res.total) break;
+        page += 1;
+      }
+
+      return items.reduce((acc, item) => {
+        acc[item.id.toString()] = item;
+        return acc;
+      }, {} as DocumentTypesMap);
+    },
   });
 }
 

@@ -4,12 +4,13 @@ import { Link } from 'react-router-dom';
 import { Card } from 'primereact/card';
 import { DataView, DataViewLayoutOptions, type DataViewPageEvent } from 'primereact/dataview';
 import { classNames } from 'primereact/utils';
+import { format } from "date-fns";
 
 import { type ListParams } from '../api';
 import { useDocuments, useDocumentThumbnail } from '../queries/useDocuments';
 import { type Document } from '../models/document';
 import { useMetadataTypesMap } from '../queries/useMetadataTypes';
-import { format } from "date-fns";
+import { useDocumentTypesMap } from '../queries/useDocumentTypes';
 
 /**
  * Renders a document in list layout for the DataView component.
@@ -26,25 +27,23 @@ type DocumentListItemProps = {
 function DocumentListItem({ doc, index }: Readonly<DocumentListItemProps>) {
     const { data } = useDocumentThumbnail(doc.id);
     const { data: mdt } = useMetadataTypesMap();
+    const { data: ddt } = useDocumentTypesMap();
 
     return (
       <div className="col-12" key={doc.id}>
         <div className={classNames('flex flex-column xl:flex-row xl:align-items-start p-4 gap-4', { 'border-top-1 surface-border': index !== 0 })}>
           <img alt="Page 1" className="w-9 sm:w-16rem xl:w-10rem shadow-2 block xl:block mx-auto aut-document-thumbnail" src={data} style={{ maxHeight: '200px' }} />
-          <section className="flex flex-column sm:flex-row justify-content-between align-items-center xl:align-items-start flex-1 gap-4 auto-document">
+          <section className="flex flex-column sm:flex-row justify-content-between align-items-center xl:align-items-start flex-1 gap-4 aut-document">
             <div className="flex flex-column align-items-center sm:align-items-start gap-3">
               <header>{doc.title}</header>
               <aside>
-                <dl>
-                  <dt className="font-bold">Created</dt>
-                  <dd>{format(new Date(doc.created_at), "MM/dd/yyyy HH:mm")}</dd>
+                <ul className="aut-document-metadata">
+                  <li><span>Type</span>: {ddt?.[doc.document_type_id]?.name}</li>
+                  <li><span>Created</span>: {format(new Date(doc.created_at), "MM/dd/yyyy HH:mm")}</li>
                   {Object.entries(doc.metadata).map(([key, value]) => (
-                    <>
-                      <dt className="font-bold">{mdt?.[key].name ?? key}</dt>
-                      <dd>{value}</dd>
-                    </>
+                    <li key={key}><span>{mdt?.[key].name ?? key}</span>: {value}</li>
                   ))}
-                </dl>
+                </ul>
               </aside>
             </div>
           </section>
@@ -66,24 +65,24 @@ type DocumentGridItemProps = {
 function DocumentGridItem({ doc }: Readonly<DocumentGridItemProps>) {
     const { data } = useDocumentThumbnail(doc.id);
     const { data: mdt } = useMetadataTypesMap();
+    const { data: ddt } = useDocumentTypesMap();
 
     return (
       <div className="col-12 sm:col-6 lg:col-4 xl:col-2 p-2 aut-document-grid" key={doc.id}>
         <div className="border-1 surface-border surface-card border-round">
-          <section className="flex flex-column align-items-center aut-document">
-            <header>{doc.title}</header>
+          <section className="flex flex-column aut-document">
+            <header>
+              <Link to={doc.id.toString()}>{doc.title}</Link>
+            </header>
             <aside>
               <img alt="Page 1" className="shadow-2 aut-document-thumbnail" src={data} style={{ maxHeight: '200px' }} />
-              <dl>
-                <dt className="font-bold">Created</dt>
-                <dd>{format(new Date(doc.created_at), "MM/dd/yyyy HH:mm")}</dd>
+              <ul className="aut-document-metadata">
+                <li><span>Type</span>: {ddt?.[doc.document_type_id]?.name}</li>
+                <li><span>Created</span>: {format(new Date(doc.created_at), "MM/dd/yyyy HH:mm")}</li>
                 {Object.entries(doc.metadata).map(([key, value]) => (
-                  <>
-                    <dt className="font-bold">{mdt?.[key].name ?? key}</dt>
-                    <dd>{value}</dd>
-                  </>
+                  <li key={key}><span>{mdt?.[key].name ?? key}</span>: {value}</li>
                 ))}
-              </dl>
+              </ul>
             </aside>
           </section>
         </div>

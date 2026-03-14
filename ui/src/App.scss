@@ -106,8 +106,40 @@ body {
 
 .aut-document-grid {
   section.aut-document {
-    padding-top: 0.3rem;
-    padding-bottom: 0.3rem;
+    padding: 0.4rem;
+
+    header {
+      padding: 0.4rem;
+      font-weight: normal;
+      text-align: left;
+    }
+  }
+}
+
+section.aut-document {
+  header {
+    word-break: break-all;
+    a {
+      text-decoration: none;
+      &:hover { text-decoration: underline; }
+    }
+  }
+  aside {
+    ul.aut-document-metadata {
+      list-style: none;
+      margin: 0;
+      padding-inline-start: 0;
+
+      li {
+        text-align: center;
+        word-break: break-all;
+        overflow-wrap: break-word;
+        span {
+          font-weight: bold;
+          overflow-wrap: break-word;
+        }
+      }
+    }
   }
 }
 
