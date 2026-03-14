@@ -9,6 +9,7 @@ import { type ListParams } from '../api';
 import { useDocuments, useDocumentThumbnail } from '../queries/useDocuments';
 import { type Document } from '../models/document';
 import { useMetadataTypesMap } from '../queries/useMetadataTypes';
+import { format } from "date-fns";
 
 /**
  * Renders a document in list layout for the DataView component.
@@ -35,6 +36,8 @@ function DocumentListItem({ doc, index }: Readonly<DocumentListItemProps>) {
               <header>{doc.title}</header>
               <aside>
                 <dl>
+                  <dt className="font-bold">Created</dt>
+                  <dd>{format(new Date(doc.created_at), "MM/dd/yyyy HH:mm")}</dd>
                   {Object.entries(doc.metadata).map(([key, value]) => (
                     <>
                       <dt className="font-bold">{mdt?.[key].name ?? key}</dt>
@@ -72,6 +75,8 @@ function DocumentGridItem({ doc }: Readonly<DocumentGridItemProps>) {
             <aside>
               <img alt="Page 1" className="shadow-2 aut-document-thumbnail" src={data} style={{ maxHeight: '200px' }} />
               <dl>
+                <dt className="font-bold">Created</dt>
+                <dd>{format(new Date(doc.created_at), "MM/dd/yyyy HH:mm")}</dd>
                 {Object.entries(doc.metadata).map(([key, value]) => (
                   <>
                     <dt className="font-bold">{mdt?.[key].name ?? key}</dt>
