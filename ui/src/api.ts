@@ -89,12 +89,28 @@ export function setAccessToken(token: string | null) {
 }
 
 export async function apiFetch<T>(url: string, init: FetchOptions = {}): Promise<T> {
-  const retryOn401 = init.retryOn401 ?? true;
-
+  
+  // Perform a JSON based API request.
   const headers = new Headers(init.headers);
-  headers.set("Accept", "application/json");
+  if (! headers.has('Accept'))
+    headers.set("Accept", "application/json");
   if (init.body !== undefined)
     headers.set("Content-Type", "application/json");
+  const res = await apiFetchRaw(url, { ...init, headers });
+
+  // Return JSON response if successful, otherwise throw.
+  if (res.ok) {
+    if (res.status === 204) return undefined as T;
+    return res.json();
+  }
+  throw await parseApiError(res);
+}
+
+export async function apiFetchRaw(url: string, init: FetchOptions = {}): Promise<Response> {
+  const retryOn401 = init.retryOn401 ?? true;
+
+  // Perform the request with authorization headers.
+  const headers = new Headers(init.headers);
   if (accessToken)
     headers.set("Authorization", `Bearer ${accessToken}`);
   const res = await fetch(`${API_HOST}/${url}`, {
@@ -103,20 +119,15 @@ export async function apiFetch<T>(url: string, init: FetchOptions = {}): Promise
     credentials: "include"
   });
 
-  if (res.ok) {
-    if (res.status === 204) return undefined as T;
-    return res.json();
-  }
-
   // If access token expired, try refresh once, then retry original request
   if (res.status === 401 && retryOn401) {
     const refreshed = await tryRefresh();
     if (refreshed) {
-      return apiFetch<T>(url, { ...init, retryOn401: false });
+      return apiFetchRaw(url, { ...init, retryOn401: false });
     }
   }
 
-  throw await parseApiError(res);
+  return res;
 }
 
 async function tryRefresh(): Promise<boolean> {

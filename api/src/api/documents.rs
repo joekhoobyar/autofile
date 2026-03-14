@@ -102,6 +102,10 @@ pub async fn get_by_id(
     Ok(Json(row))
 }
 
+/**
+ * This handler serves the thumbnail image for a document, streaming it directly from S3.
+ * It supports conditional GET with If-Modified-Since header to optimize caching.
+ */
 pub async fn thumbnail_get(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,

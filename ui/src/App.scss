@@ -103,3 +103,19 @@ body {
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
 }
+
+.aut-document-grid {
+  section.aut-document {
+    padding-top: 0.3rem;
+    padding-bottom: 0.3rem;
+  }
+}
+
+.aut-document-thumbnail {
+  display: block;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  margin: auto;
+  border: 1px solid black;
+}
