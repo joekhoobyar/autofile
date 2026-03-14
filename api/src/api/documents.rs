@@ -1,9 +1,10 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::AppState;
-use crate::schema::{documents, document_files};
-use crate::domain::documents::Document;
+use crate::schema::{documents, document_files, document_metadatas, metadata_types};
+use crate::domain::documents::{Document, DocumentView};
 use crate::domain::document_files::DocumentFile;
 use crate::infrastructure::s3::{delete_from_s3, upload_to_s3};
 use crate::infrastructure::thumbnail::GenerateThumbnail;
@@ -91,15 +92,34 @@ pub async fn get_by_id(
     _user: AuthUser,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
-) -> Result<Json<Document>, ApiError> {
-    let row = documents::table
+) -> Result<Json<DocumentView>, ApiError> {
+    let document = documents::table
         .find(id)
         .select(Document::as_select())
         .first::<Document>(&mut db)
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document"))?;
 
-    Ok(Json(row))
+    let metadata_rows: Vec<(String, String)> = document_metadatas::table
+        .inner_join(metadata_types::table)
+        .filter(document_metadatas::document_id.eq(document.id))
+        .select((metadata_types::slug, document_metadatas::value))
+        .load::<(String, String)>(&mut db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document metadata"))?;
+
+    let metadata: HashMap<String, String> = metadata_rows.into_iter().collect();
+
+    Ok(Json(DocumentView {
+        id: document.id,
+        title: document.title,
+        document_type_id: document.document_type_id,
+        metadata,
+        created_by: document.created_by,
+        created_at: document.created_at,
+        updated_by: document.updated_by,
+        updated_at: document.updated_at,
+    }))
 }
 
 /**
@@ -369,7 +389,7 @@ pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
     Query(params): Query<ListDocumentsQuery>,
-) -> Result<Json<ResourceList<Document>>, ApiError> {
+) -> Result<Json<ResourceList<DocumentView>>, ApiError> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
@@ -420,13 +440,50 @@ pub async fn list(
         _ =>
             query.order(documents::id.asc()),
     };
-    let items = query
+    let documents = query
         .limit(per_page)
         .offset(offset)
         .select(Document::as_select())
         .load::<Document>(&mut db)
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list documents"))?;
+
+    let document_ids: Vec<i64> = documents.iter().map(|doc| doc.id).collect();
+    let mut metadata_by_document: HashMap<i64, HashMap<String, String>> = HashMap::new();
+    if !document_ids.is_empty() {
+        let metadata_rows: Vec<(i64, String, String)> = document_metadatas::table
+            .inner_join(metadata_types::table)
+            .filter(document_metadatas::document_id.eq_any(&document_ids))
+            .select((
+                document_metadatas::document_id,
+                metadata_types::slug,
+                document_metadatas::value,
+            ))
+            .load::<(i64, String, String)>(&mut db)
+            .await
+            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document metadata"))?;
+
+        for (document_id, slug, value) in metadata_rows {
+            metadata_by_document
+                .entry(document_id)
+                .or_insert_with(HashMap::new)
+                .insert(slug, value);
+        }
+    }
+
+    let items = documents
+        .into_iter()
+        .map(|doc| DocumentView {
+            id: doc.id,
+            title: doc.title,
+            document_type_id: doc.document_type_id,
+            metadata: metadata_by_document.remove(&doc.id).unwrap_or_default(),
+            created_by: doc.created_by,
+            created_at: doc.created_at,
+            updated_by: doc.updated_by,
+            updated_at: doc.updated_at,
+        })
+        .collect();
 
     Ok(Json(ResourceList { total, page, per_page, items }))
 }
