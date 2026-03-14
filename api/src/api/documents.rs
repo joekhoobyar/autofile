@@ -13,17 +13,21 @@ use crate::shared::util::{diesel_to_http, ApiError, ResourceList};
 
 use aws_sdk_s3::primitives::ByteStream;
 use serde::Deserialize;
+use tokio_util::io::ReaderStream;
 
 use axum::{
     Router,
     routing::get,
     Json,
-    http::StatusCode,
+    http::{StatusCode, header, HeaderMap},
+    response::Response,
+    body::Body,
     extract::{Path, Query, Multipart, State},
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use chrono::Utc;
+use httpdate::{fmt_http_date, parse_http_date};
 use uuid::Uuid;
 
 use apalis::prelude::*;
@@ -96,6 +100,77 @@ pub async fn get_by_id(
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document"))?;
 
     Ok(Json(row))
+}
+
+pub async fn thumbnail_get(
+    _user: AuthUser,
+    State(state): State<Arc<AppState>>,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    // Find the document by ID and get the S3 key for the thumbnail, plus the document's updated_at timestamp for caching purposes.
+    let (s3_thumbnail, updated_at) = documents::table
+        .find(id)
+        .select((documents::s3_thumbnail, documents::updated_at))
+        .first::<(Option<String>, chrono::DateTime<chrono::Utc>)>(&mut db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document thumbnail"))?;
+
+    let s3_key = s3_thumbnail
+        .ok_or_else(|| ApiError::not_found("Thumbnail not available"))?;
+
+    // Support conditional GET with If-Modified-Since header to avoid unnecessary S3 requests and data transfer.
+    if let Some(if_modified_since) = headers
+        .get(header::IF_MODIFIED_SINCE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| parse_http_date(value).ok())
+    {
+        let updated_at_system: std::time::SystemTime = updated_at.into();
+        if updated_at_system <= if_modified_since {
+            let mut response = Response::new(Body::empty());
+            *response.status_mut() = StatusCode::NOT_MODIFIED;
+            let headers = response.headers_mut();
+            let last_modified = fmt_http_date(updated_at_system);
+            if let Ok(value) = header::HeaderValue::from_str(&last_modified) {
+                headers.insert(header::LAST_MODIFIED, value);
+            }
+            headers.insert(
+                header::CACHE_CONTROL,
+                header::HeaderValue::from_static("public, must-revalidate"),
+            );
+            return Ok(response);
+        }
+    }
+
+    // Prepare an HTTP response to stream the thumbnail directly from S3.
+    let object = state
+        .s3_client
+        .get_object()
+        .bucket(state.s3_bucket.as_str())
+        .key(&s3_key)
+        .send()
+        .await
+        .map_err(|e| ApiError::internal_server_error(&format!("S3 download failed: {}", e)))?;
+    let body = Body::from_stream(ReaderStream::new(object.body.into_async_read()));
+    let mut response = Response::new(body);
+
+    // Prepare the HTTP headers, including content type, caching, and last modified.
+    let headers = response.headers_mut();
+    headers.insert(
+        header::CONTENT_TYPE,
+        header::HeaderValue::from_static("image/png"),
+    );
+    let last_modified = fmt_http_date(updated_at.into());
+    if let Ok(value) = header::HeaderValue::from_str(&last_modified) {
+        headers.insert(header::LAST_MODIFIED, value);
+    }
+    headers.insert(
+        header::CACHE_CONTROL,
+        header::HeaderValue::from_static("public, must-revalidate"),
+    );
+
+    Ok(response)
 }
 
 async fn create(
@@ -356,4 +431,5 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(list).post(create))
         .route("/{id}", get(get_by_id).patch(update))
+        .route("/{id}/thumbnail", get(thumbnail_get))
 }

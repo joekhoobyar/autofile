@@ -22,6 +22,10 @@ pub struct GenerateThumbnail {
     pub width: u32,
 }
 
+/**
+ * This job generates a thumbnail for a given document file and page number,
+ * and updates the document record with the thumbnail's S3 key.
+ */
 pub async fn generate_thumbnail(
     job: GenerateThumbnail,
     state: Data<Arc<AppState>>,
