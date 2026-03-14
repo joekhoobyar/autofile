@@ -8,6 +8,7 @@ import { classNames } from 'primereact/utils';
 import { type ListParams } from '../api';
 import { useDocuments, useDocumentThumbnail } from '../queries/useDocuments';
 import { type Document } from '../models/document';
+import { useMetadataTypesMap } from '../queries/useMetadataTypes';
 
 /**
  * Renders a document in list layout for the DataView component.
@@ -21,18 +22,29 @@ type DocumentListItemProps = {
   index: number;
 };
 
-function DocumentListItem({ doc, index }: DocumentListItemProps) {
+function DocumentListItem({ doc, index }: Readonly<DocumentListItemProps>) {
     const { data } = useDocumentThumbnail(doc.id);
+    const { data: mdt } = useMetadataTypesMap();
 
     return (
       <div className="col-12" key={doc.id}>
         <div className={classNames('flex flex-column xl:flex-row xl:align-items-start p-4 gap-4', { 'border-top-1 surface-border': index !== 0 })}>
           <img alt="Page 1" className="w-9 sm:w-16rem xl:w-10rem shadow-2 block xl:block mx-auto aut-document-thumbnail" src={data} style={{ maxHeight: '200px' }} />
-          <div className="flex flex-column sm:flex-row justify-content-between align-items-center xl:align-items-start flex-1 gap-4">
-              <div className="flex flex-column align-items-center sm:align-items-start gap-3">
-                  <div className="text-2xl font-bold text-900">{doc.title}</div>
-              </div>
-          </div>
+          <section className="flex flex-column sm:flex-row justify-content-between align-items-center xl:align-items-start flex-1 gap-4 auto-document">
+            <div className="flex flex-column align-items-center sm:align-items-start gap-3">
+              <header>{doc.title}</header>
+              <aside>
+                <dl>
+                  {Object.entries(doc.metadata).map(([key, value]) => (
+                    <>
+                      <dt className="font-bold">{mdt?.[key].name ?? key}</dt>
+                      <dd>{value}</dd>
+                    </>
+                  ))}
+                </dl>
+              </aside>
+            </div>
+          </section>
         </div>
       </div>
     );
@@ -48,8 +60,9 @@ type DocumentGridItemProps = {
   doc: Readonly<Document>;
 };
 
-function DocumentGridItem({ doc }: DocumentGridItemProps) {
+function DocumentGridItem({ doc }: Readonly<DocumentGridItemProps>) {
     const { data } = useDocumentThumbnail(doc.id);
+    const { data: mdt } = useMetadataTypesMap();
 
     return (
       <div className="col-12 sm:col-6 lg:col-4 xl:col-2 p-2 aut-document-grid" key={doc.id}>
@@ -58,6 +71,14 @@ function DocumentGridItem({ doc }: DocumentGridItemProps) {
             <header>{doc.title}</header>
             <aside>
               <img alt="Page 1" className="shadow-2 aut-document-thumbnail" src={data} style={{ maxHeight: '200px' }} />
+              <dl>
+                {Object.entries(doc.metadata).map(([key, value]) => (
+                  <>
+                    <dt className="font-bold">{mdt?.[key].name ?? key}</dt>
+                    <dd>{value}</dd>
+                  </>
+                ))}
+              </dl>
             </aside>
           </section>
         </div>

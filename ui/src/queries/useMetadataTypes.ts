@@ -3,6 +3,7 @@ import { apiFetchList, type ListParams, type ResourceList, type ResourceInput, H
 import { type MetadataType } from '../models/metadataType';
 
 export type MetadataTypeInput = ResourceInput<MetadataType>;
+export type MetadataTypesMap = Record<string, MetadataType>;
 
 export function useMetadataTypes(params: ListParams): UseQueryResult<ResourceList<MetadataType>, HttpError> {
   return useQuery({
@@ -17,6 +18,37 @@ export function useMetadataType(id: string | number, options = {}): UseQueryResu
     enabled: !!id,
     ...options,
     queryFn: () => apiFetch<MetadataType>(`api/v1/metadata-types/${id}`),
+  });
+}
+
+export function useMetadataTypesMap(options = {}): UseQueryResult<MetadataTypesMap, HttpError> {
+  return useQuery({
+    queryKey: ['metadataType', 'map', 'slug'],
+    ...options,
+    queryFn: async () => {
+      const per_page = 200;
+      let page = 1;
+      let total = 0;
+      let items: MetadataType[] = [];
+
+      while (true) {
+        const res = await apiFetchList<MetadataType>('api/v1/metadata-types', { page, per_page });
+        total = res.total ?? total;
+        if (res.items?.length) {
+          items = items.concat(res.items);
+        }
+
+        if (!res.items?.length) break;
+        if (items.length >= res.total) break;
+        if (res.page && res.per_page && res.page * res.per_page >= res.total) break;
+        page += 1;
+      }
+
+      return items.reduce((acc, item) => {
+        acc[item.slug] = item;
+        return acc;
+      }, {} as MetadataTypesMap);
+    },
   });
 }
 
