@@ -105,7 +105,17 @@ body {
 }
 
 .aut-document-grid {
+  display: flex;
+
+  > .surface-card {
+    display: flex;
+    flex: 1 1 auto;
+  }
+
   section.aut-document {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
     padding: 0.4rem;
 
     header {
