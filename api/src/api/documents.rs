@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::AppState;
-use crate::schema::{documents, document_files, document_metadatas, metadata_types};
+use crate::schema::{cabinet_documents, document_files, document_metadatas, documents, metadata_types};
 use crate::domain::documents::{Document, DocumentView};
 use crate::domain::document_files::DocumentFile;
 use crate::infrastructure::s3::{delete_from_s3, upload_to_s3};
@@ -13,6 +13,7 @@ use crate::shared::extractors::DbConn;
 use crate::shared::util::{diesel_to_http, ApiError, ResourceList};
 
 use aws_sdk_s3::primitives::ByteStream;
+use diesel::dsl::exists;
 use serde::Deserialize;
 use tokio_util::io::ReaderStream;
 
@@ -82,6 +83,8 @@ pub struct ListDocumentsQuery {
     pub q: Option<String>,
     // optional document type search
     pub document_type_id: Option<i64>,
+    // optional cabinet search
+    pub cabinet_id: Option<i64>,
     // optional sort field
     pub sf: Option<DocumentSortField>,
     // optional sort descending
@@ -409,6 +412,15 @@ pub async fn list(
         // Filter by document type
         if let Some(id) = params.document_type_id {
             query = query.filter(documents::document_type_id.eq(id));
+        }
+
+        // Filter by cabinet ID
+        if let Some(id) = params.cabinet_id {
+            let subquery = cabinet_documents::table
+                .filter(cabinet_documents::cabinet_id.eq(id))
+                .filter(cabinet_documents::document_id.eq(documents::id));
+
+            query = query.filter(exists(subquery));
         }
 
         query
