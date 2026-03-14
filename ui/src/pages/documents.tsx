@@ -16,7 +16,12 @@ import { type Document } from '../models/document';
  * @param index index in the list
  * @returns HTML element for a document in list layout
  */
-function DocumentListItem(doc: Readonly<Document>, index: number) {
+type DocumentListItemProps = {
+  doc: Readonly<Document>;
+  index: number;
+};
+
+function DocumentListItem({ doc, index }: DocumentListItemProps) {
     const { data } = useDocumentThumbnail(doc.id);
 
     return (
@@ -39,7 +44,11 @@ function DocumentListItem(doc: Readonly<Document>, index: number) {
  * @param doc document
  * @returns HTML element for a document in grid layout
  */
-function DocumentGridItem(doc: Readonly<Document>) {
+type DocumentGridItemProps = {
+  doc: Readonly<Document>;
+};
+
+function DocumentGridItem({ doc }: DocumentGridItemProps) {
     const { data } = useDocumentThumbnail(doc.id);
 
     return (
@@ -79,9 +88,9 @@ export function ListDocuments() {
     if (!doc)
       return;
     if (layout === 'list')
-      return DocumentListItem(doc, index);
+      return <DocumentListItem doc={doc} index={index} />;
     else if (layout === 'grid')
-      return DocumentGridItem(doc);
+      return <DocumentGridItem doc={doc} />;
   };
 
   const listTemplate = (docs: Document[], layout: 'list' | 'grid') => {
