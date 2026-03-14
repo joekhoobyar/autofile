@@ -1,6 +1,17 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    cabinet_documents (cabinet_id, document_id) {
+        cabinet_id -> Int8,
+        document_id -> Int8,
+        created_at -> Timestamptz,
+        created_by -> Int8,
+        updated_at -> Timestamptz,
+        updated_by -> Int8,
+    }
+}
+
+diesel::table! {
     cabinets (id) {
         id -> Int8,
         slug -> Varchar,
@@ -100,6 +111,8 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(cabinet_documents -> cabinets (cabinet_id));
+diesel::joinable!(cabinet_documents -> documents (document_id));
 diesel::joinable!(document_files -> documents (document_id));
 diesel::joinable!(document_metadatas -> documents (document_id));
 diesel::joinable!(document_metadatas -> metadata_types (metadata_type_id));
@@ -108,6 +121,7 @@ diesel::joinable!(document_types_metadata_types -> metadata_types (metadata_type
 diesel::joinable!(documents -> document_types (document_type_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    cabinet_documents,
     cabinets,
     document_files,
     document_metadatas,
