@@ -8,6 +8,7 @@ import { Dropdown } from 'primereact/dropdown';
 import { Dialog } from 'primereact/dialog';
 import { classNames } from 'primereact/utils';
 import { format } from "date-fns";
+import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 
 import { type ListParams } from '../api';
 import { useDeleteDocument, useDocuments, useDocumentThumbnail } from '../queries/useDocuments';
@@ -269,6 +270,20 @@ export function ListDocuments() {
     setSelectedIds(new Set());
   };
 
+  const confirmDeleteSelectedDocuments = () => {
+    if (!selectedIds.size) return;
+    const count = selectedIds.size;
+    const label = count === 1 ? 'document' : 'documents';
+    confirmDialog({
+      message: `Are you sure you want to delete ${count} ${label}?`,
+      header: 'Delete Documents',
+      icon: 'pi pi-trash',
+      defaultFocus: 'reject',
+      acceptClassName: 'p-button-danger',
+      accept: () => void deleteSelectedDocuments(),
+    });
+  };
+
   const itemTemplate = (doc: Document, layout: 'list' | 'grid', index: number) => {
     if (!doc)
       return;
@@ -325,7 +340,7 @@ export function ListDocuments() {
   const actionMenuItems: MenuItem[] = [
     { icon: 'pi pi-upload', label: 'New Document', url: '/documents/new' },
     { separator: true },
-    { icon: 'pi pi-trash', label: 'Delete Documents', command: () => { void deleteSelectedDocuments(); }, disabled: selectedIds.size === 0 },
+    { icon: 'pi pi-trash', label: 'Delete Documents', command: () => { confirmDeleteSelectedDocuments(); }, disabled: selectedIds.size === 0 },
   ];
 
   return (
@@ -361,6 +376,7 @@ export function ListDocuments() {
         />
       )}
     </Dialog>
+    <ConfirmDialog />
     </>
   );
 }
