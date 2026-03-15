@@ -386,7 +386,7 @@ export function ListDocuments() {
     { icon: 'pi pi-upload', label: 'New Document', url: '/documents/new' },
     { separator: true },
     { icon: 'pi pi-plus-circle', label: 'Add to Cabinet', command: () => { openAddToCabinetDialog(); }, disabled: selectedIds.size === 0 },
-    { icon: 'pi pi-minus-circle', label: 'Remove From Cabinet', command: () => { openRemoveFromCabinetDialog(); }, disabled: selectedIds.size === 0 },
+    { icon: 'pi pi-minus-circle', label: 'Remove Cabinet', command: () => { openRemoveFromCabinetDialog(); }, disabled: selectedIds.size === 0 },
     { separator: true },
     { icon: 'pi pi-trash', label: 'Delete Documents', command: () => { confirmDeleteSelectedDocuments(); }, disabled: selectedIds.size === 0 },
   ];
@@ -461,7 +461,7 @@ export function ListDocuments() {
       </div>
     </Dialog>
     <Dialog
-      header="Remove From Cabinet"
+      header="Remove from Cabinet"
       visible={removeFromCabinetVisible}
       onHide={closeRemoveFromCabinetDialog}
       style={{ width: '90vw', maxWidth: '520px' }}
