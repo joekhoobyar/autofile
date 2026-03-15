@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Card } from 'primereact/card';
@@ -13,6 +13,9 @@ import { useDocuments, useDocumentThumbnail } from '../queries/useDocuments';
 import { type Document } from '../models/document';
 import { useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { useDocumentTypesMap } from '../queries/useDocumentTypes';
+import { Menu } from 'primereact/menu';
+import { Button } from 'primereact/button';
+import type { MenuItem } from 'primereact/menuitem';
 
 type DocumentListItemProps = {
   doc: Readonly<Document>;
@@ -186,6 +189,7 @@ export function ListDocuments() {
   const [previewSrc, setPreviewSrc] = useState<string | undefined>(undefined);
   const [previewTitle, setPreviewTitle] = useState('');
   const { isPending, data, isFetching } = useDocuments(listParams);
+  const actionMenu = useRef<Menu>(null);
 
   const sortOptions = [
     { label: 'ID (Ascending)', value: 'id:asc' },
@@ -268,9 +272,20 @@ export function ListDocuments() {
     ),
   };
 
+  const actionMenuItems: MenuItem[] = [
+    { icon: 'pi pi-upload', label: 'New Document', url: '/documents/new' },
+    { separator: true },
+    { icon: 'pi pi-times', label: 'Delete Documents', command: () => alert('Delete action') },
+  ];
+
   return (
     <>
-    <Link to="new" style={{float: 'right', padding: '1.5rem'}}>New Document &raquo;</Link>
+    <Menu model={actionMenuItems} popup ref={actionMenu} popupAlignment="right" id="action_menu"/>
+    <Button
+        label="Actions" className="mt-3 mr-5" style={{float: 'right'}} size="small" raised
+        onClick={(event) => actionMenu.current?.toggle(event)} aria-controls="action_menu" aria-haspopup
+      />
+
     <Card title="Documents">
       <DataView value={data?.items ?? []}
           loading={isPending || isFetching}
