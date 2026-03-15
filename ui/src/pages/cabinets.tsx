@@ -84,7 +84,7 @@ export function ListCabinets() {
         <Column field="slug" header="Slug" body={slugTemplate} sortable expander></Column>
         <Column field="name" header="Name" body={nameTemplate} sortable></Column>
         <Column field="description" header="Description" sortable></Column>
-        <Column body={actionTemplate} headerClassName="w-8rem" />
+        <Column body={actionTemplate} headerClassName="w-9rem" />
       </TreeTable>
     </Card>
     <Toast ref={toast} />

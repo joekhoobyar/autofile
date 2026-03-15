@@ -95,7 +95,7 @@ export function ListMetadataTypes() {
         <Column field="name" header="Name" body={nameTemplate} sortable></Column>
         <Column field="data_type" header="Data Type" sortable></Column>
         <Column field="description" header="Description" sortable></Column>
-        <Column body={actionTemplate} headerClassName="w-8rem" />
+        <Column body={actionTemplate} headerClassName="w-9rem" />
       </DataTable>
     </Card>
     <Toast ref={toast} />
