@@ -8,7 +8,37 @@ export type CabinetInput = ResourceInput<Cabinet>;
 export function useCabinets(params: ListParams): UseQueryResult<ResourceList<Cabinet>, HttpError> {
   return useQuery({
     queryKey: ['cabinet', 'list', params],
-    queryFn: () => apiFetchList<Cabinet>('api/v1/cabinets', params),
+    queryFn: async () => {
+      const response = await apiFetchList<Cabinet>('api/v1/cabinets', params);
+      const cabinetMap = new Map<number, Cabinet>();
+
+      response.items.forEach((cabinet) => {
+        cabinetMap.set(cabinet.id, cabinet);
+      });
+
+      const buildDisplayName = (cabinet: Cabinet): string => {
+        const parts: string[] = [];
+        const visited = new Set<number>();
+        let current: Cabinet | undefined = cabinet;
+
+        while (current) {
+          if (visited.has(current.id)) break;
+          visited.add(current.id);
+          parts.unshift(current.name);
+          current = current.parent_id ? cabinetMap.get(current.parent_id) : undefined;
+        }
+
+        return parts.join(' / ');
+      };
+
+      return {
+        ...response,
+        items: response.items.map((cabinet) => ({
+          ...cabinet,
+          displayName: buildDisplayName(cabinet),
+        })),
+      };
+    },
   });
 }
 

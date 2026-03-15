@@ -203,7 +203,7 @@ function CabinetForm({ data }: Readonly<{ data?: Partial<Cabinet> }>) {
           <Controller name="parent_id" control={control}
             render={({ field }) => (
               <Dropdown id="parent_id" {...field}
-                optionLabel="name" optionValue="id"
+                optionLabel="displayName" optionValue="id"
                 className={classNames({ 'p-invalid': !!errors.parent_id })}
                 placeholder="Parent cabinet" options={parent_id_options} autoComplete="parent_id"
               />
