@@ -9,7 +9,7 @@ import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
 import { classNames } from 'primereact/utils';
 
-import type { HttpError, ListParams } from '../api';
+import type { ListParams } from '../api';
 import { useDeleteDocumentType, useDocumentType, useDocumentTypes, useSaveDocumentType } from '../queries/useDocumentTypes';
 import { type DocumentType } from '../models/documentType';
 import { Message } from 'primereact/message';
@@ -26,13 +26,13 @@ export function ListDocumentTypes() {
 
   const slugTemplate = (c: DocumentType) => {
     return (
-      <a className="title" onClick={() => navigate(`${c.id}/edit`)}>{c.slug}</a>
+      <Link className="title" to={`${c.id}/edit`}>{c.slug}</Link>
     );
   }
 
   const nameTemplate = (c: DocumentType) => {
     return (
-      <a className="title" onClick={() => navigate(`${c.id}/edit`)}>{c.name}</a>
+      <Link className="title" to={`${c.id}/edit`}>{c.name}</Link>
     );
   }
 
@@ -69,12 +69,12 @@ export function ListDocumentTypes() {
       icon: 'pi pi-trash',
       defaultFocus: 'reject',
       acceptClassName: 'p-button-danger',
-      accept: () => doDeleteDocumentType(c),
+      accept: () => void doDeleteDocumentType(c),
     });
   };
 
   const onSort = (event: DataTableStateEvent) => {
-    setListParams({ ...listParams, sf: event.sortField as string, sd: event.sortOrder === -1 });
+    setListParams({ ...listParams, sf: event.sortField, sd: event.sortOrder === -1 });
   };
 
   const onPage = (event: DataTableStateEvent) => {
@@ -128,7 +128,7 @@ export function NewDocumentType() {
   );
 }
 
-function DocumentTypeForm({ data }: { data?: Partial<DocumentType> }) {
+function DocumentTypeForm({ data }: Readonly<{ data?: Partial<DocumentType> }>) {
   const saveDocumentType = useSaveDocumentType();
   const navigate = useNavigate();
   const {
@@ -212,7 +212,7 @@ function DocumentTypeForm({ data }: { data?: Partial<DocumentType> }) {
 
       <div className="text-end">
         {saveDocumentType.isError && (
-          <Message className="float-start" severity="error" text={(saveDocumentType.error as HttpError).message} />
+          <Message className="float-start" severity="error" text={saveDocumentType.error.message} />
         )}
 
         <Button label="Save" type="submit" icon="pi pi-check" disabled={!isDirty || !isValid || isSubmitting} />

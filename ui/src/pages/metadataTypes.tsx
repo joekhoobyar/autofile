@@ -9,7 +9,7 @@ import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
 import { classNames } from 'primereact/utils';
 
-import type { HttpError, ListParams } from '../api';
+import type { ListParams } from '../api';
 import { useMetadataType, useMetadataTypes, useSaveMetadataType, useDeleteMetadataType } from '../queries/useMetadataTypes';
 import { type MetadataType } from '../models/metadataType';
 import { Dropdown } from 'primereact/dropdown';
@@ -27,13 +27,13 @@ export function ListMetadataTypes() {
 
   const slugTemplate = (c: MetadataType) => {
     return (
-      <a className="title" onClick={() => navigate(`${c.id}/edit`)}>{c.slug}</a>
+      <Link className="title" to={`${c.id}/edit`}>{c.slug}</Link>
     );
   }
 
   const nameTemplate = (c: MetadataType) => {
     return (
-      <a className="title" onClick={() => navigate(`${c.id}/edit`)}>{c.name}</a>
+      <Link className="title" to={`${c.id}/edit`}>{c.name}</Link>
     );
   }
 
@@ -70,12 +70,12 @@ export function ListMetadataTypes() {
       icon: 'pi pi-trash',
       defaultFocus: 'reject',
       acceptClassName: 'p-button-danger',
-      accept: () => doDeleteMetadataType(c),
+      accept: () => void doDeleteMetadataType(c),
     });
   };
 
   const onSort = (event: DataTableStateEvent) => {
-    setListParams({ ...listParams, sf: event.sortField as string, sd: event.sortOrder === -1 });
+    setListParams({ ...listParams, sf: event.sortField, sd: event.sortOrder === -1 });
   };
 
   const onPage = (event: DataTableStateEvent) => {
@@ -130,7 +130,7 @@ export function NewMetadataType() {
   );
 }
 
-function MetadataTypeForm({ data }: { data?: Partial<MetadataType> }) {
+function MetadataTypeForm({ data }: Readonly<{ data?: Partial<MetadataType> }>) {
   const saveMetadataType = useSaveMetadataType();
   const navigate = useNavigate();
   const {
@@ -240,7 +240,7 @@ function MetadataTypeForm({ data }: { data?: Partial<MetadataType> }) {
 
       <div className="text-end">
         {saveMetadataType.isError && (
-          <Message className="float-start" severity="error" text={(saveMetadataType.error as HttpError).message} />
+          <Message className="float-start" severity="error" text={saveMetadataType.error.message} />
         )}
 
         <Button label="Save" type="submit" icon="pi pi-check" disabled={!isDirty || !isValid || isSubmitting} />
