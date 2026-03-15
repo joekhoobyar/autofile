@@ -20,6 +20,68 @@ type DocumentListItemProps = {
   onImageClick: (src: string | undefined, title: string) => void;
 };
 
+type DocumentThumbnailProps = {
+  src: string | undefined;
+  alt: string;
+  onClick: (src: string | undefined) => void;
+  imgClassName: string;
+  placeholderClassName: string;
+  buttonStyle?: React.CSSProperties;
+};
+
+function DocumentThumbnail({
+  src,
+  alt,
+  onClick,
+  imgClassName,
+  placeholderClassName,
+}: Readonly<DocumentThumbnailProps>) {
+  const [loadedThumbnailSrc, setLoadedThumbnailSrc] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!src) return;
+    let cancelled = false;
+    const img = new Image();
+    img.onload = () => {
+      if (!cancelled) {
+        setLoadedThumbnailSrc(src);
+      }
+    };
+    img.onerror = () => {
+      if (!cancelled) {
+        setLoadedThumbnailSrc(undefined);
+      }
+    };
+    img.src = src;
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+
+  return (
+    <div className="aut-document-thumbnail-wrapper">
+      <button type="button" onClick={() => onClick(src)}>
+        {loadedThumbnailSrc === src && src ? (
+          <img
+            alt={alt}
+            className={imgClassName}
+            src={src}
+            style={{ maxHeight: '200px', display: 'block' }}
+          />
+        ) : (
+          <div
+            className={placeholderClassName}
+            style={{ maxHeight: '200px', height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            aria-label="Loading thumbnail"
+          >
+            <span className="pi pi-spin pi-spinner" aria-hidden="true" />
+          </div>
+        )}
+      </button>
+    </div>
+  );
+}
+
 /**
  * Renders a document in list layout for the DataView component.
  * 
@@ -31,53 +93,17 @@ function DocumentListItem({ doc, index, onImageClick }: Readonly<DocumentListIte
     const { data } = useDocumentThumbnail(doc.id);
     const { data: mdt } = useMetadataTypesMap('slug');
     const { data: ddt } = useDocumentTypesMap();
-    const [loadedThumbnailSrc, setLoadedThumbnailSrc] = useState<string | undefined>(undefined);
-
-    useEffect(() => {
-      if (!data) return;
-      let cancelled = false;
-      const img = new Image();
-      img.onload = () => {
-        if (!cancelled) {
-          setLoadedThumbnailSrc(data);
-        }
-      };
-      img.onerror = () => {
-        if (!cancelled) {
-          setLoadedThumbnailSrc(undefined);
-        }
-      };
-      img.src = data;
-      return () => {
-        cancelled = true;
-      };
-    }, [data]);
 
     return (
       <div className="col-12 aut-document-list" key={doc.id}>
         <div className={classNames('flex flex-column xl:flex-row xl:align-items-start p-4 gap-4', { 'border-top-1 surface-border': index !== 0 })}>
-          <div className="aut-document-thumbnail-wrapper">
-            <button type="button"
-              onClick={() => onImageClick(data, doc.title)}
-            >
-              {loadedThumbnailSrc === data && data ? (
-                <img
-                  alt="Page 1"
-                  className="w-9 sm:w-16rem xl:w-10rem block xl:block mx-auto aut-document-thumbnail"
-                  src={data}
-                  style={{ maxHeight: '200px', display: 'block' }}
-                />
-              ) : (
-                <div
-                  className="w-9 sm:w-16rem xl:w-10rem block xl:block mx-auto aut-document-thumbnail"
-                  style={{ maxHeight: '200px', height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  aria-label="Loading thumbnail"
-                >
-                  <span className="pi pi-spin pi-spinner" aria-hidden="true" />
-                </div>
-              )}
-            </button>
-          </div>
+          <DocumentThumbnail
+            src={data}
+            alt="Page 1"
+            onClick={(src) => onImageClick(src, doc.title)}
+            imgClassName="w-9 sm:w-16rem xl:w-10rem block xl:block mx-auto aut-document-thumbnail"
+            placeholderClassName="w-9 sm:w-16rem xl:w-10rem block xl:block mx-auto aut-document-thumbnail"
+          />
           <section className="flex flex-column sm:flex-row justify-content-between align-items-center xl:align-items-start flex-1 gap-4 aut-document">
             <div className="flex flex-column align-items-center sm:align-items-start gap-3">
               <header>
@@ -114,27 +140,6 @@ function DocumentGridItem({ doc, onImageClick }: Readonly<DocumentGridItemProps>
     const { data } = useDocumentThumbnail(doc.id);
     const { data: mdt } = useMetadataTypesMap('slug');
     const { data: ddt } = useDocumentTypesMap();
-    const [loadedThumbnailSrc, setLoadedThumbnailSrc] = useState<string | undefined>(undefined);
-
-    useEffect(() => {
-      if (!data) return;
-      let cancelled = false;
-      const img = new Image();
-      img.onload = () => {
-        if (!cancelled) {
-          setLoadedThumbnailSrc(data);
-        }
-      };
-      img.onerror = () => {
-        if (!cancelled) {
-          setLoadedThumbnailSrc(undefined);
-        }
-      };
-      img.src = data;
-      return () => {
-        cancelled = true;
-      };
-    }, [data]);
 
     return (
       <div className="col-12 sm:col-6 lg:col-4 xl:col-2 p-2 aut-document-grid" key={doc.id}>
@@ -144,30 +149,13 @@ function DocumentGridItem({ doc, onImageClick }: Readonly<DocumentGridItemProps>
               <Link to={`${doc.id}/metadata`}>{doc.title}</Link>
             </header>
             <aside>
-              <div className="aut-document-thumbnail-wrapper">
-                <button
-                  type="button"
-                  onClick={() => onImageClick(data, doc.title)}
-                  style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
-                >
-                  {loadedThumbnailSrc === data && data ? (
-                    <img
-                      alt="Page 1"
-                      className="aut-document-thumbnail"
-                      src={data}
-                      style={{ maxHeight: '200px', display: 'block' }}
-                    />
-                  ) : (
-                    <div
-                      className="aut-document-thumbnail"
-                      style={{ maxHeight: '200px', height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      aria-label="Loading thumbnail"
-                    >
-                      <span className="pi pi-spin pi-spinner" aria-hidden="true" />
-                    </div>
-                  )}
-                </button>
-              </div>
+              <DocumentThumbnail
+                src={data}
+                alt="Page 1"
+                onClick={(src) => onImageClick(src, doc.title)}
+                imgClassName="aut-document-thumbnail"
+                placeholderClassName="aut-document-thumbnail"
+              />
               <ul className="aut-document-metadata">
                 <li><span>Type</span>: {ddt?.[doc.document_type_id]?.name}</li>
                 <li><span>Created</span>: {format(new Date(doc.created_at), "MM/dd/yyyy HH:mm")}</li>
