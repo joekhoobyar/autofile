@@ -49,7 +49,11 @@ export interface ListParams {
   page?: number;
   per_page?: number;
   q?: string;
+
+  // sf = sort field
   sf?: string;
+
+  // sd = sort descending
   sd?: boolean;
 }
 

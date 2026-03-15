@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { Card } from 'primereact/card';
 import { DataView, DataViewLayoutOptions, type DataViewPageEvent } from 'primereact/dataview';
+import { Dropdown } from 'primereact/dropdown';
 import { Dialog } from 'primereact/dialog';
 import { classNames } from 'primereact/utils';
 import { format } from "date-fns";
@@ -13,6 +14,12 @@ import { type Document } from '../models/document';
 import { useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { useDocumentTypesMap } from '../queries/useDocumentTypes';
 
+type DocumentListItemProps = {
+  doc: Readonly<Document>;
+  index: number;
+  onImageClick: (src: string | undefined, title: string) => void;
+};
+
 /**
  * Renders a document in list layout for the DataView component.
  * 
@@ -20,12 +27,6 @@ import { useDocumentTypesMap } from '../queries/useDocumentTypes';
  * @param index index in the list
  * @returns HTML element for a document in list layout
  */
-type DocumentListItemProps = {
-  doc: Readonly<Document>;
-  index: number;
-  onImageClick: (src: string | undefined, title: string) => void;
-};
-
 function DocumentListItem({ doc, index, onImageClick }: Readonly<DocumentListItemProps>) {
     const { data } = useDocumentThumbnail(doc.id);
     const { data: mdt } = useMetadataTypesMap();
@@ -62,17 +63,17 @@ function DocumentListItem({ doc, index, onImageClick }: Readonly<DocumentListIte
     );
 }
 
+type DocumentGridItemProps = {
+  doc: Readonly<Document>;
+  onImageClick: (src: string | undefined, title: string) => void;
+};
+
 /**
  * Renders a document in grid layout for the DataView component.
  * 
  * @param doc document
  * @returns HTML element for a document in grid layout
  */
-type DocumentGridItemProps = {
-  doc: Readonly<Document>;
-  onImageClick: (src: string | undefined, title: string) => void;
-};
-
 function DocumentGridItem({ doc, onImageClick }: Readonly<DocumentGridItemProps>) {
     const { data } = useDocumentThumbnail(doc.id);
     const { data: mdt } = useMetadataTypesMap();
@@ -115,20 +116,47 @@ function DocumentGridItem({ doc, onImageClick }: Readonly<DocumentGridItemProps>
  * @returns HTML element for a list or grid of documents
  */
 export function ListDocuments() {
-  const [listParams, setListParams] = useState<ListParams>({});
+  const [listParams, setListParams] = useState<ListParams>({
+    page: 1,
+    sf: 'created_at',
+    sd: true,
+  });
   const [layout, setLayout] = useState<'list' | 'grid'>('grid');
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewSrc, setPreviewSrc] = useState<string | undefined>(undefined);
   const [previewTitle, setPreviewTitle] = useState('');
   const { isPending, data, isFetching } = useDocuments(listParams);
-/*
-  const onSort = (event: DataTableStateEvent) => {
-    setListParams({ ...listParams, sf: event.sortField as string, sd: event.sortOrder === -1 });
-  };
-*/
+
+  const sortOptions = [
+    { label: 'ID (Ascending)', value: 'id:asc' },
+    { label: 'ID (Descending)', value: 'id:desc' },
+    { label: 'Title (A-Z)', value: 'title:asc' },
+    { label: 'Title (Z-A)', value: 'title:desc' },
+    { label: 'Created (Oldest)', value: 'created_at:asc' },
+    { label: 'Created (Newest)', value: 'created_at:desc' },
+  ];
+
+  const sortValue = listParams.sf
+    ? `${listParams.sf}:${listParams.sd ? 'desc' : 'asc'}`
+    : undefined;
 
   const onPage = (event: DataViewPageEvent) => {
     setListParams({ ...listParams, page: event.page, per_page: event.rows });
+  };
+
+  const onSortChange = (value: string | undefined) => {
+    if (!value) {
+      setListParams({ ...listParams, sf: undefined, sd: undefined, page: 0 });
+      return;
+    }
+
+    const [field, direction] = value.split(':');
+    setListParams({
+      ...listParams,
+      sf: field,
+      sd: direction === 'desc',
+      page: 0,
+    });
   };
 
   const openPreview = (src: string | undefined, title: string) => {
@@ -163,6 +191,23 @@ export function ListDocuments() {
     );
   };
 
+  const paginatorTemplate = {
+    layout: 'RowsPerPageDropdown PrevPageLink PageLinks NextPageLink CurrentPageReport',
+    CurrentPageReport: (options: { first: number; last: number; totalRecords: number }) => (
+      <div className="flex align-items-center gap-3">
+        <Dropdown
+          value={sortValue}
+          options={sortOptions}
+          placeholder="Sort by"
+          onChange={(event) => onSortChange(event.value as string | undefined)}
+          className="w-15rem"
+          aria-label="Sort documents"
+        />
+        <span>{options.first} - {options.last} of {options.totalRecords}</span>
+      </div>
+    ),
+  };
+
   return (
     <>
     <Link to="new" style={{float: 'right', padding: '1.5rem'}}>New Document &raquo;</Link>
@@ -170,6 +215,9 @@ export function ListDocuments() {
       <DataView value={data?.items ?? []}
           loading={isPending || isFetching}
           onPage={onPage} paginator={true} first={0} rows={data?.per_page} totalRecords={data?.total}
+          paginatorTemplate={paginatorTemplate}
+          paginatorPosition="both"
+          rowsPerPageOptions={[10, 20, 50, 100]}
           listTemplate={listTemplate} layout={layout} header={header()}
         />
     </Card>
