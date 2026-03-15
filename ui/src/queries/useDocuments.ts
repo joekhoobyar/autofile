@@ -68,3 +68,20 @@ export function useSaveDocumentMetadata(id: string | number): UseMutationResult<
     },
   });
 }
+
+export function useDeleteDocument(): UseMutationResult<void, HttpError, number> {
+  const qc = useQueryClient();
+
+  return useMutation<void, HttpError, number>({
+    mutationFn: async (input) => {
+      return apiMutate<void, void>(`api/v1/documents/${input}`, {
+        method: "DELETE",
+      });
+    },
+
+    onSuccess: () => {
+      // invalidate by prefix (works with table params in the queryKey)
+      qc.invalidateQueries({ queryKey: ["document"] });
+    },
+  });
+}

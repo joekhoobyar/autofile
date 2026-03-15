@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Card } from 'primereact/card';
+import { Checkbox } from 'primereact/checkbox';
 import { DataView, DataViewLayoutOptions, type DataViewPageEvent } from 'primereact/dataview';
 import { Dropdown } from 'primereact/dropdown';
 import { Dialog } from 'primereact/dialog';
@@ -9,7 +10,7 @@ import { classNames } from 'primereact/utils';
 import { format } from "date-fns";
 
 import { type ListParams } from '../api';
-import { useDocuments, useDocumentThumbnail } from '../queries/useDocuments';
+import { useDeleteDocument, useDocuments, useDocumentThumbnail } from '../queries/useDocuments';
 import { type Document } from '../models/document';
 import { useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { useDocumentTypesMap } from '../queries/useDocumentTypes';
@@ -21,6 +22,8 @@ type DocumentListItemProps = {
   doc: Readonly<Document>;
   index: number;
   onImageClick: (src: string | undefined, title: string) => void;
+  selected: boolean;
+  onSelectionChange: (id: number, checked: boolean) => void;
 };
 
 type DocumentThumbnailProps = {
@@ -92,7 +95,7 @@ function DocumentThumbnail({
  * @param index index in the list
  * @returns HTML element for a document in list layout
  */
-function DocumentListItem({ doc, index, onImageClick }: Readonly<DocumentListItemProps>) {
+function DocumentListItem({ doc, index, onImageClick, selected, onSelectionChange }: Readonly<DocumentListItemProps>) {
     const { data } = useDocumentThumbnail(doc.id);
     const { data: mdt } = useMetadataTypesMap('slug');
     const { data: ddt } = useDocumentTypesMap();
@@ -109,7 +112,12 @@ function DocumentListItem({ doc, index, onImageClick }: Readonly<DocumentListIte
           />
           <section className="flex flex-column sm:flex-row justify-content-between align-items-center xl:align-items-start flex-1 gap-4 aut-document">
             <div className="flex flex-column align-items-center sm:align-items-start gap-3">
-              <header>
+              <header className="flex align-items-center gap-2">
+                <Checkbox
+                  inputId={`document-select-${doc.id}`}
+                  onChange={(event) => onSelectionChange(doc.id, !!event.checked)}
+                  checked={selected}
+                />
                 <Link to={`${doc.id}/metadata`}>{doc.title}</Link>
               </header>
             </div>
@@ -131,6 +139,8 @@ function DocumentListItem({ doc, index, onImageClick }: Readonly<DocumentListIte
 type DocumentGridItemProps = {
   doc: Readonly<Document>;
   onImageClick: (src: string | undefined, title: string) => void;
+  selected: boolean;
+  onSelectionChange: (id: number, checked: boolean) => void;
 };
 
 /**
@@ -139,7 +149,7 @@ type DocumentGridItemProps = {
  * @param doc document
  * @returns HTML element for a document in grid layout
  */
-function DocumentGridItem({ doc, onImageClick }: Readonly<DocumentGridItemProps>) {
+function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange }: Readonly<DocumentGridItemProps>) {
     const { data } = useDocumentThumbnail(doc.id);
     const { data: mdt } = useMetadataTypesMap('slug');
     const { data: ddt } = useDocumentTypesMap();
@@ -148,7 +158,12 @@ function DocumentGridItem({ doc, onImageClick }: Readonly<DocumentGridItemProps>
       <div className="col-12 sm:col-6 lg:col-4 xl:col-2 p-2 aut-document-grid" key={doc.id}>
         <div className="border-1 surface-border surface-card border-round">
           <section className="flex flex-column aut-document">
-            <header>
+            <header className="flex align-items-center gap-2">
+              <Checkbox
+                inputId={`document-select-${doc.id}`}
+                onChange={(event) => onSelectionChange(doc.id, !!event.checked)}
+                checked={selected}
+              />
               <Link to={`${doc.id}/metadata`}>{doc.title}</Link>
             </header>
             <aside>
@@ -188,7 +203,9 @@ export function ListDocuments() {
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewSrc, setPreviewSrc] = useState<string | undefined>(undefined);
   const [previewTitle, setPreviewTitle] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const { isPending, data, isFetching } = useDocuments(listParams);
+  const deleteDocument = useDeleteDocument();
   const actionMenu = useRef<Menu>(null);
 
   const sortOptions = [
@@ -234,13 +251,47 @@ export function ListDocuments() {
     setPreviewVisible(false);
   };
 
+  const handleSelectionChange = (id: number, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  };
+
+  const deleteSelectedDocuments = async () => {
+    if (!selectedIds.size) return;
+    const ids = Array.from(selectedIds);
+    await Promise.all(ids.map((id) => deleteDocument.mutateAsync(id)));
+    setSelectedIds(new Set());
+  };
+
   const itemTemplate = (doc: Document, layout: 'list' | 'grid', index: number) => {
     if (!doc)
       return;
     if (layout === 'list')
-      return <DocumentListItem doc={doc} index={index} onImageClick={openPreview} />;
+      return (
+        <DocumentListItem
+          doc={doc}
+          index={index}
+          onImageClick={openPreview}
+          selected={selectedIds.has(doc.id)}
+          onSelectionChange={handleSelectionChange}
+        />
+      );
     else if (layout === 'grid')
-      return <DocumentGridItem doc={doc} onImageClick={openPreview} />;
+      return (
+        <DocumentGridItem
+          doc={doc}
+          onImageClick={openPreview}
+          selected={selectedIds.has(doc.id)}
+          onSelectionChange={handleSelectionChange}
+        />
+      );
   };
 
   const listTemplate = (docs: Document[], layout: 'list' | 'grid') => {
@@ -275,7 +326,7 @@ export function ListDocuments() {
   const actionMenuItems: MenuItem[] = [
     { icon: 'pi pi-upload', label: 'New Document', url: '/documents/new' },
     { separator: true },
-    { icon: 'pi pi-times', label: 'Delete Documents', command: () => alert('Delete action') },
+    { icon: 'pi pi-times', label: 'Delete Documents', command: deleteSelectedDocuments, disabled: selectedIds.size === 0 },
   ];
 
   return (
