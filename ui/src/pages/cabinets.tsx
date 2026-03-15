@@ -8,7 +8,6 @@ import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
 import { classNames } from 'primereact/utils';
 
-import type { HttpError } from '../api';
 import { useCabinet, useCabinets, useCabinetTree, useDeleteCabinet, useSaveCabinet } from '../queries/useCabinets';
 import { MAX_CABINETS, type Cabinet } from '../models/cabinet';
 import { Message } from 'primereact/message';
@@ -27,13 +26,13 @@ export function ListCabinets() {
 
   const slugTemplate = (c: TreeNode) => {
     return (
-      <a className="title" onClick={() => navigate(`${c.data.id}/edit`)}>{c.data.slug}</a>
+      <Link className="title" to={`${c.data.id}/edit`}>{c.data.slug}</Link>
     );
   }
 
   const nameTemplate = (c: TreeNode) => {
     return (
-      <a className="title" onClick={() => navigate(`${c.data.id}/edit`)}>{c.data.name}</a>
+      <Link className="title" to={`${c.data.id}/edit`}>{c.data.name}</Link>
     );
   }
 
@@ -70,7 +69,7 @@ export function ListCabinets() {
       icon: 'pi pi-trash',
       defaultFocus: 'reject',
       acceptClassName: 'p-button-danger',
-      accept: () => doDeleteCabinet(cabinet),
+      accept: () => void doDeleteCabinet(cabinet),
     });
   };
 
@@ -119,7 +118,7 @@ export function NewCabinet() {
   );
 }
 
-function CabinetForm({ data }: { data?: Partial<Cabinet> }) {
+function CabinetForm({ data }: Readonly<{ data?: Partial<Cabinet> }>) {
   const saveCabinet = useSaveCabinet();
   const navigate = useNavigate();
 
@@ -230,7 +229,7 @@ function CabinetForm({ data }: { data?: Partial<Cabinet> }) {
 
       <div className="text-end">
         {saveCabinet.isError && (
-          <Message className="float-start" severity="error" text={(saveCabinet.error as HttpError).message} />
+          <Message className="float-start" severity="error" text={saveCabinet.error.message} />
         )}
 
         <Button label="Save" type="submit" icon="pi pi-check" disabled={!isDirty || !isValid || isSubmitting} />
