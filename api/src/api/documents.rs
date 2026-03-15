@@ -30,6 +30,7 @@ use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use chrono::Utc;
 use httpdate::{fmt_http_date, parse_http_date};
+use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 use apalis::prelude::*;
@@ -279,9 +280,10 @@ async fn create(
     // Parse multipart form fields
     let mut title: Option<String> = None;
     let mut document_type_id: Option<i64> = None;
-    let mut file_data: Option<(String, Vec<u8>, Option<String>)> = None;
+    let mut file_info: Option<(String, String, Option<String>, i64)> = None;
+    let mut file_temp: Option<(std::path::PathBuf, String, Option<String>, i64)> = None;
 
-    while let Some(field) = multipart.next_field().await
+    while let Some(mut field) = multipart.next_field().await
         .map_err(|e| ApiError::bad_request(&format!("Failed to read multipart field: {}", e)))? {
 
         let field_name = field.name()
@@ -301,19 +303,46 @@ async fn create(
                     .map_err(|_| ApiError::bad_request("Invalid document_type_id"))?);
             }
             "file" => {
+                if file_info.is_some() {
+                    return Err(ApiError::bad_request("Only one file upload is supported"));
+                }
                 let mut filename = field.file_name()
                     .ok_or_else(|| ApiError::bad_request("File field missing filename"))?
                     .to_string();
                 let content_type = field.content_type().map(|ct| ct.to_string());
-                let data = field.bytes().await
-                    .map_err(|e| ApiError::bad_request(&format!("Failed to read file data: {}", e)))?;
 
                 // Normalize filename to prevent clashes with existing thumbnails
                 if filename == "_thumb.png" {
                     filename = "thumb.png".to_string();
                 }
 
-                file_data = Some((filename, data.to_vec(), content_type));
+                let mut temp_path = std::env::temp_dir();
+                temp_path.push(format!("autofile-upload-{}", Uuid::new_v4()));
+                let mut temp_file = tokio::fs::File::create(&temp_path)
+                    .await
+                    .map_err(|e| ApiError::internal_server_error(&format!("Failed to create temp file: {}", e)))?;
+
+                let mut file_size: i64 = 0;
+                loop {
+                    let chunk = field.chunk().await
+                        .map_err(|e| ApiError::bad_request(&format!("Failed to read file data: {}", e)))?;
+
+                    let Some(chunk) = chunk else {
+                        break;
+                    };
+
+                    file_size += chunk.len() as i64;
+                    temp_file
+                        .write_all(&chunk)
+                        .await
+                        .map_err(|e| ApiError::internal_server_error(&format!("Failed to buffer upload: {}", e)))?;
+                }
+                temp_file
+                    .flush()
+                    .await
+                    .map_err(|e| ApiError::internal_server_error(&format!("Failed to finalize temp file: {}", e)))?;
+
+                file_temp = Some((temp_path, filename, content_type, file_size));
             }
             _ => {
                 // Ignore unknown fields
@@ -322,34 +351,45 @@ async fn create(
     }
 
     // Validate required fields
-    let title = title.ok_or_else(|| ApiError::bad_request("Missing required field: title"))?;
-    let document_type_id = document_type_id
-        .ok_or_else(|| ApiError::bad_request("Missing required field: document_type_id"))?;
+    let title = match title {
+        Some(value) => value,
+        None => {
+            if let Some((temp_path, _, _, _)) = &file_temp {
+                let _ = tokio::fs::remove_file(temp_path).await;
+            }
+            return Err(ApiError::bad_request("Missing required field: title"));
+        }
+    };
+    let document_type_id = match document_type_id {
+        Some(value) => value,
+        None => {
+            if let Some((temp_path, _, _, _)) = &file_temp {
+                let _ = tokio::fs::remove_file(temp_path).await;
+            }
+            return Err(ApiError::bad_request("Missing required field: document_type_id"));
+        }
+    };
 
-    // Handle optional file upload
-    let file_info = if let Some((filename, data, content_type)) = file_data {
-        let file_size = data.len() as i64;
-
-        // Generate UUID for s3_prefix
+    if let Some((temp_path, filename, content_type, file_size)) = file_temp.take() {
         let s3_prefix = Uuid::new_v4().to_string();
         let s3_key = format!("{}/{}", s3_prefix, filename);
-
-        // Upload to S3
-        let body = ByteStream::from(data.to_vec());
-        upload_to_s3(
+        let upload_body = ByteStream::from_path(&temp_path)
+            .await
+            .map_err(|e| ApiError::internal_server_error(&format!("Failed to read temp file: {}", e)))?;
+        let upload_result = upload_to_s3(
             &state.s3_client,
             &state.s3_bucket,
             &s3_key,
-            body,
+            upload_body,
             content_type.as_deref(),
         )
-        .await
-        .map_err(|e| ApiError::internal_server_error(&format!("S3 upload failed: {}", e)))?;
+        .await;
+        let _ = tokio::fs::remove_file(&temp_path).await;
+        upload_result
+            .map_err(|e| ApiError::internal_server_error(&format!("S3 upload failed: {}", e)))?;
 
-        Some((s3_prefix, filename, content_type, file_size))
-    } else {
-        None
-    };
+        file_info = Some((s3_prefix, filename, content_type, file_size));
+    }
 
     // Clone file_info for potential cleanup in error path
     let file_info_for_cleanup = file_info.clone();
