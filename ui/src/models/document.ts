@@ -23,3 +23,16 @@ export interface DocumentMetadata {
   updated_at: string;
   updated_by: number;
 }
+
+export interface NewCabinetDocument {
+  document_id: number;
+}
+
+export interface CabinetDocument {
+  cabinet_id: number;
+  document_id: number;
+  created_at: string;
+  created_by: number;
+  updated_at: string;
+  updated_by: number;
+}

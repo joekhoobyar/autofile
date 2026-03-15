@@ -217,9 +217,8 @@ export function ListDocuments() {
     { label: 'Created (Newest)', value: 'created_at:desc' },
   ];
 
-  const sortValue = listParams.sf
-    ? `${listParams.sf}:${listParams.sd ? 'desc' : 'asc'}`
-    : undefined;
+  const sortDir = listParams.sd ? 'desc' : 'asc';
+  const sortValue = listParams.sf ? `${listParams.sf}:${sortDir}` : undefined;
 
   const onPage = (event: DataViewPageEvent) => {
     setListParams({ ...listParams, page: event.page, per_page: event.rows });
@@ -326,7 +325,7 @@ export function ListDocuments() {
   const actionMenuItems: MenuItem[] = [
     { icon: 'pi pi-upload', label: 'New Document', url: '/documents/new' },
     { separator: true },
-    { icon: 'pi pi-trash', label: 'Delete Documents', command: deleteSelectedDocuments, disabled: selectedIds.size === 0 },
+    { icon: 'pi pi-trash', label: 'Delete Documents', command: () => { void deleteSelectedDocuments(); }, disabled: selectedIds.size === 0 },
   ];
 
   return (

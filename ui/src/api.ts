@@ -5,7 +5,7 @@ export type ResourceBase = {
   createdAt: Date;
   updatedAt: Date;
 }
-export type ResourceInput<T> = Omit<Partial<T>, "id" | "createdAt" | "updatedAt"> & { id?: number };
+export type ResourceInput<T> = Omit<Partial<T>, "id" | "createdAt" | "updatedAt" | "createdBy" | "updatedBy"> & { id?: number };
 
 export type ApiError = {
   message: string;

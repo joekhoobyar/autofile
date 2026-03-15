@@ -1,9 +1,14 @@
 import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query';
 import { apiFetchList, type ListParams, type ResourceList, type ResourceInput, HttpError, apiFetch, apiFetchRaw, apiMutate } from '../api';
-import { type Document, type DocumentMetadata, type NewDocumentMetadata } from '../models/document';
+import { type CabinetDocument, type Document, type DocumentMetadata, type NewCabinetDocument, type NewDocumentMetadata } from '../models/document';
 import { useEffect, useMemo } from 'react';
 
 export type DocumentTypeInput = ResourceInput<DocumentType>;
+
+export interface CabinetDocumentInput {
+  cabinet_id: number;
+  documents: NewCabinetDocument[];
+}
 
 export function useDocuments(params: ListParams): UseQueryResult<ResourceList<Document>, HttpError> {
   return useQuery({
@@ -76,6 +81,24 @@ export function useDeleteDocument(): UseMutationResult<void, HttpError, number> 
     mutationFn: async (input) => {
       return apiMutate<void, void>(`api/v1/documents/${input}`, {
         method: "DELETE",
+      });
+    },
+
+    onSuccess: () => {
+      // invalidate by prefix (works with table params in the queryKey)
+      qc.invalidateQueries({ queryKey: ["document"] });
+    },
+  });
+}
+
+export function useSaveCabinetDocument(): UseMutationResult<CabinetDocument[], HttpError, CabinetDocumentInput> {
+  const qc = useQueryClient();
+
+  return useMutation<CabinetDocument[], HttpError, CabinetDocumentInput>({
+    mutationFn: async (input) => {
+      return apiMutate<CabinetDocument[], NewCabinetDocument[]>(`api/v1/cabinets/${input.cabinet_id}`, {
+        method: "POST",
+        body: input.documents,
       });
     },
 
