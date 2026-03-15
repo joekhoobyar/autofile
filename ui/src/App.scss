@@ -112,6 +112,10 @@ body {
       text-decoration: underline;
     }
   }
+
+  > .surface-border {
+    border-color: var(--surface-200) !important;
+  }
 }
 
 .aut-document-grid {
