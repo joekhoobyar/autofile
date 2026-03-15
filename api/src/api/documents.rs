@@ -110,13 +110,21 @@ pub async fn get_by_id(
         .load::<(String, String)>(&mut db)
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document metadata"))?;
-
     let metadata: HashMap<String, String> = metadata_rows.into_iter().collect();
+
+    let cabinet_rows: Vec<i64> = cabinet_documents::table
+        .filter(cabinet_documents::document_id.eq(document.id))
+        .select(cabinet_documents::cabinet_id)
+        .load::<i64>(&mut db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document cabinets"))?;
+    let cabinet_ids: Vec<i64> = cabinet_rows.into_iter().collect();
 
     Ok(Json(DocumentView {
         id: document.id,
         title: document.title,
         document_type_id: document.document_type_id,
+        cabinet_ids,
         metadata,
         created_by: document.created_by,
         created_at: document.created_at,
@@ -426,12 +434,14 @@ pub async fn list(
         query
     };
 
+    // Count the total number of documents matching the filters (for pagination metadata)
     let total = base_filter()
         .count()
         .get_result::<i64>(&mut db)
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count document_types"))?;
 
+    // Apply sorting based on query parameters, with tie-breaker on ID for consistent pagination.
     let mut query: documents::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
         (Some(DocumentSortField::Title), Some(true)) =>
@@ -452,6 +462,8 @@ pub async fn list(
         _ =>
             query.order(documents::id.asc()),
     };
+
+    // Fetch the requested page of documents, then collect IDs for batch fetching of metadata and cabinets.
     let documents = query
         .limit(per_page)
         .offset(offset)
@@ -459,8 +471,9 @@ pub async fn list(
         .load::<Document>(&mut db)
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list documents"))?;
-
     let document_ids: Vec<i64> = documents.iter().map(|doc| doc.id).collect();
+
+    // Fetch metadata for all documents in the page in a single query, and organize it by document ID.
     let mut metadata_by_document: HashMap<i64, HashMap<String, String>> = HashMap::new();
     if !document_ids.is_empty() {
         let metadata_rows: Vec<(i64, String, String)> = document_metadatas::table
@@ -483,6 +496,28 @@ pub async fn list(
         }
     }
 
+    // Fetch cabinets for all documents in the page in a single query, and organize it by cabinet ID.
+    let mut cabinets_by_document: HashMap<i64, Vec<i64>> = HashMap::new();
+    if !document_ids.is_empty() {
+        let cabinet_rows: Vec<(i64, i64)> = cabinet_documents::table
+            .filter(cabinet_documents::document_id.eq_any(&document_ids))
+            .select((
+                cabinet_documents::document_id,
+                cabinet_documents::cabinet_id,
+            ))
+            .load::<(i64, i64)>(&mut db)
+            .await
+            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document metadata"))?;
+
+        for (document_id, cabinet_id) in cabinet_rows {
+            cabinets_by_document
+                .entry(document_id)
+                .or_insert_with(Vec::new)
+                .push(cabinet_id);
+        }
+    }
+
+    // Construct the final list of document views, attaching metadata to each document.
     let items = documents
         .into_iter()
         .map(|doc| DocumentView {
@@ -490,6 +525,7 @@ pub async fn list(
             title: doc.title,
             document_type_id: doc.document_type_id,
             metadata: metadata_by_document.remove(&doc.id).unwrap_or_default(),
+            cabinet_ids: cabinets_by_document.remove(&doc.id).unwrap_or_default(),
             created_by: doc.created_by,
             created_at: doc.created_at,
             updated_by: doc.updated_by,

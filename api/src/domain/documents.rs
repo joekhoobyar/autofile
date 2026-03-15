@@ -26,6 +26,7 @@ pub struct DocumentView {
     pub title: String,
     pub document_type_id: i64,
     pub metadata: HashMap<String, String>,
+    pub cabinet_ids: Vec<i64>,
     pub created_by: i64,
     pub created_at: DateTime<Utc>,
     pub updated_by: i64,
