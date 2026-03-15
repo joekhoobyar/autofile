@@ -96,7 +96,7 @@ export function useSaveCabinetDocument(): UseMutationResult<CabinetDocument[], H
 
   return useMutation<CabinetDocument[], HttpError, CabinetDocumentInput>({
     mutationFn: async (input) => {
-      return apiMutate<CabinetDocument[], NewCabinetDocument[]>(`api/v1/cabinets/${input.cabinet_id}`, {
+      return apiMutate<CabinetDocument[], NewCabinetDocument[]>(`api/v1/cabinets/${input.cabinet_id}/documents`, {
         method: "POST",
         body: input.documents,
       });

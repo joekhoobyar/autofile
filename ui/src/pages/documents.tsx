@@ -11,13 +11,15 @@ import { format } from "date-fns";
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 
 import { type ListParams } from '../api';
-import { useDeleteDocument, useDocuments, useDocumentThumbnail } from '../queries/useDocuments';
+import { useDeleteDocument, useDocuments, useDocumentThumbnail, useSaveCabinetDocument } from '../queries/useDocuments';
 import { type Document } from '../models/document';
 import { useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { useDocumentTypesMap } from '../queries/useDocumentTypes';
 import { Menu } from 'primereact/menu';
 import { Button } from 'primereact/button';
 import type { MenuItem } from 'primereact/menuitem';
+import { useCabinets } from '../queries/useCabinets';
+import { MAX_CABINETS } from '../models/cabinet';
 
 type DocumentListItemProps = {
   doc: Readonly<Document>;
@@ -205,8 +207,12 @@ export function ListDocuments() {
   const [previewSrc, setPreviewSrc] = useState<string | undefined>(undefined);
   const [previewTitle, setPreviewTitle] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [addToCabinetVisible, setAddToCabinetVisible] = useState(false);
+  const [selectedCabinetId, setSelectedCabinetId] = useState<number | null>(null);
   const { isPending, data, isFetching } = useDocuments(listParams);
   const deleteDocument = useDeleteDocument();
+  const saveCabinetDocument = useSaveCabinetDocument();
+  const { data: cabinetOptions, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinets({ page: 1, per_page: MAX_CABINETS });
   const actionMenu = useRef<Menu>(null);
 
   const sortOptions = [
@@ -284,6 +290,24 @@ export function ListDocuments() {
     });
   };
 
+  const openAddToCabinetDialog = () => {
+    if (!selectedIds.size) return;
+    setAddToCabinetVisible(true);
+  };
+
+  const closeAddToCabinetDialog = () => {
+    setAddToCabinetVisible(false);
+    setSelectedCabinetId(null);
+  };
+
+  const saveAddToCabinet = async () => {
+    if (!selectedCabinetId || !selectedIds.size) return;
+    const documents = Array.from(selectedIds).map((id) => ({ document_id: id }));
+    await saveCabinetDocument.mutateAsync({ cabinet_id: selectedCabinetId, documents });
+    closeAddToCabinetDialog();
+    setSelectedIds(new Set());
+  };
+
   const itemTemplate = (doc: Document, layout: 'list' | 'grid', index: number) => {
     if (!doc)
       return;
@@ -340,6 +364,8 @@ export function ListDocuments() {
   const actionMenuItems: MenuItem[] = [
     { icon: 'pi pi-upload', label: 'New Document', url: '/documents/new' },
     { separator: true },
+    { icon: 'pi pi-plus-circle', label: 'Add to Cabinet', command: () => { openAddToCabinetDialog(); }, disabled: selectedIds.size === 0 },
+    { separator: true },
     { icon: 'pi pi-trash', label: 'Delete Documents', command: () => { confirmDeleteSelectedDocuments(); }, disabled: selectedIds.size === 0 },
   ];
 
@@ -375,6 +401,42 @@ export function ListDocuments() {
           style={{ width: '100%', height: 'auto', display: 'block' }}
         />
       )}
+    </Dialog>
+    <Dialog
+      header="Add to Cabinet"
+      visible={addToCabinetVisible}
+      onHide={closeAddToCabinetDialog}
+      style={{ width: '90vw', maxWidth: '520px' }}
+      dismissableMask={true}
+      footer={(
+        <div className="flex justify-content-end gap-2">
+          <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" onClick={closeAddToCabinetDialog} />
+          <Button
+            label="Save"
+            type="button"
+            icon="pi pi-check"
+            onClick={() => void saveAddToCabinet()}
+            disabled={!selectedCabinetId || !selectedIds.size || saveCabinetDocument.isPending}
+          />
+        </div>
+      )}
+    >
+      <div className="grid p-fluid">
+        <div className="col-12">
+          <label htmlFor="cabinet_id" className="font-medium mb-2 block">Cabinet</label>
+          <Dropdown
+            id="cabinet_id"
+            value={selectedCabinetId}
+            onChange={(event) => setSelectedCabinetId(event.value as number)}
+            optionLabel="displayName"
+            optionValue="id"
+            placeholder="Select a cabinet"
+            options={cabinetOptions?.items ?? []}
+            loading={isCabinetsPending || isCabinetsFetching}
+            className="w-full"
+          />
+        </div>
+      </div>
     </Dialog>
     <ConfirmDialog />
     </>
