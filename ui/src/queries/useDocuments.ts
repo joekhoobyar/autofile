@@ -1,6 +1,6 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import { apiFetchList, type ListParams, type ResourceList, type ResourceInput, HttpError, apiFetch, apiFetchRaw } from '../api';
-import { type Document } from '../models/document';
+import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query';
+import { apiFetchList, type ListParams, type ResourceList, type ResourceInput, HttpError, apiFetch, apiFetchRaw, apiMutate } from '../api';
+import { type Document, type DocumentMetadata, type NewDocumentMetadata } from '../models/document';
 import { useEffect, useMemo } from 'react';
 
 export type DocumentTypeInput = ResourceInput<DocumentType>;
@@ -49,4 +49,22 @@ export function useDocumentThumbnail(id: string | number, options = {}): UseQuer
     ...query,
     data: objectUrl,
   } as unknown as UseQueryResult<string | undefined, HttpError>;
+}
+
+export function useSaveDocumentMetadata(id: string | number): UseMutationResult<DocumentMetadata, HttpError, NewDocumentMetadata[]> {
+  const qc = useQueryClient();
+
+  return useMutation<DocumentMetadata, HttpError, NewDocumentMetadata[]>({
+    mutationFn: async (input) => {
+      return apiMutate<DocumentMetadata, NewDocumentMetadata[]>(`api/v1/documents/${id}/metadata`, {
+        method: "POST",
+        body: input,
+      });
+    },
+
+    onSuccess: () => {
+      // invalidate by prefix (works with table params in the queryKey)
+      qc.invalidateQueries({ queryKey: ["document"] });
+    },
+  });
 }

@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useDocument } from '../queries/useDocuments';
+import { useDocument, useSaveDocumentMetadata } from '../queries/useDocuments';
 import { Message } from 'primereact/message';
 import { Card } from 'primereact/card';
 import { DataTable } from 'primereact/datatable';
@@ -15,6 +15,7 @@ import { useDocumentTypeMetadataTypes, useMetadataTypesMap } from '../queries/us
 export function EditDocumentMetadata() {
   const navigate = useNavigate();
   const id = useId('id');
+  const saveDocumentMetadata = useSaveDocumentMetadata(id);
   const { isLoading, isError, data: doc, error } = useDocument(id);
   const { data: dtmdts } = useDocumentTypeMetadataTypes(doc?.document_type_id);
   const { data: mdt } = useMetadataTypesMap('id');
@@ -23,15 +24,8 @@ export function EditDocumentMetadata() {
     if (!mdt || !dtmdts) return [];
     return dtmdts.map(dtmdt => {
       const mdType = mdt?.[dtmdt.metadata_type_id];
-      if (!mdType) {
-        return {
-          slug: String(dtmdt.metadata_type_id),
-          name: String(dtmdt.metadata_type_id),
-          value: '',
-          required: dtmdt.required,
-        };
-      }
       return {
+        metadataTypeId: dtmdt.metadata_type_id,
         slug: mdType.slug,
         name: mdType?.name ?? mdType.slug,
         value: doc?.metadata?.[mdType.slug] ?? '',
@@ -67,22 +61,27 @@ export function EditDocumentMetadata() {
 
   const columns = useMemo(() => ([
     <Column key="name" field="name" header="Field" style={{ width: '25%' }} />,
-    <Column
-      key="value"
-      field="value"
-      header="Value"
-      style={{ width: '60%' }}
-      editor={cellEditor}
-      onCellEditComplete={onCellEditComplete}
+    <Column key="value" field="value" header="Value" style={{ width: '60%' }}
+      editor={cellEditor} onCellEditComplete={onCellEditComplete}
     />,
-    <Column
-      key="required"
-      field="required"
-      header="Required"
-      style={{ width: '15%' }}
+    <Column key="required" field="required" header="Required" style={{ width: '15%' }}
       body={requiredTemplate}
     />
   ]), [cellEditor, onCellEditComplete, requiredTemplate]);
+
+  const onSave = async () => {
+    const original = doc?.metadata ?? {};
+    const updates = rows
+      .filter((row) => (original[row.slug] ?? '') !== row.value)
+      .map((row) => ({ metadata_type_id: row.metadataTypeId, value: row.value }));
+
+    try {
+      await saveDocumentMetadata.mutateAsync(updates);
+      navigate('/documents');
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   if (!id)
     return <Message severity="error" text="Missing or invalid ID" />;
@@ -98,7 +97,11 @@ export function EditDocumentMetadata() {
       </DataTable>
 
       <div className="text-end">
-        <Button label="Save" type="submit" icon="pi pi-check" />
+        {saveDocumentMetadata.isError && (
+          <Message className="float-start" severity="error" text={saveDocumentMetadata.error.message} />
+        )}
+
+        <Button label="Save" type="submit" icon="pi pi-check" onClick={onSave} disabled={saveDocumentMetadata.isPending} />
         <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" style={{ marginLeft: '0.5em' }} onClick={() => navigate('/documents')} />
       </div>
     </Card>

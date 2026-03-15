@@ -8,3 +8,18 @@ export interface Document {
   updated_at: string;
   updated_by: number;
 }
+
+export interface NewDocumentMetadata {
+  metadata_type_id: number;
+  value: string;
+}
+
+export interface DocumentMetadata {
+  document_id: number;
+  metadata_type_id: number;
+  value: string;
+  created_at: string;
+  created_by: number;
+  updated_at: string;
+  updated_by: number;
+}
