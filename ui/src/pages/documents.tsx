@@ -11,7 +11,7 @@ import { format } from "date-fns";
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 
 import { type ListParams } from '../api';
-import { useDeleteDocument, useDocuments, useDocumentThumbnail, useSaveCabinetDocument } from '../queries/useDocuments';
+import { useDeleteDocument, useDocuments, useDocumentThumbnail, useRemoveCabinetDocument, useSaveCabinetDocument } from '../queries/useDocuments';
 import { type Document } from '../models/document';
 import { useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { useDocumentTypesMap } from '../queries/useDocumentTypes';
@@ -209,9 +209,12 @@ export function ListDocuments() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [addToCabinetVisible, setAddToCabinetVisible] = useState(false);
   const [selectedCabinetId, setSelectedCabinetId] = useState<number | null>(null);
+  const [removeFromCabinetVisible, setRemoveFromCabinetVisible] = useState(false);
+  const [removeCabinetId, setRemoveCabinetId] = useState<number | null>(null);
   const { isPending, data, isFetching } = useDocuments(listParams);
   const deleteDocument = useDeleteDocument();
   const saveCabinetDocument = useSaveCabinetDocument();
+  const removeCabinetDocument = useRemoveCabinetDocument();
   const { data: cabinetOptions, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinets({ page: 1, per_page: MAX_CABINETS });
   const actionMenu = useRef<Menu>(null);
 
@@ -308,6 +311,24 @@ export function ListDocuments() {
     setSelectedIds(new Set());
   };
 
+  const openRemoveFromCabinetDialog = () => {
+    if (!selectedIds.size) return;
+    setRemoveFromCabinetVisible(true);
+  };
+
+  const closeRemoveFromCabinetDialog = () => {
+    setRemoveFromCabinetVisible(false);
+    setRemoveCabinetId(null);
+  };
+
+  const saveRemoveFromCabinet = async () => {
+    if (!removeCabinetId || !selectedIds.size) return;
+    const documents = Array.from(selectedIds);
+    await removeCabinetDocument.mutateAsync({ cabinet_id: removeCabinetId, documents });
+    closeRemoveFromCabinetDialog();
+    setSelectedIds(new Set());
+  };
+
   const itemTemplate = (doc: Document, layout: 'list' | 'grid', index: number) => {
     if (!doc)
       return;
@@ -365,6 +386,7 @@ export function ListDocuments() {
     { icon: 'pi pi-upload', label: 'New Document', url: '/documents/new' },
     { separator: true },
     { icon: 'pi pi-plus-circle', label: 'Add to Cabinet', command: () => { openAddToCabinetDialog(); }, disabled: selectedIds.size === 0 },
+    { icon: 'pi pi-minus-circle', label: 'Remove From Cabinet', command: () => { openRemoveFromCabinetDialog(); }, disabled: selectedIds.size === 0 },
     { separator: true },
     { icon: 'pi pi-trash', label: 'Delete Documents', command: () => { confirmDeleteSelectedDocuments(); }, disabled: selectedIds.size === 0 },
   ];
@@ -428,6 +450,43 @@ export function ListDocuments() {
             id="cabinet_id"
             value={selectedCabinetId}
             onChange={(event) => setSelectedCabinetId(event.value as number)}
+            optionLabel="displayName"
+            optionValue="id"
+            placeholder="Select a cabinet"
+            options={cabinetOptions?.items ?? []}
+            loading={isCabinetsPending || isCabinetsFetching}
+            className="w-full"
+          />
+        </div>
+      </div>
+    </Dialog>
+    <Dialog
+      header="Remove From Cabinet"
+      visible={removeFromCabinetVisible}
+      onHide={closeRemoveFromCabinetDialog}
+      style={{ width: '90vw', maxWidth: '520px' }}
+      dismissableMask={true}
+      footer={(
+        <div className="flex justify-content-end gap-2">
+          <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" onClick={closeRemoveFromCabinetDialog} />
+          <Button
+            label="Remove"
+            type="button"
+            severity="danger"
+            icon="pi pi-minus-circle"
+            onClick={() => void saveRemoveFromCabinet()}
+            disabled={!removeCabinetId || !selectedIds.size || removeCabinetDocument.isPending}
+          />
+        </div>
+      )}
+    >
+      <div className="grid p-fluid">
+        <div className="col-12">
+          <label htmlFor="remove_cabinet_id" className="font-medium mb-2 block">Cabinet</label>
+          <Dropdown
+            id="remove_cabinet_id"
+            value={removeCabinetId}
+            onChange={(event) => setRemoveCabinetId(event.value as number)}
             optionLabel="displayName"
             optionValue="id"
             placeholder="Select a cabinet"
