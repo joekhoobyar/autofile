@@ -1,0 +1,106 @@
+import { useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+import { useDocument } from '../queries/useDocuments';
+import { Message } from 'primereact/message';
+import { Card } from 'primereact/card';
+import { DataTable } from 'primereact/datatable';
+import { Column, type ColumnEditorOptions, type ColumnEvent } from 'primereact/column';
+import { InputText } from 'primereact/inputtext';
+import { Button } from 'primereact/button';
+
+import { useId } from '../util';
+import { useDocumentTypeMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
+
+export function EditDocumentMetadata() {
+  const navigate = useNavigate();
+  const id = useId('id');
+  const { isLoading, isError, data: doc, error } = useDocument(id);
+  const { data: dtmdts } = useDocumentTypeMetadataTypes(doc?.document_type_id);
+  const { data: mdt } = useMetadataTypesMap('id');
+
+  const rows = useMemo(() => {
+    if (!mdt || !dtmdts) return [];
+    return dtmdts.map(dtmdt => {
+      const mdType = mdt?.[dtmdt.metadata_type_id];
+      if (!mdType) {
+        return {
+          slug: String(dtmdt.metadata_type_id),
+          name: String(dtmdt.metadata_type_id),
+          value: '',
+          required: dtmdt.required,
+        };
+      }
+      return {
+        slug: mdType.slug,
+        name: mdType?.name ?? mdType.slug,
+        value: doc?.metadata?.[mdType.slug] ?? '',
+        required: dtmdt.required,
+      };
+    });
+  }, [doc?.metadata, dtmdts, mdt]);
+
+  const requiredTemplate = useCallback((rowData: {required: boolean}) => {
+    return rowData.required ?
+        <i className="pi pi-check" style={{color: 'var(--green-600)'}} /> :
+        <i className="pi pi-times" style={{color: 'var(--red-600)'}} />;
+  }, []);
+
+  const textEditor = useCallback((options: ColumnEditorOptions) => {
+    return <InputText
+        type="text" value={options.value} className="p-inputtext-sm"
+        onChange={(e) => options.editorCallback?.(e.target.value)}
+        onKeyDown={(e) => e.stopPropagation()}
+    />;
+  }, []);
+
+  const onCellEditComplete = useCallback((e: ColumnEvent) => {
+    const { rowData, newValue, field, originalEvent: event } = e;
+    rowData[field] = newValue;
+    console.log(event);
+  }, []);
+
+  const cellEditor = useCallback((options: ColumnEditorOptions) => {
+    if (options.field === 'name') return null;
+    return textEditor(options);
+  }, [textEditor]);
+
+  const columns = useMemo(() => ([
+    <Column key="name" field="name" header="Field" style={{ width: '25%' }} />,
+    <Column
+      key="value"
+      field="value"
+      header="Value"
+      style={{ width: '60%' }}
+      editor={cellEditor}
+      onCellEditComplete={onCellEditComplete}
+    />,
+    <Column
+      key="required"
+      field="required"
+      header="Required"
+      style={{ width: '15%' }}
+      body={requiredTemplate}
+    />
+  ]), [cellEditor, onCellEditComplete, requiredTemplate]);
+
+  if (!id)
+    return <Message severity="error" text="Missing or invalid ID" />;
+  if (isError)
+    return <Message severity="error" text={error.message} />
+  if (isLoading)
+    return <div>Loading</div>;
+
+  return (
+    <Card title="Document Metadata">
+      <DataTable value={rows} editMode="cell" tableStyle={{ minWidth: '50rem' }}>
+        {columns}
+      </DataTable>
+
+      <div className="text-end">
+        <Button label="Save" type="submit" icon="pi pi-check" />
+        <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" style={{ marginLeft: '0.5em' }} onClick={() => navigate('/documents')} />
+      </div>
+    </Card>
+  );
+}

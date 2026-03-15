@@ -19,6 +19,7 @@ import { NAV, useBreadcrumbs } from './nav.ts';
 import { Button } from 'primereact/button';
 import Login, { RequireAuth } from './pages/auth.tsx';
 import { AuthProvider } from './AuthProvider.tsx';
+import { EditDocumentMetadata } from './pages/documentMetadata.tsx';
 
 export function SideNav() {
   const location = useLocation();
@@ -98,6 +99,7 @@ const router = createBrowserRouter([
       { path: 'documents', 
         children: [
           { index: true, element: <ListDocuments/> },
+          { path: ':id/metadata', element: <EditDocumentMetadata/> },
         ]
       },
       { path: 'cabinets', 

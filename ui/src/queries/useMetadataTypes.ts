@@ -1,9 +1,19 @@
 import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query';
 import { apiFetchList, type ListParams, type ResourceList, type ResourceInput, HttpError, apiMutate, apiFetch } from '../api';
 import { type MetadataType } from '../models/metadataType';
+import { type DocumentTypeMetadataType } from '../models/documentTypeMetadataType';
 
 export type MetadataTypeInput = ResourceInput<MetadataType>;
 export type MetadataTypesMap = Record<string, MetadataType>;
+
+export function useDocumentTypeMetadataTypes(document_type_id: string | number | undefined, options = {}): UseQueryResult<DocumentTypeMetadataType[], HttpError> {
+  return useQuery({
+    queryKey: ['documentTypeMetadataType', 'list', {document_type_id}],
+    enabled: !!document_type_id,
+    ...options,
+    queryFn: () => apiFetch<DocumentTypeMetadataType[]>(`api/v1/document-types-metadata-types?document_type_id=${document_type_id}`),
+  });
+}
 
 export function useMetadataTypes(params: ListParams): UseQueryResult<ResourceList<MetadataType>, HttpError> {
   return useQuery({
@@ -21,9 +31,9 @@ export function useMetadataType(id: string | number, options = {}): UseQueryResu
   });
 }
 
-export function useMetadataTypesMap(options = {}): UseQueryResult<MetadataTypesMap, HttpError> {
+export function useMetadataTypesMap(by: 'slug' | 'id', options = {}): UseQueryResult<MetadataTypesMap, HttpError> {
   return useQuery({
-    queryKey: ['metadataType', 'map', 'slug'],
+    queryKey: ['metadataType', 'map', by],
     ...options,
     queryFn: async () => {
       const per_page = 200;
@@ -45,7 +55,7 @@ export function useMetadataTypesMap(options = {}): UseQueryResult<MetadataTypesM
       }
 
       return items.reduce((acc, item) => {
-        acc[item.slug] = item;
+        acc[item[by].toString()] = item;
         return acc;
       }, {} as MetadataTypesMap);
     },

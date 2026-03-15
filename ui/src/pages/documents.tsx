@@ -29,7 +29,7 @@ type DocumentListItemProps = {
  */
 function DocumentListItem({ doc, index, onImageClick }: Readonly<DocumentListItemProps>) {
     const { data } = useDocumentThumbnail(doc.id);
-    const { data: mdt } = useMetadataTypesMap();
+    const { data: mdt } = useMetadataTypesMap('slug');
     const { data: ddt } = useDocumentTypesMap();
 
     return (
@@ -45,7 +45,7 @@ function DocumentListItem({ doc, index, onImageClick }: Readonly<DocumentListIte
           <section className="flex flex-column sm:flex-row justify-content-between align-items-center xl:align-items-start flex-1 gap-4 aut-document">
             <div className="flex flex-column align-items-center sm:align-items-start gap-3">
               <header>
-                <Link to={doc.id.toString()}>{doc.title}</Link>
+                <Link to={`${doc.id}/metadata`}>{doc.title}</Link>
               </header>
             </div>
             <aside className="flex flex-column align-items-center sm:align-items-start">
@@ -76,7 +76,7 @@ type DocumentGridItemProps = {
  */
 function DocumentGridItem({ doc, onImageClick }: Readonly<DocumentGridItemProps>) {
     const { data } = useDocumentThumbnail(doc.id);
-    const { data: mdt } = useMetadataTypesMap();
+    const { data: mdt } = useMetadataTypesMap('slug');
     const { data: ddt } = useDocumentTypesMap();
 
     return (
@@ -84,7 +84,7 @@ function DocumentGridItem({ doc, onImageClick }: Readonly<DocumentGridItemProps>
         <div className="border-1 surface-border surface-card border-round">
           <section className="flex flex-column aut-document">
             <header>
-              <Link to={doc.id.toString()}>{doc.title}</Link>
+              <Link to={`${doc.id}/metadata`}>{doc.title}</Link>
             </header>
             <aside>
               <div className="aut-document-thumbnail-wrapper">
