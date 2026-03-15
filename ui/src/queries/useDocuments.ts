@@ -10,6 +10,11 @@ export interface CabinetDocumentInput {
   documents: NewCabinetDocument[];
 }
 
+export interface RemoveCabinetDocumentInput {
+  cabinet_id: number;
+  documents: number[];
+}
+
 export function useDocuments(params: ListParams): UseQueryResult<ResourceList<Document>, HttpError> {
   return useQuery({
     queryKey: ['document', 'list', params],
@@ -97,6 +102,24 @@ export function useSaveCabinetDocument(): UseMutationResult<CabinetDocument[], H
   return useMutation<CabinetDocument[], HttpError, CabinetDocumentInput>({
     mutationFn: async (input) => {
       return apiMutate<CabinetDocument[], NewCabinetDocument[]>(`api/v1/cabinets/${input.cabinet_id}/documents`, {
+        method: "POST",
+        body: input.documents,
+      });
+    },
+
+    onSuccess: () => {
+      // invalidate by prefix (works with table params in the queryKey)
+      qc.invalidateQueries({ queryKey: ["document"] });
+    },
+  });
+}
+
+export function useRemoveCabinetDocument(): UseMutationResult<CabinetDocument[], HttpError, RemoveCabinetDocumentInput> {
+  const qc = useQueryClient();
+
+  return useMutation<CabinetDocument[], HttpError, RemoveCabinetDocumentInput>({
+    mutationFn: async (input) => {
+      return apiMutate<CabinetDocument[], number[]>(`api/v1/cabinets/${input.cabinet_id}/documents/delete`, {
         method: "POST",
         body: input.documents,
       });
