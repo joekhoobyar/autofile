@@ -10,7 +10,7 @@ use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_to
 use crate::infrastructure::thumbnail::GenerateThumbnail;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{diesel_to_http, ApiError, ResourceList};
+use crate::shared::util::{diesel_to_http, write_field_to_temp_file, ApiError, ResourceList};
 
 use aws_sdk_s3::primitives::ByteStream;
 use diesel::dsl::exists;
@@ -30,7 +30,6 @@ use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use chrono::Utc;
 use httpdate::{fmt_http_date, parse_http_date};
-use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 use apalis::prelude::*;
@@ -90,6 +89,98 @@ pub struct ListDocumentsQuery {
     pub sf: Option<DocumentSortField>,
     // optional sort descending
     pub sd: Option<bool>,
+}
+
+struct ParsedMultipart {
+    title: Option<String>,
+    document_type_id: Option<i64>,
+    file_temp: Option<(std::path::PathBuf, String, Option<String>, i64)>,
+}
+
+async fn parse_create_multipart(
+    multipart: &mut Multipart,
+) -> Result<ParsedMultipart, ApiError> {
+    let mut title: Option<String> = None;
+    let mut document_type_id: Option<i64> = None;
+    let mut file_temp: Option<(std::path::PathBuf, String, Option<String>, i64)> = None;
+
+    while let Some(mut field) = multipart.next_field().await
+        .map_err(|e| ApiError::bad_request(&format!("Failed to read multipart field: {}", e)))? {
+
+        let field_name = field.name()
+            .ok_or_else(|| ApiError::bad_request("Field missing name"))?
+            .to_string();
+
+        match field_name.as_str() {
+            "title" => {
+                let value = field.text().await
+                    .map_err(|e| ApiError::bad_request(&format!("Failed to read title: {}", e)))?;
+                title = Some(value);
+            }
+            "document_type_id" => {
+                let value = field.text().await
+                    .map_err(|e| ApiError::bad_request(&format!("Failed to read document_type_id: {}", e)))?;
+                document_type_id = Some(value.parse::<i64>()
+                    .map_err(|_| ApiError::bad_request("Invalid document_type_id"))?);
+            }
+            "file" => {
+                if file_temp.is_some() {
+                    return Err(ApiError::bad_request("Only one file upload is supported"));
+                }
+                let mut filename = field.file_name()
+                    .ok_or_else(|| ApiError::bad_request("File field missing filename"))?
+                    .to_string();
+                let content_type = field.content_type().map(|ct| ct.to_string());
+
+                if filename == "_thumb.png" {
+                    filename = "thumb.png".to_string();
+                }
+
+                let temp_upload = write_field_to_temp_file(&mut field).await?;
+                file_temp = Some((temp_upload.path, filename, content_type, temp_upload.size));
+            }
+            _ => {
+                // Ignore unknown fields
+            }
+        }
+    }
+
+    Ok(ParsedMultipart {
+        title,
+        document_type_id,
+        file_temp,
+    })
+}
+
+async fn upload_temp_file_to_s3(
+    state: &AppState,
+    temp_path: std::path::PathBuf,
+    filename: String,
+    content_type: Option<String>,
+    size: i64,
+) -> Result<(String, String, Option<String>, i64), ApiError> {
+    let s3_prefix = Uuid::new_v4().to_string();
+    let s3_key = format!("{}/{}", s3_prefix, filename);
+    let upload_body = match ByteStream::from_path(&temp_path).await {
+        Ok(body) => body,
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            return Err(ApiError::internal_server_error(&format!("Failed to read temp file: {}", e)));
+        }
+    };
+    let upload_result = upload_to_s3(
+        &state.s3_client,
+        &state.s3_bucket,
+        &s3_key,
+        upload_body,
+        content_type.as_deref(),
+    )
+    .await;
+    let _ = tokio::fs::remove_file(&temp_path).await;
+    upload_result
+        .map_err(|e| ApiError::internal_server_error(&format!("S3 upload failed: {}", e)))?;
+
+    Ok((s3_prefix, filename, content_type, size))
 }
 
 pub async fn get_by_id(
@@ -277,78 +368,13 @@ async fn create(
     DbConn(mut db): DbConn,
     mut multipart: Multipart,
 ) -> Result<Json<Document>, ApiError> {
-    // Parse multipart form fields
-    let mut title: Option<String> = None;
-    let mut document_type_id: Option<i64> = None;
+    let ParsedMultipart {
+        title,
+        document_type_id,
+        mut file_temp,
+    } = parse_create_multipart(&mut multipart).await?;
+
     let mut file_info: Option<(String, String, Option<String>, i64)> = None;
-    let mut file_temp: Option<(std::path::PathBuf, String, Option<String>, i64)> = None;
-
-    while let Some(mut field) = multipart.next_field().await
-        .map_err(|e| ApiError::bad_request(&format!("Failed to read multipart field: {}", e)))? {
-
-        let field_name = field.name()
-            .ok_or_else(|| ApiError::bad_request("Field missing name"))?
-            .to_string();
-
-        match field_name.as_str() {
-            "title" => {
-                let value = field.text().await
-                    .map_err(|e| ApiError::bad_request(&format!("Failed to read title: {}", e)))?;
-                title = Some(value);
-            }
-            "document_type_id" => {
-                let value = field.text().await
-                    .map_err(|e| ApiError::bad_request(&format!("Failed to read document_type_id: {}", e)))?;
-                document_type_id = Some(value.parse::<i64>()
-                    .map_err(|_| ApiError::bad_request("Invalid document_type_id"))?);
-            }
-            "file" => {
-                if file_info.is_some() {
-                    return Err(ApiError::bad_request("Only one file upload is supported"));
-                }
-                let mut filename = field.file_name()
-                    .ok_or_else(|| ApiError::bad_request("File field missing filename"))?
-                    .to_string();
-                let content_type = field.content_type().map(|ct| ct.to_string());
-
-                // Normalize filename to prevent clashes with existing thumbnails
-                if filename == "_thumb.png" {
-                    filename = "thumb.png".to_string();
-                }
-
-                let mut temp_path = std::env::temp_dir();
-                temp_path.push(format!("autofile-upload-{}", Uuid::new_v4()));
-                let mut temp_file = tokio::fs::File::create(&temp_path)
-                    .await
-                    .map_err(|e| ApiError::internal_server_error(&format!("Failed to create temp file: {}", e)))?;
-
-                let mut file_size: i64 = 0;
-                loop {
-                    let chunk = field.chunk().await
-                        .map_err(|e| ApiError::bad_request(&format!("Failed to read file data: {}", e)))?;
-
-                    let Some(chunk) = chunk else {
-                        break;
-                    };
-
-                    file_size += chunk.len() as i64;
-                    temp_file
-                        .write_all(&chunk)
-                        .await
-                        .map_err(|e| ApiError::internal_server_error(&format!("Failed to buffer upload: {}", e)))?;
-                }
-                temp_file
-                    .flush()
-                    .await
-                    .map_err(|e| ApiError::internal_server_error(&format!("Failed to finalize temp file: {}", e)))?;
-
-                file_temp = Some((temp_path, filename, content_type, file_size));
-            }
-            _ => {
-                // Ignore unknown fields
-            }
-        }
-    }
 
     // Validate required fields
     let title = match title {
@@ -370,25 +396,15 @@ async fn create(
         }
     };
 
+    // Upload the temp file to S3, then delete it.
     if let Some((temp_path, filename, content_type, file_size)) = file_temp.take() {
-        let s3_prefix = Uuid::new_v4().to_string();
-        let s3_key = format!("{}/{}", s3_prefix, filename);
-        let upload_body = ByteStream::from_path(&temp_path)
-            .await
-            .map_err(|e| ApiError::internal_server_error(&format!("Failed to read temp file: {}", e)))?;
-        let upload_result = upload_to_s3(
-            &state.s3_client,
-            &state.s3_bucket,
-            &s3_key,
-            upload_body,
-            content_type.as_deref(),
-        )
-        .await;
-        let _ = tokio::fs::remove_file(&temp_path).await;
-        upload_result
-            .map_err(|e| ApiError::internal_server_error(&format!("S3 upload failed: {}", e)))?;
-
-        file_info = Some((s3_prefix, filename, content_type, file_size));
+        file_info = Some(upload_temp_file_to_s3(
+            &state,
+            temp_path,
+            filename,
+            content_type,
+            file_size,
+        ).await?);
     }
 
     // Clone file_info for potential cleanup in error path

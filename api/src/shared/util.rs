@@ -4,6 +4,8 @@ use axum::{
     Json,
 };
 use diesel::result::{DatabaseErrorKind, Error as DieselError};
+use tokio::io::AsyncWriteExt;
+use uuid::Uuid;
 
 #[derive(Debug, serde::Serialize)]
 pub struct ResourceList<T> {
@@ -77,4 +79,47 @@ where
     // - value -> Option<T>::Some(value)
     // Then we wrap it in Some(...) to record presence.
     Ok(Some(<Option<T>>::deserialize(d)?))
+}
+
+pub struct TempUpload {
+    pub path: std::path::PathBuf,
+    pub size: i64,
+}
+
+pub async fn write_field_to_temp_file(
+    field: &mut axum::extract::multipart::Field<'_>,
+) -> Result<TempUpload, ApiError> {
+    let mut temp_path = std::env::temp_dir();
+    temp_path.push(format!("autofile-upload-{}", Uuid::new_v4()));
+    let mut temp_file = tokio::fs::File::create(&temp_path)
+        .await
+        .map_err(|e| ApiError::internal_server_error(&format!("Failed to create temp file: {}", e)))?;
+
+    let mut size: i64 = 0;
+    loop {
+        let chunk = field
+            .chunk()
+            .await
+            .map_err(|e| ApiError::bad_request(&format!("Failed to read file data: {}", e)))?;
+
+        let Some(chunk) = chunk else {
+            break;
+        };
+
+        size += chunk.len() as i64;
+        temp_file
+            .write_all(&chunk)
+            .await
+            .map_err(|e| ApiError::internal_server_error(&format!("Failed to buffer upload: {}", e)))?;
+    }
+
+    temp_file
+        .flush()
+        .await
+        .map_err(|e| ApiError::internal_server_error(&format!("Failed to finalize temp file: {}", e)))?;
+
+    Ok(TempUpload {
+        path: temp_path,
+        size,
+    })
 }
