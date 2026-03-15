@@ -326,7 +326,7 @@ export function ListDocuments() {
   const actionMenuItems: MenuItem[] = [
     { icon: 'pi pi-upload', label: 'New Document', url: '/documents/new' },
     { separator: true },
-    { icon: 'pi pi-times', label: 'Delete Documents', command: deleteSelectedDocuments, disabled: selectedIds.size === 0 },
+    { icon: 'pi pi-trash', label: 'Delete Documents', command: deleteSelectedDocuments, disabled: selectedIds.size === 0 },
   ];
 
   return (
