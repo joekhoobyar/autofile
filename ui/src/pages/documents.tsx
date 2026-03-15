@@ -30,22 +30,26 @@ function DocumentListItem({ doc, index }: Readonly<DocumentListItemProps>) {
     const { data: ddt } = useDocumentTypesMap();
 
     return (
-      <div className="col-12" key={doc.id}>
+      <div className="col-12 aut-document-list" key={doc.id}>
         <div className={classNames('flex flex-column xl:flex-row xl:align-items-start p-4 gap-4', { 'border-top-1 surface-border': index !== 0 })}>
-          <img alt="Page 1" className="w-9 sm:w-16rem xl:w-10rem shadow-2 block xl:block mx-auto aut-document-thumbnail" src={data} style={{ maxHeight: '200px' }} />
+          <div className="aut-document-thumbnail-wrapper">
+            <img alt="Page 1" className="w-9 sm:w-16rem xl:w-10rem block xl:block mx-auto aut-document-thumbnail" src={data} style={{ maxHeight: '200px' }} />
+          </div>
           <section className="flex flex-column sm:flex-row justify-content-between align-items-center xl:align-items-start flex-1 gap-4 aut-document">
             <div className="flex flex-column align-items-center sm:align-items-start gap-3">
-              <header>{doc.title}</header>
-              <aside>
-                <ul className="aut-document-metadata">
-                  <li><span>Type</span>: {ddt?.[doc.document_type_id]?.name}</li>
-                  <li><span>Created</span>: {format(new Date(doc.created_at), "MM/dd/yyyy HH:mm")}</li>
-                  {Object.entries(doc.metadata).map(([key, value]) => (
-                    <li key={key}><span>{mdt?.[key].name ?? key}</span>: {value}</li>
-                  ))}
-                </ul>
-              </aside>
+              <header>
+                <Link to={doc.id.toString()}>{doc.title}</Link>
+              </header>
             </div>
+            <aside className="flex flex-column align-items-center sm:align-items-start">
+              <ul className="aut-document-metadata">
+                <li><span>Type</span>: {ddt?.[doc.document_type_id]?.name}</li>
+                <li><span>Created</span>: {format(new Date(doc.created_at), "MM/dd/yyyy HH:mm")}</li>
+                {Object.entries(doc.metadata).map(([key, value]) => (
+                  <li key={key}><span>{mdt?.[key].name ?? key}</span>: {value}</li>
+                ))}
+              </ul>
+            </aside>
           </section>
         </div>
       </div>
@@ -75,7 +79,9 @@ function DocumentGridItem({ doc }: Readonly<DocumentGridItemProps>) {
               <Link to={doc.id.toString()}>{doc.title}</Link>
             </header>
             <aside>
-              <img alt="Page 1" className="shadow-2 aut-document-thumbnail" src={data} style={{ maxHeight: '200px' }} />
+              <div className="aut-document-thumbnail-wrapper">
+                <img alt="Page 1" className="aut-document-thumbnail" src={data} style={{ maxHeight: '200px' }} />
+              </div>
               <ul className="aut-document-metadata">
                 <li><span>Type</span>: {ddt?.[doc.document_type_id]?.name}</li>
                 <li><span>Created</span>: {format(new Date(doc.created_at), "MM/dd/yyyy HH:mm")}</li>
