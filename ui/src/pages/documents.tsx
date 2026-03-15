@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { Card } from 'primereact/card';
 import { DataView, DataViewLayoutOptions, type DataViewPageEvent } from 'primereact/dataview';
+import { Dialog } from 'primereact/dialog';
 import { classNames } from 'primereact/utils';
 import { format } from "date-fns";
 
@@ -22,9 +23,10 @@ import { useDocumentTypesMap } from '../queries/useDocumentTypes';
 type DocumentListItemProps = {
   doc: Readonly<Document>;
   index: number;
+  onImageClick: (src: string | undefined, title: string) => void;
 };
 
-function DocumentListItem({ doc, index }: Readonly<DocumentListItemProps>) {
+function DocumentListItem({ doc, index, onImageClick }: Readonly<DocumentListItemProps>) {
     const { data } = useDocumentThumbnail(doc.id);
     const { data: mdt } = useMetadataTypesMap();
     const { data: ddt } = useDocumentTypesMap();
@@ -33,7 +35,11 @@ function DocumentListItem({ doc, index }: Readonly<DocumentListItemProps>) {
       <div className="col-12 aut-document-list" key={doc.id}>
         <div className={classNames('flex flex-column xl:flex-row xl:align-items-start p-4 gap-4', { 'border-top-1 surface-border': index !== 0 })}>
           <div className="aut-document-thumbnail-wrapper">
-            <img alt="Page 1" className="w-9 sm:w-16rem xl:w-10rem block xl:block mx-auto aut-document-thumbnail" src={data} style={{ maxHeight: '200px' }} />
+            <button type="button"
+              onClick={() => onImageClick(data, doc.title)}
+            >
+              <img alt="Page 1" className="w-9 sm:w-16rem xl:w-10rem block xl:block mx-auto aut-document-thumbnail" src={data} style={{ maxHeight: '200px' }} />
+            </button>
           </div>
           <section className="flex flex-column sm:flex-row justify-content-between align-items-center xl:align-items-start flex-1 gap-4 aut-document">
             <div className="flex flex-column align-items-center sm:align-items-start gap-3">
@@ -64,9 +70,10 @@ function DocumentListItem({ doc, index }: Readonly<DocumentListItemProps>) {
  */
 type DocumentGridItemProps = {
   doc: Readonly<Document>;
+  onImageClick: (src: string | undefined, title: string) => void;
 };
 
-function DocumentGridItem({ doc }: Readonly<DocumentGridItemProps>) {
+function DocumentGridItem({ doc, onImageClick }: Readonly<DocumentGridItemProps>) {
     const { data } = useDocumentThumbnail(doc.id);
     const { data: mdt } = useMetadataTypesMap();
     const { data: ddt } = useDocumentTypesMap();
@@ -80,7 +87,13 @@ function DocumentGridItem({ doc }: Readonly<DocumentGridItemProps>) {
             </header>
             <aside>
               <div className="aut-document-thumbnail-wrapper">
-                <img alt="Page 1" className="aut-document-thumbnail" src={data} style={{ maxHeight: '200px' }} />
+                <button
+                  type="button"
+                  onClick={() => onImageClick(data, doc.title)}
+                  style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
+                >
+                  <img alt="Page 1" className="aut-document-thumbnail" src={data} style={{ maxHeight: '200px' }} />
+                </button>
               </div>
               <ul className="aut-document-metadata">
                 <li><span>Type</span>: {ddt?.[doc.document_type_id]?.name}</li>
@@ -104,6 +117,9 @@ function DocumentGridItem({ doc }: Readonly<DocumentGridItemProps>) {
 export function ListDocuments() {
   const [listParams, setListParams] = useState<ListParams>({});
   const [layout, setLayout] = useState<'list' | 'grid'>('grid');
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewSrc, setPreviewSrc] = useState<string | undefined>(undefined);
+  const [previewTitle, setPreviewTitle] = useState('');
   const { isPending, data, isFetching } = useDocuments(listParams);
 /*
   const onSort = (event: DataTableStateEvent) => {
@@ -115,13 +131,24 @@ export function ListDocuments() {
     setListParams({ ...listParams, page: event.page, per_page: event.rows });
   };
 
+  const openPreview = (src: string | undefined, title: string) => {
+    if (!src) return;
+    setPreviewSrc(src);
+    setPreviewTitle(title);
+    setPreviewVisible(true);
+  };
+
+  const closePreview = () => {
+    setPreviewVisible(false);
+  };
+
   const itemTemplate = (doc: Document, layout: 'list' | 'grid', index: number) => {
     if (!doc)
       return;
     if (layout === 'list')
-      return <DocumentListItem doc={doc} index={index} />;
+      return <DocumentListItem doc={doc} index={index} onImageClick={openPreview} />;
     else if (layout === 'grid')
-      return <DocumentGridItem doc={doc} />;
+      return <DocumentGridItem doc={doc} onImageClick={openPreview} />;
   };
 
   const listTemplate = (docs: Document[], layout: 'list' | 'grid') => {
@@ -146,6 +173,21 @@ export function ListDocuments() {
           listTemplate={listTemplate} layout={layout} header={header()}
         />
     </Card>
+    <Dialog
+      header={previewTitle || 'Document Preview'}
+      visible={previewVisible}
+      onHide={closePreview}
+      style={{ width: '90vw', maxWidth: '900px' }}
+      dismissableMask={true}
+    >
+      {previewSrc && (
+        <img
+          alt={previewTitle || 'Document image'}
+          src={previewSrc}
+          style={{ width: '100%', height: 'auto', display: 'block' }}
+        />
+      )}
+    </Dialog>
     </>
   );
 }

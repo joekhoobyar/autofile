@@ -163,6 +163,14 @@ section.aut-document {
   }
   .aut-document-thumbnail-wrapper {
     background-color: var(--surface-100) !important;
+
+    button {
+      border: none;
+      background: transparent;
+      padding: 0;
+      cursor: pointer;
+      width: 100%;
+    }
   }
   aside {
     ul.aut-document-metadata {
