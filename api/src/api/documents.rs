@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -6,7 +6,7 @@ use crate::AppState;
 use crate::schema::{cabinet_documents, document_files, document_metadatas, documents, metadata_types};
 use crate::domain::documents::{Document, DocumentView};
 use crate::domain::document_files::DocumentFile;
-use crate::infrastructure::s3::{delete_from_s3, upload_to_s3};
+use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_to_s3};
 use crate::infrastructure::thumbnail::GenerateThumbnail;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
@@ -27,7 +27,7 @@ use axum::{
     extract::{Path, Query, Multipart, State},
 };
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 use chrono::Utc;
 use httpdate::{fmt_http_date, parse_http_date};
 use uuid::Uuid;
@@ -131,6 +131,68 @@ pub async fn get_by_id(
         updated_by: document.updated_by,
         updated_at: document.updated_at,
     }))
+}
+
+pub async fn delete(
+    _user: AuthUser,
+    State(state): State<Arc<AppState>>,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+) -> Result<Json<()>, ApiError> {
+    let prefixes = db.transaction::<_, diesel::result::Error, _>(move |conn| {
+        Box::pin(async move {
+            // Delete the cabinet document associations
+            diesel::delete(cabinet_documents::table.filter(cabinet_documents::document_id.eq(id)))
+                .execute(conn)
+                .await?;
+
+            // Delete the document metadata associations
+            diesel::delete(document_metadatas::table.filter(document_metadatas::document_id.eq(id)))
+                .execute(conn)
+                .await?;
+
+            // Delete the document files, fetching the S3 keys for later deletion.
+            let prefixes: Vec<String> = diesel::delete(document_files::table.filter(document_files::document_id.eq(id)))
+                .returning(document_files::s3_prefix)
+                .get_results(conn)
+                .await?;
+
+            // Delete the document.
+            let affected = diesel::delete(documents::table.filter(documents::id.eq(id)))
+                .execute(conn)
+                .await?;
+            if affected == 0 {
+                return Err(diesel::result::Error::NotFound);
+            }
+
+            Ok(prefixes)
+        })
+    })
+    .await
+    .map_err(|e| {
+        if matches!(e, diesel::result::Error::NotFound) {
+            ApiError::not_found("Document not found")
+        } else {
+            ApiError::new(diesel_to_http(e), "Failed to delete document")
+        }
+    })?;
+
+    if !prefixes.is_empty() {
+        let unique_prefixes: HashSet<String> = prefixes.into_iter().collect();
+        for prefix in unique_prefixes {
+            let delete_prefix = format!("{}/", prefix);
+            delete_prefix_from_s3(&state.s3_client, &state.s3_bucket, &delete_prefix)
+                .await
+                .map_err(|e| {
+                    ApiError::internal_server_error(&format!(
+                        "Failed to delete document files from storage: {}",
+                        e
+                    ))
+                })?;
+        }
+    }
+
+    Ok(Json(()))
 }
 
 /**
@@ -539,6 +601,6 @@ pub async fn list(
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(list).post(create))
-        .route("/{id}", get(get_by_id).patch(update))
+        .route("/{id}", get(get_by_id).patch(update).delete(delete))
         .route("/{id}/thumbnail", get(thumbnail_get))
 }

@@ -136,17 +136,15 @@ async fn delete(
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
 ) -> Result<Json<()>, ApiError> {
-    let metadata_type_id = id;
-
     db.transaction::<_, diesel::result::Error, _>(move |conn| {
         Box::pin(async move {
             // Delete the join table records
-            diesel::delete(document_types_metadata_types::table.filter(document_types_metadata_types::metadata_type_id.eq(metadata_type_id)))
+            diesel::delete(document_types_metadata_types::table.filter(document_types_metadata_types::metadata_type_id.eq(id)))
                 .execute(conn)
                 .await?;
 
             // Delete the metadata type
-            let affected = diesel::delete(metadata_types::table.filter(metadata_types::id.eq(metadata_type_id)))
+            let affected = diesel::delete(metadata_types::table.filter(metadata_types::id.eq(id)))
                 .execute(conn)
                 .await?;
 
