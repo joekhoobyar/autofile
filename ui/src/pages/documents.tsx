@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Card } from 'primereact/card';
@@ -31,6 +31,27 @@ function DocumentListItem({ doc, index, onImageClick }: Readonly<DocumentListIte
     const { data } = useDocumentThumbnail(doc.id);
     const { data: mdt } = useMetadataTypesMap('slug');
     const { data: ddt } = useDocumentTypesMap();
+    const [loadedThumbnailSrc, setLoadedThumbnailSrc] = useState<string | undefined>(undefined);
+
+    useEffect(() => {
+      if (!data) return;
+      let cancelled = false;
+      const img = new Image();
+      img.onload = () => {
+        if (!cancelled) {
+          setLoadedThumbnailSrc(data);
+        }
+      };
+      img.onerror = () => {
+        if (!cancelled) {
+          setLoadedThumbnailSrc(undefined);
+        }
+      };
+      img.src = data;
+      return () => {
+        cancelled = true;
+      };
+    }, [data]);
 
     return (
       <div className="col-12 aut-document-list" key={doc.id}>
@@ -39,7 +60,22 @@ function DocumentListItem({ doc, index, onImageClick }: Readonly<DocumentListIte
             <button type="button"
               onClick={() => onImageClick(data, doc.title)}
             >
-              <img alt="Page 1" className="w-9 sm:w-16rem xl:w-10rem block xl:block mx-auto aut-document-thumbnail" src={data} style={{ maxHeight: '200px' }} />
+              {loadedThumbnailSrc === data && data ? (
+                <img
+                  alt="Page 1"
+                  className="w-9 sm:w-16rem xl:w-10rem block xl:block mx-auto aut-document-thumbnail"
+                  src={data}
+                  style={{ maxHeight: '200px', display: 'block' }}
+                />
+              ) : (
+                <div
+                  className="w-9 sm:w-16rem xl:w-10rem block xl:block mx-auto aut-document-thumbnail"
+                  style={{ maxHeight: '200px', height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  aria-label="Loading thumbnail"
+                >
+                  <span className="pi pi-spin pi-spinner" aria-hidden="true" />
+                </div>
+              )}
             </button>
           </div>
           <section className="flex flex-column sm:flex-row justify-content-between align-items-center xl:align-items-start flex-1 gap-4 aut-document">
@@ -78,6 +114,27 @@ function DocumentGridItem({ doc, onImageClick }: Readonly<DocumentGridItemProps>
     const { data } = useDocumentThumbnail(doc.id);
     const { data: mdt } = useMetadataTypesMap('slug');
     const { data: ddt } = useDocumentTypesMap();
+    const [loadedThumbnailSrc, setLoadedThumbnailSrc] = useState<string | undefined>(undefined);
+
+    useEffect(() => {
+      if (!data) return;
+      let cancelled = false;
+      const img = new Image();
+      img.onload = () => {
+        if (!cancelled) {
+          setLoadedThumbnailSrc(data);
+        }
+      };
+      img.onerror = () => {
+        if (!cancelled) {
+          setLoadedThumbnailSrc(undefined);
+        }
+      };
+      img.src = data;
+      return () => {
+        cancelled = true;
+      };
+    }, [data]);
 
     return (
       <div className="col-12 sm:col-6 lg:col-4 xl:col-2 p-2 aut-document-grid" key={doc.id}>
@@ -93,7 +150,22 @@ function DocumentGridItem({ doc, onImageClick }: Readonly<DocumentGridItemProps>
                   onClick={() => onImageClick(data, doc.title)}
                   style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
                 >
-                  <img alt="Page 1" className="aut-document-thumbnail" src={data} style={{ maxHeight: '200px' }} />
+                  {loadedThumbnailSrc === data && data ? (
+                    <img
+                      alt="Page 1"
+                      className="aut-document-thumbnail"
+                      src={data}
+                      style={{ maxHeight: '200px', display: 'block' }}
+                    />
+                  ) : (
+                    <div
+                      className="aut-document-thumbnail"
+                      style={{ maxHeight: '200px', height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      aria-label="Loading thumbnail"
+                    >
+                      <span className="pi pi-spin pi-spinner" aria-hidden="true" />
+                    </div>
+                  )}
                 </button>
               </div>
               <ul className="aut-document-metadata">
