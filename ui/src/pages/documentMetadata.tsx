@@ -9,6 +9,7 @@ import { Column, type ColumnEditorOptions, type ColumnEvent } from 'primereact/c
 import { InputText } from 'primereact/inputtext';
 import { Button } from 'primereact/button';
 import { Calendar } from 'primereact/calendar';
+import { Dropdown } from 'primereact/dropdown';
 
 import { useId } from '../util';
 import { useDocumentTypeMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
@@ -31,6 +32,7 @@ export function EditDocumentMetadata() {
           name: mdType?.name ?? mdType.slug,
           value: doc?.metadata?.[mdType.slug] ?? '',
           dataType: mdType?.data_type ?? 'string',
+          options: mdType?.options,
           required: dtmdt.required,
         };
     });
@@ -107,6 +109,26 @@ export function EditDocumentMetadata() {
     );
   }, [closeCellEditor]);
 
+  const lookupEditor = useCallback((options: ColumnEditorOptions) => {
+    const choices = options.rowData?.options?.choices ?? [];
+    const lookupOptions = choices.map((choice: string) => ({ label: choice, value: choice }));
+
+    return (
+      <Dropdown
+        value={options.value ?? ''}
+        onChange={(event) => {
+          options.editorCallback?.(event.value ?? '');
+        }}
+        onBlur={(event) => {
+          closeCellEditor(event);
+        }}
+        options={lookupOptions}
+        placeholder={lookupOptions.length > 0 ? 'Select a choice' : 'No choices'}
+        className="w-full"
+      />
+    );
+  }, [closeCellEditor]);
+
   const onCellEditComplete = useCallback((e: ColumnEvent) => {
     const { rowData, newValue, field, originalEvent: event } = e;
     rowData[field] = newValue;
@@ -118,8 +140,10 @@ export function EditDocumentMetadata() {
       return null;
     if (options.rowData?.dataType === 'date')
       return dateEditor(options);
+    if (options.rowData?.dataType === 'lookup')
+      return lookupEditor(options);
     return textEditor(options);
-  }, [dateEditor, textEditor]);
+  }, [dateEditor, lookupEditor, textEditor]);
 
   const columns = useMemo(() => ([
     <Column key="name" field="name" header="Field" style={{ width: '25%' }} />,
