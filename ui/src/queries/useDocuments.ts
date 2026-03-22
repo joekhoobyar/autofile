@@ -61,12 +61,12 @@ export function useDocumentThumbnail(id: string | number, options = {}): UseQuer
   } as unknown as UseQueryResult<string | undefined, HttpError>;
 }
 
-export function useSaveDocumentMetadata(id: string | number): UseMutationResult<DocumentMetadata, HttpError, NewDocumentMetadata[]> {
+export function useSaveDocumentMetadata(id: string | number): UseMutationResult<DocumentMetadata[], HttpError, NewDocumentMetadata[]> {
   const qc = useQueryClient();
 
-  return useMutation<DocumentMetadata, HttpError, NewDocumentMetadata[]>({
+  return useMutation<DocumentMetadata[], HttpError, NewDocumentMetadata[]>({
     mutationFn: async (input) => {
-      return apiMutate<DocumentMetadata, NewDocumentMetadata[]>(`api/v1/documents/${id}/metadata`, {
+      return apiMutate<DocumentMetadata[], NewDocumentMetadata[]>(`api/v1/documents/${id}/metadata`, {
         method: "POST",
         body: input,
       });
