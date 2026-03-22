@@ -612,7 +612,7 @@ export default function UploadDocument() {
         const uploadOne = async (file: File) => {
             const formData = new FormData();
             const trimmedTitle = title.trim();
-            const resolvedTitle = trimmedTitle ? trimmedTitle : file.name;
+            const resolvedTitle = trimmedTitle || file.name;
             formData.append('title', resolvedTitle);
             formData.append('document_type_id', String(effectiveDocumentTypeId));
             formData.append('file', file);
