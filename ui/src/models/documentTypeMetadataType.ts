@@ -3,3 +3,8 @@ export interface DocumentTypeMetadataType {
   metadata_type_id: number
   required: boolean
 }
+
+export interface DocumentTypeNewMetadataType {
+  metadata_type_id: number
+  required: boolean
+}

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -7,6 +7,7 @@ import { Column } from 'primereact/column';
 import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
+import { MultiSelect } from 'primereact/multiselect';
 import { classNames } from 'primereact/utils';
 
 import type { ListParams } from '../api';
@@ -16,6 +17,8 @@ import { Message } from 'primereact/message';
 import { useId } from '../util';
 import { Toast } from 'primereact/toast';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
+import { useDocumentTypeMetadataTypes, useDocumentTypeSaveMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
+import { type DocumentTypeNewMetadataType } from '../models/documentTypeMetadataType';
 
 export function ListDocumentTypes() {
   const toast = useRef(null);
@@ -123,30 +126,111 @@ export function NewDocumentType() {
   );
 }
 
+type DocumentTypeFormValues = Partial<DocumentType> & {
+  metadata_type_ids: number[];
+  metadata_type_required: Record<number, boolean>;
+};
+
 function DocumentTypeForm({ data }: Readonly<{ data?: Partial<DocumentType> }>) {
   const saveDocumentType = useSaveDocumentType();
+  const { data: documentTypeMetadataTypes } = useDocumentTypeMetadataTypes(data?.id);
+  const { data: metadataTypesMap, isLoading: isLoadingMetadataTypes } = useMetadataTypesMap('id');
+  const [metadataSaveRequest, setMetadataSaveRequest] = useState<{
+    documentTypeId: number;
+    payload: DocumentTypeNewMetadataType[];
+  } | null>(null);
+  const saveMetadataTypes = useDocumentTypeSaveMetadataTypes(data?.id ?? metadataSaveRequest?.documentTypeId ?? 0);
   const navigate = useNavigate();
+  const selectedMetadataTypeIds = useMemo(
+    () => documentTypeMetadataTypes?.map((item) => item.metadata_type_id) ?? [],
+    [documentTypeMetadataTypes]
+  );
+  const metadataTypeRequiredMap = useMemo(() => (
+    documentTypeMetadataTypes?.reduce((acc, item) => {
+      acc[item.metadata_type_id] = item.required;
+      return acc;
+    }, {} as Record<number, boolean>) ?? {}
+  ), [documentTypeMetadataTypes]);
+  const metadataTypeOptions = useMemo(() => {
+    if (!metadataTypesMap) return [];
+    return Object.values(metadataTypesMap)
+      .sort((a, b) => (a.name ?? a.slug).localeCompare(b.name ?? b.slug))
+      .map((item) => ({
+        label: item.name ?? item.slug,
+        value: item.id,
+      }));
+  }, [metadataTypesMap]);
+  const formValues = useMemo(() => ({
+    ...(data ?? {}),
+    metadata_type_ids: selectedMetadataTypeIds,
+    metadata_type_required: metadataTypeRequiredMap,
+  }), [data, selectedMetadataTypeIds, metadataTypeRequiredMap]);
   const {
     control,
     handleSubmit,
+    reset,
+    watch,
     formState: { errors, isSubmitting, isValid, isDirty },
-  } = useForm<Partial<DocumentType>>({
+  } = useForm<DocumentTypeFormValues>({
     mode: 'onChange', // validate as user types
     defaultValues: {
+      metadata_type_ids: [],
+      metadata_type_required: {},
     },
-    values: data ?? {},
   });
 
-  const submitter = async (data: Partial<DocumentType>) => {
-    await saveDocumentType.mutateAsync(data, {
-      onSuccess: () => {
-        navigate('/document-types');
+  useEffect(() => {
+    if (isDirty) return;
+    reset(formValues);
+  }, [formValues, isDirty, reset]);
+
+  useEffect(() => {
+    if (!metadataSaveRequest) return;
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        await saveMetadataTypes.mutateAsync(metadataSaveRequest.payload);
+        if (!cancelled) {
+          setMetadataSaveRequest(null);
+          navigate('/document-types');
+        }
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setMetadataSaveRequest(null);
+        }
       }
-    });
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [metadataSaveRequest, navigate, saveMetadataTypes]);
+
+  const submitter = async (data: DocumentTypeFormValues) => {
+    const { metadata_type_ids, metadata_type_required, ...documentTypeData } = data;
+    const savedDocumentType = await saveDocumentType.mutateAsync(documentTypeData);
+    const documentTypeId = savedDocumentType.id ?? documentTypeData.id;
+    if (!documentTypeId) return;
+
+    const payload = (metadata_type_ids ?? []).map((metadata_type_id) => ({
+      metadata_type_id,
+      required: metadata_type_required?.[metadata_type_id] ?? false,
+    }));
+
+    if (documentTypeData.id) {
+      await saveMetadataTypes.mutateAsync(payload);
+      navigate('/document-types');
+      return;
+    }
+
+    setMetadataSaveRequest({ documentTypeId, payload });
   };
 
   // PrimeReact-friendly error helper
-  const errMsg = (name: keyof Partial<DocumentType>) =>
+  const errMsg = (name: keyof DocumentTypeFormValues) =>
     errors[name]?.message ? String(errors[name]?.message) : null;
 
   return (
@@ -203,14 +287,73 @@ function DocumentTypeForm({ data }: Readonly<{ data?: Partial<DocumentType> }>) 
           />
           {errMsg('description') && <small className="p-error">{errMsg('description')}</small>}
         </div>
+
+        {/* Metadata Types */}
+        <div className="col-12">
+          <label htmlFor="metadata_type_ids" className="font-medium mb-2 block">Metadata Types</label>
+          <Controller name="metadata_type_ids" control={control}
+            render={({ field }) => (
+              <MultiSelect id="metadata_type_ids" value={field.value ?? []}
+                options={metadataTypeOptions}
+                onChange={(event) => field.onChange(event.value ?? [])}
+                filter
+                display="chip"
+                optionLabel="label"
+                optionValue="value"
+                placeholder={metadataTypeOptions.length ? 'Select metadata types' : 'No metadata types available'}
+                disabled={isLoadingMetadataTypes || !metadataTypeOptions.length}
+                className={classNames({ 'p-invalid': !!errors.metadata_type_ids })}
+              />
+            )}
+          />
+          {errMsg('metadata_type_ids') && <small className="p-error">{errMsg('metadata_type_ids')}</small>}
+        </div>
+
+        {/* Required Metadata Types */}
+        <div className="col-12">
+          <label className="font-medium mb-2 block">Required Fields</label>
+          <Controller name="metadata_type_required" control={control}
+            render={({ field }) => {
+              const selectedIds = new Set(watch('metadata_type_ids') ?? []);
+              const selectedOptions = metadataTypeOptions.filter((option) => selectedIds.has(option.value));
+
+              if (!selectedOptions.length) {
+                return <small className="text-600">Select metadata types to set required fields.</small>;
+              }
+
+              return (
+                <div className="flex flex-column gap-2">
+                  {selectedOptions.map((option) => (
+                    <label key={option.value} className="flex align-items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={field.value?.[option.value] ?? false}
+                        onChange={(event) => {
+                          field.onChange({
+                            ...(field.value ?? {}),
+                            [option.value]: event.target.checked,
+                          });
+                        }}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              );
+            }}
+          />
+        </div>
       </div>
 
       <div className="text-end">
         {saveDocumentType.isError && (
           <Message className="float-start" severity="error" text={saveDocumentType.error.message} />
         )}
+        {saveMetadataTypes.isError && (
+          <Message className="float-start" severity="error" text={saveMetadataTypes.error.message} />
+        )}
 
-        <Button label="Save" type="submit" icon="pi pi-check" raised disabled={!isDirty || !isValid || isSubmitting} />
+        <Button label="Save" type="submit" icon="pi pi-check" raised disabled={!isDirty || !isValid || isSubmitting || saveMetadataTypes.isPending} />
         <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" raised onClick={() => navigate('/document-types')} />
       </div>
     </form>

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query';
 import { apiFetchList, type ListParams, type ResourceList, type ResourceInput, HttpError, apiMutate, apiFetch } from '../api';
 import { type MetadataType } from '../models/metadataType';
-import { type DocumentTypeMetadataType } from '../models/documentTypeMetadataType';
+import { type DocumentTypeMetadataType, type DocumentTypeNewMetadataType } from '../models/documentTypeMetadataType';
 
 export type MetadataTypeInput = ResourceInput<MetadataType>;
 export type MetadataTypesMap = Record<string, MetadataType>;
@@ -12,6 +12,24 @@ export function useDocumentTypeMetadataTypes(document_type_id: string | number |
     enabled: !!document_type_id,
     ...options,
     queryFn: () => apiFetch<DocumentTypeMetadataType[]>(`api/v1/document-types-metadata-types?document_type_id=${document_type_id}`),
+  });
+}
+
+export function useDocumentTypeSaveMetadataTypes(document_type_id: string | number): UseMutationResult<DocumentTypeMetadataType[], HttpError, DocumentTypeNewMetadataType[]> {
+  const qc = useQueryClient();
+
+  return useMutation<DocumentTypeMetadataType[], HttpError, DocumentTypeNewMetadataType[]>({
+    mutationFn: async (input) => {
+      return apiMutate<DocumentTypeMetadataType[], DocumentTypeNewMetadataType[]>(`api/v1/document-types-metadata-types/${document_type_id}`, {
+        method: "POST",
+        body: input,
+      });
+    },
+
+    onSuccess: () => {
+      // invalidate by prefix (works with table params in the queryKey)
+      qc.invalidateQueries({ queryKey: ["documentTypeMetadataType"] });
+    },
   });
 }
 
