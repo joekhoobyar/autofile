@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::AppState;
 use crate::schema::{document_types_metadata_types, metadata_types};
-use crate::domain::metadata_types::MetadataType;
+use crate::domain::metadata_types::{DataType, MetadataType};
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{diesel_to_http, ApiError, ResourceList};
@@ -25,7 +25,7 @@ use chrono::{DateTime, Utc};
 struct NewMetadataType {
     slug: String,
     name: String,
-    data_type: String,
+    data_type: DataType,
     description: Option<String>,
 }
 
@@ -34,7 +34,7 @@ struct NewMetadataType {
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct MetadataTypeChangeset {
     name: Option<String>,
-    data_type: Option<String>,
+    data_type: Option<DataType>,
     description: Option<String>,
     updated_at: Option<DateTime<Utc>>,
 }
