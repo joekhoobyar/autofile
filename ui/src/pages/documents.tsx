@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Card } from 'primereact/card';
@@ -10,16 +10,22 @@ import { classNames } from 'primereact/utils';
 import { format } from "date-fns";
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 
-import { type ListParams } from '../api';
+import { apiFetchRaw, type ListParams } from '../api';
 import { useDeleteDocument, useDocuments, useDocumentThumbnail, useRemoveCabinetDocument, useSaveCabinetDocument } from '../queries/useDocuments';
 import { type Document } from '../models/document';
 import { useMetadataTypesMap } from '../queries/useMetadataTypes';
-import { useDocumentTypesMap } from '../queries/useDocumentTypes';
+import { useDocumentTypes, useDocumentTypesMap } from '../queries/useDocumentTypes';
 import { Menu } from 'primereact/menu';
 import { Button } from 'primereact/button';
 import type { MenuItem } from 'primereact/menuitem';
 import { useCabinets } from '../queries/useCabinets';
 import { MAX_CABINETS } from '../models/cabinet';
+import { Toast } from 'primereact/toast';
+import { Tooltip } from 'primereact/tooltip';
+import { FileUpload, type FileUploadFile, type FileUploadHandlerEvent, type FileUploadSelectEvent, type FileUploadUploadEvent, type ItemTemplateOptions } from 'primereact/fileupload';
+import { ProgressBar } from 'primereact/progressbar';
+import { Tag } from 'primereact/tag';
+import { InputText } from 'primereact/inputtext';
 
 type DocumentListItemProps = {
   doc: Readonly<Document>;
@@ -500,4 +506,205 @@ export function ListDocuments() {
     <ConfirmDialog />
     </>
   );
+}
+
+export default function UploadDocument() {
+    const toast = useRef<Toast>(null);
+    const [totalSize, setTotalSize] = useState(0);
+    const fileUploadRef = useRef<FileUpload>(null);
+    const [title, setTitle] = useState('');
+    const [documentTypeId, setDocumentTypeId] = useState<number | null>(null);
+    const { data: documentTypes, isPending: isDocumentTypesPending, isFetching: isDocumentTypesFetching } = useDocumentTypes({ page: 1, per_page: 200 });
+    const defaultDocumentTypeId = documentTypes?.items?.find((item) => item.name === 'Unspecified' || item.slug === 'unspecified')?.id ?? null;
+    const effectiveDocumentTypeId = documentTypeId ?? defaultDocumentTypeId;
+    
+    const onTemplateSelect = (e:FileUploadSelectEvent) => {
+        let _totalSize = totalSize;
+        const files = e.files;
+
+        files.forEach((_value: FileUploadFile, key: number) => {
+            _totalSize += files[key].size || 0;
+        });
+
+        setTotalSize(_totalSize);
+    };
+
+    const onTemplateUpload = (e:FileUploadUploadEvent) => {
+        let _totalSize = 0;
+
+        e.files.forEach((file) => {
+            _totalSize += file.size || 0;
+        });
+
+        setTotalSize(_totalSize);
+        toast.current?.show({ severity: 'info', summary: 'Success', detail: 'File Uploaded' });
+    };
+
+    const onTemplateRemove = (file: File, callback: (event: React.SyntheticEvent) => void, event: React.SyntheticEvent) => {
+        setTotalSize(totalSize - file.size);
+        callback(event);
+    };
+
+    const onTemplateClear = () => {
+        setTotalSize(0);
+    };
+
+    const headerTemplate = (options: { className: string; chooseButton: ReactNode; uploadButton: ReactNode; cancelButton: ReactNode }) => {
+        const { className, chooseButton, uploadButton, cancelButton } = options;
+        const value = totalSize / 10000;
+        const formatedValue = fileUploadRef?.current ? fileUploadRef.current.formatSize(totalSize) : '0 B';
+
+        return (
+            <div className={className} style={{ backgroundColor: 'transparent', display: 'flex', alignItems: 'center' }}>
+                {chooseButton}
+                {uploadButton}
+                {cancelButton}
+                <div className="flex align-items-center gap-3 ml-auto">
+                    <span>{formatedValue} / 1 MB</span>
+                    <ProgressBar value={value} showValue={false} style={{ width: '10rem', height: '12px' }}></ProgressBar>
+                </div>
+            </div>
+        );
+    };
+
+    const itemTemplate = (file: FileUploadFile, props: ItemTemplateOptions) => {
+        return (
+            <div className="flex align-items-center flex-wrap">
+                <div className="flex align-items-center" style={{ width: '40%' }}>
+                    <img alt={file.name} role="presentation" src={file.objectURL} width={100} />
+                    <span className="flex flex-column text-left ml-3">
+                        {file.name}
+                        <small>{new Date().toLocaleDateString()}</small>
+                    </span>
+                </div>
+                <Tag value={props.formatSize} severity="warning" className="px-3 py-2" />
+                <Button
+                    type="button" icon="pi pi-times" className="p-button-outlined p-button-rounded p-button-danger ml-auto"
+                    onClick={(event) => onTemplateRemove(file, props.onRemove, event)}
+                  />
+            </div>
+        );
+    };
+
+    const uploadHandler = async (event: FileUploadHandlerEvent) => {
+        if (!effectiveDocumentTypeId) {
+            toast.current?.show({ severity: 'warn', summary: 'Missing type', detail: 'Select a document type before uploading.' });
+            return;
+        }
+
+        const files = event.files ?? [];
+        if (!files.length) return;
+
+        const uploadOne = async (file: File) => {
+            const formData = new FormData();
+            const trimmedTitle = title.trim();
+            const resolvedTitle = trimmedTitle ? trimmedTitle : file.name;
+            formData.append('title', resolvedTitle);
+            formData.append('document_type_id', String(effectiveDocumentTypeId));
+            formData.append('file', file);
+
+            const res = await apiFetchRaw('api/v1/documents', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!res.ok) {
+                let detail = `Upload failed (${res.status})`;
+                try {
+                    const data = await res.json();
+                    if (typeof data?.message === 'string') {
+                        detail = data.message;
+                    }
+                } catch {
+                    try {
+                        const text = await res.text();
+                        if (text) detail = text;
+                    } catch {
+                        // ignore
+                    }
+                }
+                throw new Error(detail);
+            }
+        };
+
+        const results = await Promise.allSettled(files.map((file) => uploadOne(file)));
+        const failures = results.filter((result) => result.status === 'rejected');
+
+        if (failures.length) {
+            const message = failures[0].status === 'rejected' && failures[0].reason instanceof Error
+                ? failures[0].reason.message
+                : 'Some files failed to upload.';
+            toast.current?.show({
+                severity: 'error',
+                summary: 'Upload incomplete',
+                detail: message,
+            });
+            return;
+        }
+
+        event.options.clear();
+        setTotalSize(0);
+        setTitle('');
+        setDocumentTypeId(null);
+        const label = files.length === 1 ? 'File uploaded.' : `${files.length} files uploaded.`;
+        toast.current?.show({ severity: 'success', summary: 'Success', detail: label });
+    };
+
+    const emptyTemplate = () => {
+        return (
+            <div className="flex align-items-center flex-column">
+                <i className="pi pi-image mt-3 p-5" style={{ fontSize: '5em', borderRadius: '50%', backgroundColor: 'var(--surface-b)', color: 'var(--surface-d)' }}></i>
+                <span style={{ fontSize: '1.2em', color: 'var(--text-color-secondary)' }} className="my-5">
+                    Drag and Drop Image Here
+                </span>
+            </div>
+        );
+    };
+
+    const chooseOptions = { label: 'Choose Files', icon: 'pi pi-fw pi-images', className: 'custom-choose-btn p-button-rounded p-button-outlined' };
+    const uploadOptions = { label: 'Upload', icon: 'pi pi-fw pi-cloud-upload', className: 'custom-upload-btn p-button-success p-button-rounded p-button-outlined' };
+    const cancelOptions = { label: 'Clear', icon: 'pi pi-fw pi-times', className: 'custom-cancel-btn p-button-danger p-button-rounded p-button-outlined' };
+
+    return (
+        <div>
+            <Toast ref={toast}></Toast>
+
+            <div className="grid p-fluid mb-4">
+                <div className="col-12 md:col-6">
+                    <label htmlFor="document_title" className="font-medium mb-2 block">Title</label>
+                    <InputText
+                        id="document_title"
+                        value={title}
+                        onChange={(event) => setTitle(event.target.value)}
+                        placeholder="Enter document title"
+                        className="w-full"
+                    />
+                </div>
+                <div className="col-12 md:col-6">
+                    <label htmlFor="document_type_id" className="font-medium mb-2 block">Document Type</label>
+                    <Dropdown
+                        id="document_type_id"
+                        value={effectiveDocumentTypeId}
+                        onChange={(event) => setDocumentTypeId(event.value as number)}
+                        optionLabel="name"
+                        optionValue="id"
+                        placeholder="Select a document type"
+                        options={documentTypes?.items ?? []}
+                        loading={isDocumentTypesPending || isDocumentTypesFetching}
+                        className="w-full"
+                    />
+                </div>
+            </div>
+
+            <Tooltip target=".custom-choose-btn" content="Choose" position="bottom" />
+            <Tooltip target=".custom-upload-btn" content="Upload" position="bottom" />
+            <Tooltip target=".custom-cancel-btn" content="Clear" position="bottom" />
+
+            <FileUpload ref={fileUploadRef} name="file" customUpload uploadHandler={uploadHandler} multiple
+                onUpload={onTemplateUpload} onSelect={onTemplateSelect} onError={onTemplateClear} onClear={onTemplateClear}
+                headerTemplate={headerTemplate} emptyTemplate={emptyTemplate}
+                itemTemplate={itemTemplate as (file: object, options: ItemTemplateOptions) => React.ReactNode}
+                chooseOptions={chooseOptions} uploadOptions={uploadOptions} cancelOptions={cancelOptions} />
+        </div>
+    )
 }
