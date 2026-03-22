@@ -134,9 +134,15 @@ function DocumentListItem({ doc, index, onImageClick, selected, onSelectionChang
               <ul className="aut-document-metadata">
                 <li><span>Type</span>: {ddt?.[doc.document_type_id]?.name}</li>
                 <li><span>Created</span>: {format(new Date(doc.created_at), "MM/dd/yyyy HH:mm")}</li>
-                {Object.entries(doc.metadata).map(([key, value]) => (
-                  <li key={key}><span>{mdt?.[key].name ?? key}</span>: {value}</li>
-                ))}
+                {Object.entries(doc.metadata)
+                  .sort(([keyA], [keyB]) => {
+                    const nameA = mdt?.[keyA]?.name ?? keyA;
+                    const nameB = mdt?.[keyB]?.name ?? keyB;
+                    return nameA.localeCompare(nameB);
+                  })
+                  .map(([key, value]) => (
+                    <li key={key}><span>{mdt?.[key].name ?? key}</span>: {value}</li>
+                  ))}
               </ul>
             </aside>
           </section>
@@ -186,9 +192,15 @@ function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange }: Re
               <ul className="aut-document-metadata">
                 <li><span>Type</span>: {ddt?.[doc.document_type_id]?.name}</li>
                 <li><span>Created</span>: {format(new Date(doc.created_at), "MM/dd/yyyy HH:mm")}</li>
-                {Object.entries(doc.metadata).map(([key, value]) => (
-                  <li key={key}><span>{mdt?.[key].name ?? key}</span>: {value}</li>
-                ))}
+                {Object.entries(doc.metadata)
+                  .sort(([keyA], [keyB]) => {
+                    const nameA = mdt?.[keyA]?.name ?? keyA;
+                    const nameB = mdt?.[keyB]?.name ?? keyB;
+                    return nameA.localeCompare(nameB);
+                  })
+                  .map(([key, value]) => (
+                    <li key={key}><span>{mdt?.[key].name ?? key}</span>: {value}</li>
+                  ))}
               </ul>
             </aside>
           </section>

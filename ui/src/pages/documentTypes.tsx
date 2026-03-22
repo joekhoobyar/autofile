@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { DataTable, type DataTableStateEvent } from 'primereact/datatable';
@@ -162,7 +162,7 @@ function DocumentTypeForm({ data }: Readonly<{ data?: Partial<DocumentType> }>) 
       }));
   }, [metadataTypesMap]);
   const formValues = useMemo(() => ({
-    ...(data ?? {}),
+    ...data,
     metadata_type_ids: selectedMetadataTypeIds,
     metadata_type_required: metadataTypeRequiredMap,
   }), [data, selectedMetadataTypeIds, metadataTypeRequiredMap]);
@@ -170,7 +170,6 @@ function DocumentTypeForm({ data }: Readonly<{ data?: Partial<DocumentType> }>) 
     control,
     handleSubmit,
     reset,
-    watch,
     formState: { errors, isSubmitting, isValid, isDirty },
   } = useForm<DocumentTypeFormValues>({
     mode: 'onChange', // validate as user types
@@ -178,6 +177,11 @@ function DocumentTypeForm({ data }: Readonly<{ data?: Partial<DocumentType> }>) 
       metadata_type_ids: [],
       metadata_type_required: {},
     },
+  });
+
+  const watchedMetadataTypeIds = useWatch({
+    control,
+    name: 'metadata_type_ids',
   });
 
   useEffect(() => {
@@ -315,7 +319,7 @@ function DocumentTypeForm({ data }: Readonly<{ data?: Partial<DocumentType> }>) 
           <label className="font-medium mb-2 block">Required Fields</label>
           <Controller name="metadata_type_required" control={control}
             render={({ field }) => {
-              const selectedIds = new Set(watch('metadata_type_ids') ?? []);
+              const selectedIds = new Set(watchedMetadataTypeIds ?? []);
               const selectedOptions = metadataTypeOptions.filter((option) => selectedIds.has(option.value));
 
               if (!selectedOptions.length) {
@@ -331,7 +335,7 @@ function DocumentTypeForm({ data }: Readonly<{ data?: Partial<DocumentType> }>) 
                         checked={field.value?.[option.value] ?? false}
                         onChange={(event) => {
                           field.onChange({
-                            ...(field.value ?? {}),
+                            ...field.value,
                             [option.value]: event.checked ?? false,
                           });
                         }}

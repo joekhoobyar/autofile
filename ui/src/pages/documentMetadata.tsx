@@ -26,16 +26,16 @@ export function EditDocumentMetadata() {
     if (!mdt || !dtmdts) return [];
     return dtmdts.map(dtmdt => {
       const mdType = mdt?.[dtmdt.metadata_type_id];
-        return {
-          metadataTypeId: dtmdt.metadata_type_id,
-          slug: mdType.slug,
-          name: mdType?.name ?? mdType.slug,
-          value: doc?.metadata?.[mdType.slug] ?? '',
-          dataType: mdType?.data_type ?? 'string',
-          options: mdType?.options,
-          required: dtmdt.required,
-        };
-    });
+      return {
+        metadataTypeId: dtmdt.metadata_type_id,
+        slug: mdType.slug,
+        name: mdType?.name ?? mdType.slug,
+        value: doc?.metadata?.[mdType.slug] ?? '',
+        dataType: mdType?.data_type ?? 'string',
+        options: mdType?.options,
+        required: dtmdt.required,
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
   }, [doc?.metadata, dtmdts, mdt]);
 
   const requiredTemplate = useCallback((rowData: {required: boolean}) => {
