@@ -16,8 +16,7 @@ use axum::{
     extract::{Path, Query},
 };
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
-use diesel::upsert::excluded;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = document_types_metadata_types)]
@@ -109,42 +108,47 @@ async fn update(
     Ok(Json(updated))
 }
 
-async fn upsert(
+async fn document_type_save(
     _user: AuthUser,
     DbConn(mut db): DbConn,
     Path(document_type_id): Path<i64>,
     Json(input): Json<Vec<DocumentTypeNewMetadataTypeInput>>,
 ) -> Result<Json<Vec<DocumentTypeMetadataType>>, ApiError> {
-    // Prepare the rows to upsert.  It is worth allocating memory so that we can
-    // bulk upsert with Diesel, rather than doing individual queries in a loop.
-    let rows: Vec<NewDocumentTypeMetadataType> = input
-        .into_iter()
-        .map(|m| NewDocumentTypeMetadataType {
-            document_type_id,
-            metadata_type_id: m.metadata_type_id,
-            required: m.required,
+    let mut rows = db.transaction::<_, diesel::result::Error, _>(move |conn| {
+        Box::pin(async move {
+            diesel::delete(
+                    document_types_metadata_types::table
+                        .filter(document_types_metadata_types::document_type_id.eq(document_type_id))
+                )
+                .execute(conn)
+                .await?;
+
+            if input.is_empty() {
+                return Ok(Vec::new());
+            }
+
+            // Prepare the rows to insert. It is worth allocating memory so that we can
+            // bulk insert with Diesel, rather than doing individual queries in a loop.
+            let rows: Vec<NewDocumentTypeMetadataType> = input
+                .into_iter()
+                .map(|m| NewDocumentTypeMetadataType {
+                    document_type_id,
+                    metadata_type_id: m.metadata_type_id,
+                    required: m.required,
+                })
+                .collect();
+
+            let rows = diesel::insert_into(document_types_metadata_types::table)
+                .values(&rows)
+                .returning(DocumentTypeMetadataType::as_returning())
+                .get_results::<DocumentTypeMetadataType>(conn)
+                .await?;
+
+            Ok(rows)
         })
-        .collect();
-
-    diesel::insert_into(document_types_metadata_types::table)
-        .values(&rows)
-        .on_conflict((
-            document_types_metadata_types::document_type_id,
-            document_types_metadata_types::metadata_type_id,
-        ))
-        .do_update()
-        .set(document_types_metadata_types::required.eq(excluded(document_types_metadata_types::required)))
-        .execute(&mut db)
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to upsert document_type_metadata_type"))?;
-
-    let rows = document_types_metadata_types::table
-        .filter(document_types_metadata_types::document_type_id.eq(document_type_id))
-        .select(DocumentTypeMetadataType::as_select())
-        .order(document_types_metadata_types::metadata_type_id.asc())
-        .load::<DocumentTypeMetadataType>(&mut db)
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_type_metadata_types"))?;
+    })
+    .await
+    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to save document_type_metadata_type"))?;
 
     Ok(Json(rows))
 }
@@ -217,7 +221,7 @@ pub async fn list(
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(list).post(create))
-        .route("/{document_type_id}", post(upsert))
+        .route("/{document_type_id}", post(document_type_save))
         .route("/{document_type_id}/{metadata_type_id}",
             get(get_by_ids).patch(update).delete(delete_junction))
 }
