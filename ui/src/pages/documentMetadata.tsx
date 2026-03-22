@@ -44,7 +44,18 @@ export function EditDocumentMetadata() {
     return <InputText
         type="text" value={options.value} className="p-inputtext-sm"
         onChange={(e) => options.editorCallback?.(e.target.value)}
-        onKeyDown={(e) => e.stopPropagation()}
+        onBlur={(event) => {
+          options.editorCallback?.(event.target.value);
+          const cell = event.currentTarget.closest('td');
+          if (!cell) return;
+          const enterEvent = new KeyboardEvent('keydown', {
+            bubbles: true,
+            cancelable: true,
+            key: 'Enter',
+            code: 'Enter',
+          });
+          cell.dispatchEvent(enterEvent);
+        }}
     />;
   }, []);
 
