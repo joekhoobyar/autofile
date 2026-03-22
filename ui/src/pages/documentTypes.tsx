@@ -8,6 +8,7 @@ import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
 import { MultiSelect } from 'primereact/multiselect';
+import { Checkbox } from 'primereact/checkbox';
 import { classNames } from 'primereact/utils';
 
 import type { ListParams } from '../api';
@@ -322,21 +323,21 @@ function DocumentTypeForm({ data }: Readonly<{ data?: Partial<DocumentType> }>) 
               }
 
               return (
-                <div className="flex flex-column gap-2">
+                <div className="flex flex-wrap gap-3">
                   {selectedOptions.map((option) => (
-                    <label key={option.value} className="flex align-items-center gap-2">
-                      <input
-                        type="checkbox"
+                    <div key={option.value} className="flex align-items-center gap-2">
+                      <Checkbox
+                        inputId={`metadata-required-${option.value}`}
                         checked={field.value?.[option.value] ?? false}
                         onChange={(event) => {
                           field.onChange({
                             ...(field.value ?? {}),
-                            [option.value]: event.target.checked,
+                            [option.value]: event.checked ?? false,
                           });
                         }}
                       />
-                      <span>{option.label}</span>
-                    </label>
+                      <label htmlFor={`metadata-required-${option.value}`}>{option.label}</label>
+                    </div>
                   ))}
                 </div>
               );
