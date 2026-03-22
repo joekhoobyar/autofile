@@ -105,6 +105,11 @@ body {
     border-bottom-left-radius: 0;
 }
 
+// Prevent jumping vertically when entering edit mode in the datatable.
+.p-editable-column {
+  padding: 0 1rem;
+}
+
 .text-end {
   margin-top: 1.3rem;
 }
