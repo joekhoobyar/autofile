@@ -4,7 +4,7 @@ import { createBrowserRouter, RouterProvider, NavLink, useLocation } from 'react
 import { PrimeReactProvider } from 'primereact/api';
 // import 'bootstrap/scss/bootstrap.scss';
 import 'primereact/resources/primereact.min.css';
-import 'primereact/resources/themes/md-dark-indigo/theme.css';
+import 'primereact/resources/themes/lara-dark-indigo/theme.css';
 import 'primeicons/primeicons.css';
 import 'primeflex/primeflex.css';
 import { BreadCrumb } from 'primereact/breadcrumb';
