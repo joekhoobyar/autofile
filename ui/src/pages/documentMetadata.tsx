@@ -45,7 +45,7 @@ export function EditDocumentMetadata() {
   }, []);
 
   const closeCellEditor = useCallback((event: React.FocusEvent<HTMLElement>) => {
-    const cell = event.currentTarget.closest('td');
+    const cell = event.currentTarget?.closest('td');
     if (!cell) return;
     const relatedTarget = event.relatedTarget as HTMLElement | null;
     if (relatedTarget) {
@@ -130,9 +130,8 @@ export function EditDocumentMetadata() {
   }, [closeCellEditor]);
 
   const onCellEditComplete = useCallback((e: ColumnEvent) => {
-    const { rowData, newValue, field, originalEvent: event } = e;
+    const { rowData, newValue, field  } = e;
     rowData[field] = newValue;
-    console.log(event);
   }, []);
 
   const cellEditor = useCallback((options: ColumnEditorOptions) => {

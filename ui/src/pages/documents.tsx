@@ -341,6 +341,7 @@ export function ListDocuments() {
     if (layout === 'list')
       return (
         <DocumentListItem
+          key={doc.id}
           doc={doc}
           index={index}
           onImageClick={openPreview}
@@ -351,6 +352,7 @@ export function ListDocuments() {
     else if (layout === 'grid')
       return (
         <DocumentGridItem
+          key={doc.id}
           doc={doc}
           onImageClick={openPreview}
           selected={selectedIds.has(doc.id)}
