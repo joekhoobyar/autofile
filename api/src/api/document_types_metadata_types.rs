@@ -114,7 +114,7 @@ async fn document_type_save(
     Path(document_type_id): Path<i64>,
     Json(input): Json<Vec<DocumentTypeNewMetadataTypeInput>>,
 ) -> Result<Json<Vec<DocumentTypeMetadataType>>, ApiError> {
-    let mut rows = db.transaction::<_, diesel::result::Error, _>(move |conn| {
+    let rows = db.transaction::<_, diesel::result::Error, _>(move |conn| {
         Box::pin(async move {
             diesel::delete(
                     document_types_metadata_types::table
