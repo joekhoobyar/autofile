@@ -55,11 +55,6 @@ export function ListDocumentTypes() {
         navigate('/document-types');
       }
     });
-    /*
-    if (toast.current) {
-      toast.current.show({ severity: 'info', summary: 'Confirmed', detail: 'You have accepted', life: 3000 });
-    }
-    */
   }
 
   const confirmDeleteDocumentType = (c: DocumentType) => {

@@ -56,11 +56,6 @@ export function ListMetadataTypes() {
         navigate('/metadata-types');
       }
     });
-    /*
-    if (toast.current) {
-      toast.current.show({ severity: 'info', summary: 'Confirmed', detail: 'You have accepted', life: 3000 });
-    }
-    */
   }
 
   const confirmDeleteMetadataType = (c: MetadataType) => {
