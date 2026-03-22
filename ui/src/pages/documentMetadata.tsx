@@ -8,6 +8,7 @@ import { DataTable } from 'primereact/datatable';
 import { Column, type ColumnEditorOptions, type ColumnEvent } from 'primereact/column';
 import { InputText } from 'primereact/inputtext';
 import { Button } from 'primereact/button';
+import { Calendar } from 'primereact/calendar';
 
 import { useId } from '../util';
 import { useDocumentTypeMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
@@ -24,13 +25,14 @@ export function EditDocumentMetadata() {
     if (!mdt || !dtmdts) return [];
     return dtmdts.map(dtmdt => {
       const mdType = mdt?.[dtmdt.metadata_type_id];
-      return {
-        metadataTypeId: dtmdt.metadata_type_id,
-        slug: mdType.slug,
-        name: mdType?.name ?? mdType.slug,
-        value: doc?.metadata?.[mdType.slug] ?? '',
-        required: dtmdt.required,
-      };
+        return {
+          metadataTypeId: dtmdt.metadata_type_id,
+          slug: mdType.slug,
+          name: mdType?.name ?? mdType.slug,
+          value: doc?.metadata?.[mdType.slug] ?? '',
+          dataType: mdType?.data_type ?? 'string',
+          required: dtmdt.required,
+        };
     });
   }, [doc?.metadata, dtmdts, mdt]);
 
@@ -40,24 +42,72 @@ export function EditDocumentMetadata() {
         <i className="pi pi-times" style={{color: 'var(--red-600)'}} />;
   }, []);
 
+  const closeCellEditor = useCallback((event: React.FocusEvent<HTMLElement>) => {
+    const cell = event.currentTarget.closest('td');
+    if (!cell) return;
+    const relatedTarget = event.relatedTarget as HTMLElement | null;
+    if (relatedTarget) {
+      if (cell.contains(relatedTarget)) return;
+      if (relatedTarget.closest('.p-datepicker, .p-datepicker-panel, .p-datepicker-calendar, .p-datepicker-group')) return;
+    }
+
+    setTimeout(() => {
+      const activeElement = document.activeElement as HTMLElement | null;
+      if (!activeElement) return;
+      if (cell.contains(activeElement)) return;
+      if (activeElement.closest('.p-datepicker, .p-datepicker-panel, .p-datepicker-calendar, .p-datepicker-group')) return;
+
+      const enterEvent = new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: 'Enter',
+        code: 'Enter',
+      });
+      cell.dispatchEvent(enterEvent);
+    }, 50);
+  }, []);
+
   const textEditor = useCallback((options: ColumnEditorOptions) => {
     return <InputText
         type="text" value={options.value} className="p-inputtext-sm"
         onChange={(e) => options.editorCallback?.(e.target.value)}
         onBlur={(event) => {
           options.editorCallback?.(event.target.value);
-          const cell = event.currentTarget.closest('td');
-          if (!cell) return;
-          const enterEvent = new KeyboardEvent('keydown', {
-            bubbles: true,
-            cancelable: true,
-            key: 'Enter',
-            code: 'Enter',
-          });
-          cell.dispatchEvent(enterEvent);
+          closeCellEditor(event);
         }}
     />;
-  }, []);
+  }, [closeCellEditor]);
+
+  const dateEditor = useCallback((options: ColumnEditorOptions) => {
+    const dateValue = typeof options.value === 'string' && options.value
+      ? (() => {
+          const [year, month, day] = options.value.split('-').map(Number);
+          if (!year || !month || !day) return null;
+          return new Date(year, month - 1, day);
+        })()
+      : null;
+
+    return (
+      <Calendar
+        value={dateValue}
+        onChange={(event) => {
+          const nextValue = event.value instanceof Date
+            ? `${event.value.getFullYear()}-${String(event.value.getMonth() + 1).padStart(2, '0')}-${String(event.value.getDate()).padStart(2, '0')}`
+            : typeof event.value === 'string'
+              ? event.value
+              : '';
+          options.editorCallback?.(nextValue);
+        }}
+        onBlur={(event) => {
+          closeCellEditor(event);
+        }}
+        dateFormat="yy-mm-dd"
+        placeholder="yyyy-mm-dd"
+        showIcon
+        className="p-inputtext-sm"
+      />
+    );
+  }, [closeCellEditor]);
 
   const onCellEditComplete = useCallback((e: ColumnEvent) => {
     const { rowData, newValue, field, originalEvent: event } = e;
@@ -66,9 +116,12 @@ export function EditDocumentMetadata() {
   }, []);
 
   const cellEditor = useCallback((options: ColumnEditorOptions) => {
-    if (options.field === 'name') return null;
+    if (options.field !== 'value')
+      return null;
+    if (options.rowData?.dataType === 'date')
+      return dateEditor(options);
     return textEditor(options);
-  }, [textEditor]);
+  }, [dateEditor, textEditor]);
 
   const columns = useMemo(() => ([
     <Column key="name" field="name" header="Field" style={{ width: '25%' }} />,
