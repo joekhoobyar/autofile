@@ -69,7 +69,7 @@ export function EditDocumentMetadata() {
 
   const textEditor = useCallback((options: ColumnEditorOptions) => {
     return <InputText
-        type="text" value={options.value} className="p-inputtext-sm"
+        type="text" value={options.value} className="w-full"
         onChange={(e) => options.editorCallback?.(e.target.value)}
         onBlur={(event) => {
           options.editorCallback?.(event.target.value);
@@ -93,9 +93,7 @@ export function EditDocumentMetadata() {
         onChange={(event) => {
           const nextValue = event.value instanceof Date
             ? `${event.value.getFullYear()}-${String(event.value.getMonth() + 1).padStart(2, '0')}-${String(event.value.getDate()).padStart(2, '0')}`
-            : typeof event.value === 'string'
-              ? event.value
-              : '';
+            : (typeof event.value === 'string' ? event.value : '');
           options.editorCallback?.(nextValue);
         }}
         onBlur={(event) => {
@@ -104,7 +102,7 @@ export function EditDocumentMetadata() {
         dateFormat="yy-mm-dd"
         placeholder="yyyy-mm-dd"
         showIcon
-        className="p-inputtext-sm"
+        className="w-full"
       />
     );
   }, [closeCellEditor]);
