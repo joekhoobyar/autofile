@@ -177,7 +177,7 @@ export function EditDocumentMetadata() {
     return <div>Loading</div>;
 
   return (
-    <Card title="Document Metadata">
+    <Card title={`Document Metadata: ${doc?.title}`}>
       <DataTable value={rows} editMode="cell" tableStyle={{ minWidth: '50rem' }}>
         {columns}
       </DataTable>
