@@ -18,6 +18,7 @@ use axum::{
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use chrono::{DateTime, Utc};
+use serde_json::Value;
 
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = metadata_types)]
@@ -27,6 +28,7 @@ struct NewMetadataType {
     name: String,
     data_type: DataType,
     description: Option<String>,
+    options: Option<Value>,
 }
 
 #[derive(Debug, Deserialize, AsChangeset)]
@@ -36,6 +38,7 @@ struct MetadataTypeChangeset {
     name: Option<String>,
     data_type: Option<DataType>,
     description: Option<String>,
+    options: Option<Value>,
     updated_at: Option<DateTime<Utc>>,
 }
 

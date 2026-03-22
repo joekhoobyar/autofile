@@ -6,6 +6,7 @@ use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::Varchar;
 use diesel::{AsExpression, FromSqlRow};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::io::Write;
 
 use crate::schema::metadata_types;
@@ -21,6 +22,7 @@ pub struct MetadataType {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub description: Option<String>,
+    pub options: Option<Value>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, AsExpression, FromSqlRow)]

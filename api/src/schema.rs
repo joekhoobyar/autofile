@@ -95,6 +95,7 @@ diesel::table! {
         description -> Nullable<Varchar>,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        options -> Nullable<Jsonb>,
     }
 }
 
