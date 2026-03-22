@@ -39,10 +39,10 @@ export function ListDocumentTypes() {
   const actionTemplate = (c: DocumentType) => {
     return (
       <div className="flex flex-wrap gap-2">
-        <Button size="small" type="button" icon="pi pi-pencil" severity="success" rounded aria-description="Edit"
+        <Button type="button" icon="pi pi-pencil" severity="success" rounded text raised aria-description="Edit"
           onClick={() => navigate(`${c.id}/edit`)}
         ></Button>
-        <Button size="small" type="button" icon="pi pi-trash" severity="danger" rounded aria-description="Delete"
+        <Button type="button" icon="pi pi-trash" severity="danger" rounded text raised aria-description="Delete"
           onClick={() => confirmDeleteDocumentType(c)}
         ></Button>
       </div>
@@ -210,8 +210,8 @@ function DocumentTypeForm({ data }: Readonly<{ data?: Partial<DocumentType> }>) 
           <Message className="float-start" severity="error" text={saveDocumentType.error.message} />
         )}
 
-        <Button label="Save" type="submit" icon="pi pi-check" disabled={!isDirty || !isValid || isSubmitting} />
-        <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" style={{ marginLeft: '0.5em' }} onClick={() => navigate('/document-types')} />
+        <Button label="Save" type="submit" icon="pi pi-check" raised disabled={!isDirty || !isValid || isSubmitting} />
+        <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" raised onClick={() => navigate('/document-types')} />
       </div>
     </form>
   );

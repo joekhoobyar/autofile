@@ -39,10 +39,10 @@ export function ListCabinets() {
   const actionTemplate = (c: TreeNode) => {
     return (
       <div className="flex flex-wrap gap-2">
-        <Button size="small" type="button" icon="pi pi-pencil" severity="success" rounded aria-description="Edit"
+        <Button type="button" icon="pi pi-pencil" severity="success" rounded text raised aria-description="Edit"
           onClick={() => navigate(`${c.data.id}/edit`)}
         ></Button>
-        <Button size="small" type="button" icon="pi pi-trash" severity="danger" rounded aria-description="Delete"
+        <Button type="button" icon="pi pi-trash" severity="danger" rounded text raised aria-description="Delete"
           onClick={() => confirmDeleteCabinet(c.data)}
         ></Button>
       </div>
@@ -227,8 +227,8 @@ function CabinetForm({ data }: Readonly<{ data?: Partial<Cabinet> }>) {
           <Message className="float-start" severity="error" text={saveCabinet.error.message} />
         )}
 
-        <Button label="Save" type="submit" icon="pi pi-check" disabled={!isDirty || !isValid || isSubmitting} />
-        <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" style={{ marginLeft: '0.5em' }} onClick={() => navigate('/cabinets')} />
+        <Button label="Save" type="submit" icon="pi pi-check" raised disabled={!isDirty || !isValid || isSubmitting} />
+        <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" raised onClick={() => navigate('/cabinets')} />
       </div>
     </form>
   );

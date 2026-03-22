@@ -163,8 +163,8 @@ export function EditDocumentMetadata() {
           <Message className="float-start" severity="error" text={saveDocumentMetadata.error.message} />
         )}
 
-        <Button label="Save" type="submit" icon="pi pi-check" onClick={onSave} disabled={saveDocumentMetadata.isPending} />
-        <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" style={{ marginLeft: '0.5em' }} onClick={() => navigate('/documents')} />
+        <Button label="Save" type="submit" icon="pi pi-check" onClick={onSave} raised disabled={saveDocumentMetadata.isPending} />
+        <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" raised onClick={() => navigate('/documents')} />
       </div>
     </Card>
   );

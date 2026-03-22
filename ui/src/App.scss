@@ -22,6 +22,15 @@ body {
 
 .app-backdrop { display: none; }
 
+.p-breadcrumb {
+  background: var(--surface-50);
+  border-color: var(--surface-50);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+
+  ol { padding: 0; margin: 0; }
+}
+
 @media (max-width: 900px) {
   .app-topbar { display: flex; }
   .app-nav {
@@ -66,12 +75,21 @@ body {
 .side-nav-item:hover { background: var(--surface-hover); }
 .side-nav-item.is-active { background: var(--highlight-bg); font-weight: 600; }
 
-.p-breadcrumb ol {
-  padding: 0; margin: 0;
-}
 
+/*
+ * App-specific overrides for PrimeReact components
+ */
 .p-card > .p-card-body { padding: 1rem; }
 
+.p-button.p-button-raised {
+    box-shadow: 0px 3px 1px -2px rgba(0, 0, 0, 0.8), 0px 2px 2px 0px rgba(0, 0, 0, 0.4), 0px 1px 5px 0px rgba(0, 0, 0, 0.2);
+}
+
+.p-dialog-footer .p-button { margin-left: 0.7rem; }
+
+/*
+ * Data Table
+ */
 .p-datatable .p-datatable-tbody > tr {
   border-bottom: 1px solid var(--surface-border);
 }
@@ -84,8 +102,6 @@ body {
   border-width: 0;
 }
 
-.p-dialog-footer .p-button { margin-left: 0.7rem; }
-
 // Prevent jumping vertically when entering edit mode in the datatable.
 .p-editable-column {
   padding: 0 1rem;
@@ -93,6 +109,11 @@ body {
 
 .text-end {
   margin-top: 1.3rem;
+
+  button {
+    margin-left: 0.7em;
+    &:first-of-type { margin-left: 0; }
+  }
 }
 
 /*
@@ -120,7 +141,7 @@ body {
   > .surface-card {
     display: flex;
     flex: 1 1 auto;
-    background-color: #1e1e1e !important;
+    background-color: var(--surface-0) !important;
   }
 
   > .surface-border {
@@ -133,7 +154,7 @@ body {
     height: 100%;
 
     header {
-      background-color: #1e1e1e !important;
+      background-color: var(--surface-0) !important;
       padding: 0.5rem;
       font-weight: normal;
       text-align: left;
