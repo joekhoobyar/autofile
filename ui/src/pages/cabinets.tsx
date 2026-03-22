@@ -39,10 +39,10 @@ export function ListCabinets() {
   const actionTemplate = (c: TreeNode) => {
     return (
       <div className="flex flex-wrap gap-2">
-        <Button type="button" icon="pi pi-pencil" severity="success" rounded aria-description="Edit"
+        <Button size="small" type="button" icon="pi pi-pencil" severity="success" rounded aria-description="Edit"
           onClick={() => navigate(`${c.data.id}/edit`)}
         ></Button>
-        <Button type="button" icon="pi pi-trash" severity="danger" rounded aria-description="Delete"
+        <Button size="small" type="button" icon="pi pi-trash" severity="danger" rounded aria-description="Delete"
           onClick={() => confirmDeleteCabinet(c.data)}
         ></Button>
       </div>

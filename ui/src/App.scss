@@ -72,10 +72,6 @@ body {
 
 .p-card > .p-card-body { padding: 1rem; }
 
-.p-button {
-  border-radius: 6px;
-}
-
 .p-datatable .p-datatable-tbody > tr {
   border-bottom: 1px solid var(--surface-border);
 }
@@ -90,21 +86,6 @@ body {
 
 .p-dialog-footer .p-button { margin-left: 0.7rem; }
 
-.p-button-group .p-button:first-of-type {
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-}
-
-.p-button-group .p-button:last-of-type {
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-}
-
-.p-calendar-w-btn-right .p-datepicker-trigger {
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-}
-
 // Prevent jumping vertically when entering edit mode in the datatable.
 .p-editable-column {
   padding: 0 1rem;
@@ -114,6 +95,11 @@ body {
   margin-top: 1.3rem;
 }
 
+/*
+ *
+ * Document list / grid view
+ *
+ */
 .aut-document-list {
   header {
     word-break: break-all;
