@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useEffect, useRef, useState } from 'react';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { DataTable, type DataTableStateEvent } from 'primereact/datatable';
@@ -7,6 +7,7 @@ import { Column } from 'primereact/column';
 import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
+import { InputTextarea } from 'primereact/inputtextarea';
 import { classNames } from 'primereact/utils';
 
 import type { ListParams } from '../api';
@@ -140,6 +141,14 @@ function MetadataTypeForm({ data }: Readonly<{ data?: Partial<MetadataType> }>) 
     values: data ?? {},
   });
 
+  const dataType = useWatch({ control, name: 'data_type' });
+  const initialChoicesText = data?.options?.choices?.join('\n') ?? '';
+  const [choicesText, setChoicesText] = useState(initialChoicesText);
+
+  useEffect(() => {
+    setChoicesText(initialChoicesText);
+  }, [initialChoicesText]);
+
   const submitter = async (data: Partial<MetadataType>) => {
     await saveMetadataType.mutateAsync(data, {
       onSuccess: () => {
@@ -154,10 +163,8 @@ function MetadataTypeForm({ data }: Readonly<{ data?: Partial<MetadataType> }>) 
 
   const data_type_options = [
     { label: 'String', value: 'string' },
-    { label: 'Integer', value: 'integer' },
-    { label: 'Decimal', value: 'float' },
-    { label: 'Boolean', value: 'boolean' },
     { label: 'Date', value: 'date' },
+    { label: 'Lookup', value: 'lookup' },
   ];
 
   return (
@@ -231,6 +238,36 @@ function MetadataTypeForm({ data }: Readonly<{ data?: Partial<MetadataType> }>) 
           />
           {errMsg('description') && <small className="p-error">{errMsg('description')}</small>}
         </div>
+
+        {/* Lookup Options */}
+        {dataType === 'lookup' && (
+          <div className="col-12 md:col-6">
+            <label htmlFor="options" className="font-medium mb-2 block">Choices</label>
+            <Controller
+              name="options"
+              control={control}
+              render={({ field }) => (
+                <InputTextarea
+                  id="options"
+                  value={choicesText}
+                  onChange={(event) => {
+                    const rawValue = event.target.value;
+                    setChoicesText(rawValue);
+                    const choices = rawValue
+                      .split('\n')
+                      .map((choice) => choice.trim())
+                      .filter((choice) => choice.length > 0);
+                    field.onChange(choices.length > 0 ? { choices } : undefined);
+                  }}
+                  className={classNames({ 'p-invalid': !!errors.options })}
+                  placeholder="One choice per line"
+                  autoComplete="off"
+                  rows={6}
+                />
+              )}
+            />
+          </div>
+        )}
       </div>
 
       <div className="text-end">
