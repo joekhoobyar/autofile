@@ -7,6 +7,8 @@ export interface Document {
   created_by: number;
   updated_at: string;
   updated_by: number;
+  cabinet_ids?: number[];
+  tag_ids?: number[];
 }
 
 export interface NewDocumentMetadata {

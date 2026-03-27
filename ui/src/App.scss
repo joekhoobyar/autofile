@@ -190,10 +190,26 @@ section.aut-document {
     }
   }
   aside {
+
+    a {
+      text-decoration: none;
+      &:hover { text-decoration: underline; }
+    }
+
+    span.p-badge {
+      display: inline;
+      padding: 3px 10px 3px;
+      max-width: 100%;
+      white-space: normal;
+      word-break: break-all;
+      overflow-wrap: anywhere;
+    }
+
     ul.aut-document-metadata {
       list-style: none;
       margin: 0;
       padding-inline-start: 0;
+      font-size: 14px;
 
       li {
         text-align: center;
@@ -202,6 +218,35 @@ section.aut-document {
           font-weight: bold;
           overflow-wrap: break-word;
         }
+      }
+    }
+
+    ul.aut-document-tags {
+      list-style: none;
+      margin: 0 0 0.5rem;
+      padding-inline-start: 0;
+      font-size: 14px;
+
+      li {
+        text-align: center;
+        overflow-wrap: break-word;
+        span.aut-document-tag {
+          font-size: 14px;
+        }
+        a:hover { text-decoration: none; }
+      }
+    }
+
+    ul.aut-document-cabinets {
+      list-style: none;
+      margin: 0 0 0.5rem;
+      padding-inline-start: 0;
+      font-size: 14px;
+
+      li {
+        text-align: center;
+        overflow-wrap: break-word;
+        font-style: italic;
       }
     }
   }
@@ -219,6 +264,10 @@ section.aut-document {
 .aut-document-tag {
   color: #000000;
   font-size: 1rem;
+  max-width: 100%;
+  white-space: normal;
+  word-break: break-all;
+  overflow-wrap: anywhere;
   text-shadow: 0px 0px 2px #ffffff;
   box-shadow: 2px 2px 0px #101010;
 }

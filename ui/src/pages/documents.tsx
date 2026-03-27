@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Card } from 'primereact/card';
@@ -21,12 +21,14 @@ import type { MenuItem } from 'primereact/menuitem';
 import { useCabinets } from '../queries/useCabinets';
 import { MAX_CABINETS } from '../models/cabinet';
 import { useTags } from '../queries/useTags';
+import type { Tag as TagModel } from '../models/tag';
 import { Toast } from 'primereact/toast';
 import { Tooltip } from 'primereact/tooltip';
 import { FileUpload, type FileUploadFile, type FileUploadHandlerEvent, type FileUploadSelectEvent, type FileUploadUploadEvent, type ItemTemplateOptions } from 'primereact/fileupload';
 import { ProgressBar } from 'primereact/progressbar';
 import { Tag } from 'primereact/tag';
 import { InputText } from 'primereact/inputtext';
+import { Badge } from 'primereact/badge';
 
 type DocumentListItemProps = {
   doc: Readonly<Document>;
@@ -34,6 +36,8 @@ type DocumentListItemProps = {
   onImageClick: (src: string | undefined, title: string) => void;
   selected: boolean;
   onSelectionChange: (id: number, checked: boolean) => void;
+  cabinetLookup: Record<number, string>;
+  tagLookup: Record<number, TagModel>;
 };
 
 type DocumentThumbnailProps = {
@@ -105,10 +109,16 @@ function DocumentThumbnail({
  * @param index index in the list
  * @returns HTML element for a document in list layout
  */
-function DocumentListItem({ doc, index, onImageClick, selected, onSelectionChange }: Readonly<DocumentListItemProps>) {
+function DocumentListItem({ doc, index, onImageClick, selected, onSelectionChange, cabinetLookup, tagLookup }: Readonly<DocumentListItemProps>) {
     const { data } = useDocumentThumbnail(doc.id);
     const { data: mdt } = useMetadataTypesMap('slug');
     const { data: ddt } = useDocumentTypesMap();
+    const cabinetNames = (doc.cabinet_ids ?? [])
+      .map((id) => cabinetLookup[id])
+      .filter((name): name is string => !!name);
+    const tagItems = (doc.tag_ids ?? [])
+      .map((id) => tagLookup[id])
+      .filter((tag): tag is TagModel => !!tag);
 
     return (
       <div className="col-12 aut-document-list" key={doc.id}>
@@ -146,6 +156,28 @@ function DocumentListItem({ doc, index, onImageClick, selected, onSelectionChang
                   ))}
               </ul>
             </aside>
+            <aside className="flex flex-column align-items-center sm:align-items-start">
+              {tagItems.length > 0 && (
+                <ul className="aut-document-tags">
+                  {tagItems.map((tag) => (
+                    <li key={tag.id}>
+                      <Link to={`/tags/${tag.id}/documents`}>
+                        <Badge value={tag.name} className="aut-document-tag" style={{ backgroundColor: `#${tag.color}` }} />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {cabinetNames.length > 0 && (
+                <ul className="aut-document-cabinets">
+                  {cabinetNames.map((name) => (
+                    <li key={name}>
+                      <Badge value={name} severity="secondary" />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </aside>
           </section>
         </div>
       </div>
@@ -157,6 +189,8 @@ type DocumentGridItemProps = {
   onImageClick: (src: string | undefined, title: string) => void;
   selected: boolean;
   onSelectionChange: (id: number, checked: boolean) => void;
+  cabinetLookup: Record<number, string>;
+  tagLookup: Record<number, TagModel>;
 };
 
 /**
@@ -165,10 +199,16 @@ type DocumentGridItemProps = {
  * @param doc document
  * @returns HTML element for a document in grid layout
  */
-function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange }: Readonly<DocumentGridItemProps>) {
+function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange, cabinetLookup, tagLookup }: Readonly<DocumentGridItemProps>) {
     const { data } = useDocumentThumbnail(doc.id);
     const { data: mdt } = useMetadataTypesMap('slug');
     const { data: ddt } = useDocumentTypesMap();
+    const cabinetNames = (doc.cabinet_ids ?? [])
+      .map((id) => cabinetLookup[id])
+      .filter((name): name is string => !!name);
+    const tagItems = (doc.tag_ids ?? [])
+      .map((id) => tagLookup[id])
+      .filter((tag): tag is TagModel => !!tag);
 
     return (
       <div className="col-12 sm:col-6 lg:col-4 xl:col-2 p-2 aut-document-grid" key={doc.id}>
@@ -203,6 +243,26 @@ function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange }: Re
                     <li key={key}><span>{mdt?.[key].name ?? key}</span>: {value}</li>
                   ))}
               </ul>
+              {tagItems.length > 0 && (
+                <ul className="aut-document-tags">
+                  {tagItems.map((tag) => (
+                    <li key={tag.id}>
+                      <Link to={`/tags/${tag.id}/documents`}>
+                        <Badge value={tag.name} className="aut-document-tag" style={{ backgroundColor: `#${tag.color}` }} />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {cabinetNames.length > 0 && (
+                <ul className="aut-document-cabinets">
+                  {cabinetNames.map((name) => (
+                    <li key={name}>
+                      <Badge value={name} severity="secondary" />
+                    </li>
+                  ))}
+                </ul>
+              )}
             </aside>
           </section>
         </div>
@@ -243,6 +303,20 @@ export function ListDocuments() {
   const { data: cabinetOptions, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinets({ page: 1, per_page: MAX_CABINETS });
   const { data: tagOptions, isPending: isTagsPending, isFetching: isTagsFetching } = useTags({ page: 1, per_page: 200 });
   const actionMenu = useRef<Menu>(null);
+  const cabinetLookup = useMemo(() => {
+    const lookup: Record<number, string> = {};
+    for (const cabinet of cabinetOptions?.items ?? []) {
+      lookup[cabinet.id] = cabinet.displayName ?? cabinet.name ?? cabinet.slug;
+    }
+    return lookup;
+  }, [cabinetOptions?.items]);
+  const tagLookup = useMemo(() => {
+    const lookup: Record<number, TagModel> = {};
+    for (const tag of tagOptions?.items ?? []) {
+      lookup[tag.id] = tag;
+    }
+    return lookup;
+  }, [tagOptions?.items]);
 
   const sortOptions = [
     { label: 'ID (Ascending)', value: 'id:asc' },
@@ -403,6 +477,8 @@ export function ListDocuments() {
           onImageClick={openPreview}
           selected={selectedIds.has(doc.id)}
           onSelectionChange={handleSelectionChange}
+          cabinetLookup={cabinetLookup}
+          tagLookup={tagLookup}
         />
       );
     else if (layout === 'grid')
@@ -413,6 +489,8 @@ export function ListDocuments() {
           onImageClick={openPreview}
           selected={selectedIds.has(doc.id)}
           onSelectionChange={handleSelectionChange}
+          cabinetLookup={cabinetLookup}
+          tagLookup={tagLookup}
         />
       );
   };
