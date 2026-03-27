@@ -129,6 +129,7 @@ const router = createBrowserRouter([
           { index: true, element: <ListTags/> },
           { path: 'new', element: <NewTag/> },
           { path: ':id/edit', element: <EditTag/> },
+          { path: ':tagId/documents', element: <ListDocuments/> },
         ]
       }
     ],

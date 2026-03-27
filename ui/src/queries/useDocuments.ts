@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query';
-import { apiFetchList, type ListParams, type ResourceList, type ResourceInput, HttpError, apiFetch, apiFetchRaw, apiMutate } from '../api';
-import { type CabinetDocument, type Document, type DocumentMetadata, type NewCabinetDocument, type NewDocumentMetadata, type NewTagDocument, type TagDocument } from '../models/document';
+import { apiFetchList, type ResourceList, type ResourceInput, HttpError, apiFetch, apiFetchRaw, apiMutate } from '../api';
+import { type CabinetDocument, type Document, type DocumentListParams, type DocumentMetadata, type NewCabinetDocument, type NewDocumentMetadata, type NewTagDocument, type TagDocument } from '../models/document';
 import { useEffect, useMemo } from 'react';
 
 export type DocumentTypeInput = ResourceInput<DocumentType>;
@@ -25,7 +25,7 @@ export interface RemoveCabinetDocumentInput {
   documents: number[];
 }
 
-export function useDocuments(params: ListParams): UseQueryResult<ResourceList<Document>, HttpError> {
+export function useDocuments(params: DocumentListParams): UseQueryResult<ResourceList<Document>, HttpError> {
   return useQuery({
     queryKey: ['document', 'list', params],
     queryFn: () => apiFetchList<Document>('api/v1/documents', params),

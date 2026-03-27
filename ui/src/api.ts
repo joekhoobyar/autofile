@@ -68,16 +68,14 @@ export async function apiFetchList<T>(url: string, params: ListParams): Promise<
   const qp : string[] = [];
 
   if (params) {
-    if (params.page)
-      qp.push(`page=${encodeURIComponent(params.page)}`);
-    if (params.per_page)
-      qp.push(`per_page=${encodeURIComponent(params.per_page)}`);
-    if (params.q)
-      qp.push(`q=${encodeURIComponent(params.q)}`);
-    if (params.sf)
-      qp.push(`sf=${encodeURIComponent(params.sf)}`);
-    if (params.sd !== undefined && params.sd !== null)
-      qp.push(`sd=${params.sd ? 'true' : 'false'}`);
+    for (const [key, value] of Object.entries(params)) {
+      if (key == 'sd') {
+        if (value !== undefined && value !== null)
+          qp.push(`sd=${params.sd ? 'true' : 'false'}`);
+      } else if (value !== undefined && value !== null) {
+        qp.push(`${key}=${encodeURIComponent(value)}`);
+      }
+    }
   }
 
   const q = qp.length ? '?'+qp.join('&') : '';

@@ -11,6 +11,22 @@ export interface Document {
   tag_ids?: number[];
 }
 
+
+export interface DocumentListParams {
+  page?: number;
+  per_page?: number;
+  q?: string;
+  document_type_id?: number;
+  cabinet_id?: number;
+  tag_id?: number;
+
+  // sf = sort field
+  sf?: string;
+
+  // sd = sort descending
+  sd?: boolean;
+}
+
 export interface NewDocumentMetadata {
   metadata_type_id: number;
   value: string;
