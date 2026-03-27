@@ -108,6 +108,7 @@ const router = createBrowserRouter([
           { index: true, element: <ListCabinets/> },
           { path: 'new', element: <NewCabinet/> },
           { path: ':id/edit', element: <EditCabinet/> },
+          { path: ':cabinetId/documents', element: <ListDocuments/> },
         ]
       },
       { path: 'document-types', 
