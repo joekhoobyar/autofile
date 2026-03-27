@@ -11,7 +11,7 @@ import { format } from "date-fns";
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 
 import { apiFetchRaw, type ListParams } from '../api';
-import { useDeleteDocument, useDocuments, useDocumentThumbnail, useRemoveCabinetDocument, useSaveCabinetDocument } from '../queries/useDocuments';
+import { useDeleteDocument, useDocuments, useDocumentThumbnail, useRemoveCabinetDocument, useRemoveTagDocument, useSaveCabinetDocument, useSaveTagDocument } from '../queries/useDocuments';
 import { type Document } from '../models/document';
 import { useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { useDocumentTypes, useDocumentTypesMap } from '../queries/useDocumentTypes';
@@ -20,6 +20,7 @@ import { Button } from 'primereact/button';
 import type { MenuItem } from 'primereact/menuitem';
 import { useCabinets } from '../queries/useCabinets';
 import { MAX_CABINETS } from '../models/cabinet';
+import { useTags } from '../queries/useTags';
 import { Toast } from 'primereact/toast';
 import { Tooltip } from 'primereact/tooltip';
 import { FileUpload, type FileUploadFile, type FileUploadHandlerEvent, type FileUploadSelectEvent, type FileUploadUploadEvent, type ItemTemplateOptions } from 'primereact/fileupload';
@@ -229,11 +230,18 @@ export function ListDocuments() {
   const [selectedCabinetId, setSelectedCabinetId] = useState<number | null>(null);
   const [removeFromCabinetVisible, setRemoveFromCabinetVisible] = useState(false);
   const [removeCabinetId, setRemoveCabinetId] = useState<number | null>(null);
+  const [addTagVisible, setAddTagVisible] = useState(false);
+  const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
+  const [removeTagVisible, setRemoveTagVisible] = useState(false);
+  const [removeTagId, setRemoveTagId] = useState<number | null>(null);
   const { isPending, data, isFetching } = useDocuments(listParams);
   const deleteDocument = useDeleteDocument();
   const saveCabinetDocument = useSaveCabinetDocument();
   const removeCabinetDocument = useRemoveCabinetDocument();
+  const saveTagDocument = useSaveTagDocument();
+  const removeTagDocument = useRemoveTagDocument();
   const { data: cabinetOptions, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinets({ page: 1, per_page: MAX_CABINETS });
+  const { data: tagOptions, isPending: isTagsPending, isFetching: isTagsFetching } = useTags({ page: 1, per_page: 200 });
   const actionMenu = useRef<Menu>(null);
 
   const sortOptions = [
@@ -347,6 +355,42 @@ export function ListDocuments() {
     setSelectedIds(new Set());
   };
 
+  const openAddTagDialog = () => {
+    if (!selectedIds.size) return;
+    setAddTagVisible(true);
+  };
+
+  const closeAddTagDialog = () => {
+    setAddTagVisible(false);
+    setSelectedTagId(null);
+  };
+
+  const saveAddTag = async () => {
+    if (!selectedTagId || !selectedIds.size) return;
+    const documents = Array.from(selectedIds).map((id) => ({ document_id: id }));
+    await saveTagDocument.mutateAsync({ tag_id: selectedTagId, documents });
+    closeAddTagDialog();
+    setSelectedIds(new Set());
+  };
+
+  const openRemoveTagDialog = () => {
+    if (!selectedIds.size) return;
+    setRemoveTagVisible(true);
+  };
+
+  const closeRemoveTagDialog = () => {
+    setRemoveTagVisible(false);
+    setRemoveTagId(null);
+  };
+
+  const saveRemoveTag = async () => {
+    if (!removeTagId || !selectedIds.size) return;
+    const documents = Array.from(selectedIds);
+    await removeTagDocument.mutateAsync({ tag_id: removeTagId, documents });
+    closeRemoveTagDialog();
+    setSelectedIds(new Set());
+  };
+
   const itemTemplate = (doc: Document, layout: 'list' | 'grid', index: number) => {
     if (!doc)
       return;
@@ -407,6 +451,9 @@ export function ListDocuments() {
     { separator: true },
     { icon: 'pi pi-plus-circle', label: 'Add to Cabinet', command: () => { openAddToCabinetDialog(); }, disabled: selectedIds.size === 0 },
     { icon: 'pi pi-minus-circle', label: 'Remove Cabinet', command: () => { openRemoveFromCabinetDialog(); }, disabled: selectedIds.size === 0 },
+    { separator: true },
+    { icon: 'pi pi-plus-circle', label: 'Add Tag', command: () => { openAddTagDialog(); }, disabled: selectedIds.size === 0 },
+    { icon: 'pi pi-minus-circle', label: 'Remove Tag', command: () => { openRemoveTagDialog(); }, disabled: selectedIds.size === 0 },
     { separator: true },
     { icon: 'pi pi-trash', label: 'Delete Documents', command: () => { confirmDeleteSelectedDocuments(); }, disabled: selectedIds.size === 0 },
   ];
@@ -512,6 +559,79 @@ export function ListDocuments() {
             placeholder="Select a cabinet"
             options={cabinetOptions?.items ?? []}
             loading={isCabinetsPending || isCabinetsFetching}
+            className="w-full"
+          />
+        </div>
+      </div>
+    </Dialog>
+    <Dialog
+      header="Add Tag"
+      visible={addTagVisible}
+      onHide={closeAddTagDialog}
+      style={{ width: '90vw', maxWidth: '520px' }}
+      dismissableMask={true}
+      footer={(
+        <div className="flex justify-content-end gap-2">
+          <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" onClick={closeAddTagDialog} />
+          <Button
+            label="Save"
+            type="button"
+            icon="pi pi-check"
+            onClick={() => void saveAddTag()}
+            disabled={!selectedTagId || !selectedIds.size || saveTagDocument.isPending}
+          />
+        </div>
+      )}
+    >
+      <div className="grid p-fluid">
+        <div className="col-12">
+          <label htmlFor="tag_id" className="font-medium mb-2 block">Tag</label>
+          <Dropdown
+            id="tag_id"
+            value={selectedTagId}
+            onChange={(event) => setSelectedTagId(event.value as number)}
+            optionLabel="name"
+            optionValue="id"
+            placeholder="Select a tag"
+            options={tagOptions?.items ?? []}
+            loading={isTagsPending || isTagsFetching}
+            className="w-full"
+          />
+        </div>
+      </div>
+    </Dialog>
+    <Dialog
+      header="Remove Tag"
+      visible={removeTagVisible}
+      onHide={closeRemoveTagDialog}
+      style={{ width: '90vw', maxWidth: '520px' }}
+      dismissableMask={true}
+      footer={(
+        <div className="flex justify-content-end gap-2">
+          <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" onClick={closeRemoveTagDialog} />
+          <Button
+            label="Remove"
+            type="button"
+            severity="danger"
+            icon="pi pi-minus-circle"
+            onClick={() => void saveRemoveTag()}
+            disabled={!removeTagId || !selectedIds.size || removeTagDocument.isPending}
+          />
+        </div>
+      )}
+    >
+      <div className="grid p-fluid">
+        <div className="col-12">
+          <label htmlFor="remove_tag_id" className="font-medium mb-2 block">Tag</label>
+          <Dropdown
+            id="remove_tag_id"
+            value={removeTagId}
+            onChange={(event) => setRemoveTagId(event.value as number)}
+            optionLabel="name"
+            optionValue="id"
+            placeholder="Select a tag"
+            options={tagOptions?.items ?? []}
+            loading={isTagsPending || isTagsFetching}
             className="w-full"
           />
         </div>

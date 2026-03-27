@@ -36,3 +36,14 @@ export interface CabinetDocument {
   updated_at: string;
   updated_by: number;
 }
+
+export interface NewTagDocument {
+  document_id: number;
+}
+
+export interface TagDocument {
+  tag_id: number;
+  document_id: number;
+  updated_at: string;
+  updated_by: number;
+}

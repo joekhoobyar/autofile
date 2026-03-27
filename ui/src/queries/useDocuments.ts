@@ -1,9 +1,19 @@
 import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query';
 import { apiFetchList, type ListParams, type ResourceList, type ResourceInput, HttpError, apiFetch, apiFetchRaw, apiMutate } from '../api';
-import { type CabinetDocument, type Document, type DocumentMetadata, type NewCabinetDocument, type NewDocumentMetadata } from '../models/document';
+import { type CabinetDocument, type Document, type DocumentMetadata, type NewCabinetDocument, type NewDocumentMetadata, type NewTagDocument, type TagDocument } from '../models/document';
 import { useEffect, useMemo } from 'react';
 
 export type DocumentTypeInput = ResourceInput<DocumentType>;
+
+export interface TagDocumentInput {
+  tag_id: number;
+  documents: NewTagDocument[];
+}
+
+export interface RemoveTagDocumentInput {
+  tag_id: number;
+  documents: number[];
+}
 
 export interface CabinetDocumentInput {
   cabinet_id: number;
@@ -120,6 +130,42 @@ export function useRemoveCabinetDocument(): UseMutationResult<CabinetDocument[],
   return useMutation<CabinetDocument[], HttpError, RemoveCabinetDocumentInput>({
     mutationFn: async (input) => {
       return apiMutate<CabinetDocument[], number[]>(`api/v1/cabinets/${input.cabinet_id}/documents/delete`, {
+        method: "POST",
+        body: input.documents,
+      });
+    },
+
+    onSuccess: () => {
+      // invalidate by prefix (works with table params in the queryKey)
+      qc.invalidateQueries({ queryKey: ["document"] });
+    },
+  });
+}
+
+export function useSaveTagDocument(): UseMutationResult<TagDocument[], HttpError, TagDocumentInput> {
+  const qc = useQueryClient();
+
+  return useMutation<TagDocument[], HttpError, TagDocumentInput>({
+    mutationFn: async (input) => {
+      return apiMutate<TagDocument[], NewTagDocument[]>(`api/v1/tags/${input.tag_id}/documents`, {
+        method: "POST",
+        body: input.documents,
+      });
+    },
+
+    onSuccess: () => {
+      // invalidate by prefix (works with table params in the queryKey)
+      qc.invalidateQueries({ queryKey: ["document"] });
+    },
+  });
+}
+
+export function useRemoveTagDocument(): UseMutationResult<TagDocument[], HttpError, RemoveTagDocumentInput> {
+  const qc = useQueryClient();
+
+  return useMutation<TagDocument[], HttpError, RemoveTagDocumentInput>({
+    mutationFn: async (input) => {
+      return apiMutate<TagDocument[], number[]>(`api/v1/tags/${input.tag_id}/documents/delete`, {
         method: "POST",
         body: input.documents,
       });
