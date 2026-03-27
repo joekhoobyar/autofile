@@ -8,6 +8,7 @@ import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
 import { classNames } from 'primereact/utils';
+import { Badge } from 'primereact/badge';
 
 import type { ListParams } from '../api';
 import { useTag, useTags, useSaveTag, useDeleteTag } from '../queries/useTags';
@@ -36,6 +37,14 @@ export function ListTags() {
       <Link className="title" to={`${c.id}/edit`}>{c.name}</Link>
     );
   }
+
+  const previewTemplate = (c: Tag) => {
+    return (
+      <Link to={`${c.id}/documents`}>
+        <Badge value={c.name} className="aut-document-tag" style={{ backgroundColor: `#${c.color}` }} />
+      </Link>
+    );
+  };
 
   const actionTemplate = (c: Tag) => {
     return (
@@ -88,7 +97,7 @@ export function ListTags() {
         >
         <Column field="slug" header="Slug" body={slugTemplate} sortable></Column>
         <Column field="name" header="Name" body={nameTemplate} sortable></Column>
-        <Column field="color" header="Color"></Column>
+        <Column header="Preview" body={previewTemplate}></Column>
         <Column body={actionTemplate} headerClassName="w-9rem" />
       </DataTable>
     </Card>
