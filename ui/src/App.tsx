@@ -14,6 +14,7 @@ import UploadDocument, { ListDocuments } from './pages/documents.tsx';
 import { EditCabinet, ListCabinets, NewCabinet } from './pages/cabinets.tsx';
 import { EditMetadataType, ListMetadataTypes, NewMetadataType } from './pages/metadataTypes.tsx';
 import { EditDocumentType, ListDocumentTypes, NewDocumentType } from './pages/documentTypes.tsx';
+import { EditTag, ListTags, NewTag } from './pages/tags.tsx';
 import { NAV, useBreadcrumbs } from './nav.ts';
 import { Button } from 'primereact/button';
 import Login, { RequireAuth } from './pages/auth.tsx';
@@ -121,6 +122,13 @@ const router = createBrowserRouter([
           { index: true, element: <ListMetadataTypes/> },
           { path: 'new', element: <NewMetadataType/> },
           { path: ':id/edit', element: <EditMetadataType/> },
+        ]
+      },
+      { path: 'tags', 
+        children: [
+          { index: true, element: <ListTags/> },
+          { path: 'new', element: <NewTag/> },
+          { path: ':id/edit', element: <EditTag/> },
         ]
       }
     ],
