@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { Card } from 'primereact/card';
@@ -56,37 +56,42 @@ function DocumentThumbnail({
   imgClassName,
   placeholderClassName,
 }: Readonly<DocumentThumbnailProps>) {
-  const [loadedThumbnailSrc, setLoadedThumbnailSrc] = useState<string | undefined>(undefined);
+  const [loadedSrc, setLoadedSrc] = useState<string | undefined>(undefined);
+  const [errorSrc, setErrorSrc] = useState<string | undefined>(undefined);
 
-  useEffect(() => {
-    if (!src) return;
-    let cancelled = false;
-    const img = new Image();
-    img.onload = () => {
-      if (!cancelled) {
-        setLoadedThumbnailSrc(src);
+  const isLoaded = !!src && loadedSrc === src;
+  const hasError = !!src && errorSrc === src;
+
+  const handleLoad = () => {
+    if (src) {
+      setLoadedSrc(src);
+      setErrorSrc(undefined);
+      if (src.startsWith('blob:')) {
+        URL.revokeObjectURL(src);
       }
-    };
-    img.onerror = () => {
-      if (!cancelled) {
-        setLoadedThumbnailSrc(undefined);
+    }
+  };
+
+  const handleError = () => {
+    if (src) {
+      setErrorSrc(src);
+      if (src.startsWith('blob:')) {
+        URL.revokeObjectURL(src);
       }
-    };
-    img.src = src;
-    return () => {
-      cancelled = true;
-    };
-  }, [src]);
+    }
+  };
 
   return (
     <div className="aut-document-thumbnail-wrapper">
       <button type="button" onClick={() => onClick(src)}>
-        {loadedThumbnailSrc === src && src ? (
+        {src && !hasError ? (
           <img
             alt={alt}
             className={imgClassName}
             src={src}
-            style={{ maxHeight: '200px', display: 'block' }}
+            onLoad={handleLoad}
+            onError={handleError}
+            style={{ maxHeight: '200px', display: isLoaded ? 'block' : 'none' }}
           />
         ) : (
           <div

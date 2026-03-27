@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query';
-import { apiFetchList, type ResourceList, type ResourceInput, HttpError, apiFetch, apiFetchRaw, apiMutate } from '../api';
+import { apiFetchList, type ResourceList, type ResourceInput, HttpError, apiFetch, apiFetchRaw, apiMutate, parseApiError } from '../api';
 import { type CabinetDocument, type Document, type DocumentListParams, type DocumentMetadata, type NewCabinetDocument, type NewDocumentMetadata, type NewTagDocument, type TagDocument } from '../models/document';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 
 export type DocumentTypeInput = ResourceInput<DocumentType>;
 
@@ -42,12 +42,18 @@ export function useDocument(id: string | number, options = {}): UseQueryResult<D
 }
 
 export function useDocumentThumbnail(id: string | number, options = {}): UseQueryResult<string | undefined, HttpError> {
-  const query = useQuery<Blob, HttpError>({
+  const query = useQuery<Blob | undefined, HttpError>({
     queryKey: ['document', 'get', {id}, 'thumbnail'],
     enabled: !!id,
     ...options,
     queryFn: async () => {
       const res = await apiFetchRaw(`api/v1/documents/${id}/thumbnail`);
+      if (res.status === 404) {
+        return undefined;
+      }
+      if (!res.ok) {
+        throw await parseApiError(res);
+      }
       return await res.blob();
     }
   });
@@ -56,14 +62,6 @@ export function useDocumentThumbnail(id: string | number, options = {}): UseQuer
     if (!query.data) return undefined;
     return URL.createObjectURL(query.data);
   }, [query.data]);
-
-  useEffect(() => {
-    return () => {
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-  }, [objectUrl]);
 
   return {
     ...query,
