@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::AppState;
-use crate::schema::{cabinet_documents, document_files, document_metadatas, documents, metadata_types};
+use crate::schema::{cabinet_documents, document_files, document_metadatas, documents, metadata_types, tag_documents};
 use crate::domain::documents::{Document, DocumentView};
 use crate::domain::document_files::DocumentFile;
 use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_to_s3};
@@ -85,6 +85,8 @@ pub struct ListDocumentsQuery {
     pub document_type_id: Option<i64>,
     // optional cabinet search
     pub cabinet_id: Option<i64>,
+    // optional tag search
+    pub tag_id: Option<i64>,
     // optional sort field
     pub sf: Option<DocumentSortField>,
     // optional sort descending
@@ -209,14 +211,23 @@ pub async fn get_by_id(
         .select(cabinet_documents::cabinet_id)
         .load::<i64>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document cabinets"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list cabinets for document"))?;
     let cabinet_ids: Vec<i64> = cabinet_rows.into_iter().collect();
+
+    let tag_rows: Vec<i64> = tag_documents::table
+        .filter(tag_documents::document_id.eq(document.id))
+        .select(tag_documents::tag_id)
+        .load::<i64>(&mut db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list tags for document"))?;
+    let tag_ids: Vec<i64> = tag_rows.into_iter().collect();
 
     Ok(Json(DocumentView {
         id: document.id,
         title: document.title,
         document_type_id: document.document_type_id,
         cabinet_ids,
+        tag_ids,
         metadata,
         created_by: document.created_by,
         created_at: document.created_at,
@@ -549,6 +560,15 @@ pub async fn list(
             query = query.filter(exists(subquery));
         }
 
+        // Filter by tag ID
+        if let Some(id) = params.tag_id {
+            let subquery = tag_documents::table
+                .filter(tag_documents::tag_id.eq(id))
+                .filter(tag_documents::document_id.eq(documents::id));
+
+            query = query.filter(exists(subquery));
+        }
+
         query
     };
 
@@ -625,13 +645,34 @@ pub async fn list(
             ))
             .load::<(i64, i64)>(&mut db)
             .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document metadata"))?;
+            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list cabinets for documents"))?;
 
         for (document_id, cabinet_id) in cabinet_rows {
             cabinets_by_document
                 .entry(document_id)
                 .or_insert_with(Vec::new)
                 .push(cabinet_id);
+        }
+    }
+
+    // Fetch tags for all documents in the page in a single query, and organize it by tag ID.
+    let mut tags_by_document: HashMap<i64, Vec<i64>> = HashMap::new();
+    if !document_ids.is_empty() {
+        let tag_rows: Vec<(i64, i64)> = tag_documents::table
+            .filter(tag_documents::document_id.eq_any(&document_ids))
+            .select((
+                tag_documents::document_id,
+                tag_documents::tag_id,
+            ))
+            .load::<(i64, i64)>(&mut db)
+            .await
+            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list tags for documents"))?;
+
+        for (document_id, tag_id) in tag_rows {
+            tags_by_document
+                .entry(document_id)
+                .or_insert_with(Vec::new)
+                .push(tag_id);
         }
     }
 
@@ -644,6 +685,7 @@ pub async fn list(
             document_type_id: doc.document_type_id,
             metadata: metadata_by_document.remove(&doc.id).unwrap_or_default(),
             cabinet_ids: cabinets_by_document.remove(&doc.id).unwrap_or_default(),
+            tag_ids: tags_by_document.remove(&doc.id).unwrap_or_default(),
             created_by: doc.created_by,
             created_at: doc.created_at,
             updated_by: doc.updated_by,
