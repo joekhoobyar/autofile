@@ -100,6 +100,29 @@ diesel::table! {
 }
 
 diesel::table! {
+    tag_documents (tag_id, document_id) {
+        tag_id -> Int8,
+        document_id -> Int8,
+        updated_at -> Timestamptz,
+        updated_by -> Int8,
+    }
+}
+
+diesel::table! {
+    tags (id) {
+        id -> Int8,
+        slug -> Varchar,
+        name -> Varchar,
+        #[max_length = 6]
+        color -> Bpchar,
+        created_at -> Timestamptz,
+        created_by -> Int8,
+        updated_at -> Timestamptz,
+        updated_by -> Int8,
+    }
+}
+
+diesel::table! {
     users (id) {
         id -> Int8,
         username -> Text,
@@ -120,6 +143,9 @@ diesel::joinable!(document_metadatas -> metadata_types (metadata_type_id));
 diesel::joinable!(document_types_metadata_types -> document_types (document_type_id));
 diesel::joinable!(document_types_metadata_types -> metadata_types (metadata_type_id));
 diesel::joinable!(documents -> document_types (document_type_id));
+diesel::joinable!(tag_documents -> documents (document_id));
+diesel::joinable!(tag_documents -> tags (tag_id));
+diesel::joinable!(tag_documents -> users (updated_by));
 
 diesel::allow_tables_to_appear_in_same_query!(
     cabinet_documents,
@@ -130,5 +156,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     document_types_metadata_types,
     documents,
     metadata_types,
+    tag_documents,
+    tags,
     users,
 );

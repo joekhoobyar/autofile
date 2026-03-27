@@ -146,7 +146,7 @@ pub async fn list(
         .select(CabinetDocument::as_select())
         .load::<CabinetDocument>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list metadata_types"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list cabinet_documents"))?;
 
     Ok(Json(ResourceList { total, page, per_page, items }))
 }
@@ -181,10 +181,10 @@ async fn delete_junction(
         )
         .execute(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete document_metadatas"))?;
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete cabinet_document"))?;
 
     if affected == 0 {
-        return Err(ApiError::not_found("document_metadatas not found"));
+        return Err(ApiError::not_found("cabinet_document not found"));
     }
 
     Ok(Json(()))

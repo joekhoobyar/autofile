@@ -36,6 +36,8 @@ mod api {
     pub mod documents;
     pub mod metadata_types;
     pub mod users;
+    pub mod tags;
+    pub mod tag_documents;
 }
 mod domain {
     pub mod cabinets;
@@ -47,6 +49,8 @@ mod domain {
     pub mod documents;
     pub mod metadata_types;
     pub mod users;
+    pub mod tags;
+    pub mod tag_documents;
 }
 mod infrastructure {
     pub mod s3;
@@ -183,7 +187,9 @@ async fn main() {
         .nest("/documents", api::documents::routes())
         .nest("/documents", api::document_metadatas::routes())
         .nest("/metadata-types", api::metadata_types::routes())
-        .nest("/users", api::users::routes());
+        .nest("/users", api::users::routes())
+        .nest("/tags", api::tags::routes())
+        .nest("/tags", api::tag_documents::routes());
 
     // Build the router (wrap state in Arc for efficient sharing)
     let app = Router::new()
