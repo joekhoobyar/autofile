@@ -135,10 +135,25 @@ body {
   }
 
   section.aut-document {
+    .aut-document-header { width: 80%; }
     aside {
+      width: 100%; 
       ul {
         width: 100%;
-        li { width: 100%; }
+        li {
+          width: 100%;
+        }
+
+        &.aut-document-tags li {
+          width: auto;
+          display: inline-block;
+        }
+
+        &.aut-document-cabinets li {
+          width: auto;
+          display: inline-block;
+          margin: 0 0.3rem 0 0;
+        }
       }
     }
   }
