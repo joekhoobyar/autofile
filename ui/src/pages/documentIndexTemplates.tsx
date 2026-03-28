@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
@@ -50,8 +50,8 @@ export function ListDocumentIndexTemplates() {
     flagTemplate(!!c.data.enabled)
   ), [flagTemplate]);
 
-  useEffect(() => {
-    if (!data?.length) return;
+  const autoExpandedKeys = useMemo(() => {
+    if (!data?.length) return {};
 
     const keys: Record<string, boolean> = {};
     const stack = [...data];
@@ -67,7 +67,7 @@ export function ListDocumentIndexTemplates() {
       }
     }
 
-    setExpandedKeys(keys);
+    return keys;
   }, [data]);
 
   if (!document_index_id || Number.isNaN(documentIndexId))
@@ -111,7 +111,7 @@ export function ListDocumentIndexTemplates() {
     <Card title="Document Index Templates">
       <TreeTable value={data}
           loading={isPending || isFetching}
-          expandedKeys={expandedKeys}
+          expandedKeys={Object.keys(expandedKeys).length ? expandedKeys : autoExpandedKeys}
           onToggle={(event) => setExpandedKeys(event.value)}
         >
         <Column field="template" header="Template" body={templateTemplate} sortable expander></Column>
