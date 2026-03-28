@@ -11,7 +11,9 @@ pub struct Cabinet {
     pub id: i64,
     pub slug: String,
     pub name: String,
+    pub created_by: i64,
     pub created_at: DateTime<Utc>,
+    pub updated_by: i64,
     pub updated_at: DateTime<Utc>,
     pub description: Option<String>,
     pub parent_id: Option<i64>

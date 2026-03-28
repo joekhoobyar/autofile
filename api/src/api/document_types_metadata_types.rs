@@ -99,7 +99,10 @@ async fn update(
                     .filter(document_types_metadata_types::document_type_id.eq(document_type_id))
                     .filter(document_types_metadata_types::metadata_type_id.eq(metadata_type_id))
             )
-            .set(&changes)
+            .set((
+                &changes,
+                document_types_metadata_types::updated_at.eq(diesel::dsl::now),
+            ))
             .returning(DocumentTypeMetadataType::as_returning())
             .get_result(&mut db)
             .await

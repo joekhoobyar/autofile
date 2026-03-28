@@ -4,8 +4,6 @@ diesel::table! {
     cabinet_documents (cabinet_id, document_id) {
         cabinet_id -> Int8,
         document_id -> Int8,
-        created_at -> Timestamptz,
-        created_by -> Int8,
         updated_at -> Timestamptz,
         updated_by -> Int8,
     }
@@ -20,6 +18,8 @@ diesel::table! {
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
         parent_id -> Nullable<Int8>,
+        created_by -> Int8,
+        updated_by -> Int8,
     }
 }
 
@@ -61,6 +61,8 @@ diesel::table! {
         description -> Nullable<Varchar>,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        created_by -> Int8,
+        updated_by -> Int8,
     }
 }
 
@@ -69,6 +71,7 @@ diesel::table! {
         document_type_id -> Int8,
         metadata_type_id -> Int8,
         required -> Bool,
+        updated_at -> Timestamptz,
     }
 }
 
@@ -96,6 +99,8 @@ diesel::table! {
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
         options -> Nullable<Jsonb>,
+        created_by -> Int8,
+        updated_by -> Int8,
     }
 }
 
@@ -137,6 +142,7 @@ diesel::table! {
 
 diesel::joinable!(cabinet_documents -> cabinets (cabinet_id));
 diesel::joinable!(cabinet_documents -> documents (document_id));
+diesel::joinable!(cabinet_documents -> users (updated_by));
 diesel::joinable!(document_files -> documents (document_id));
 diesel::joinable!(document_metadatas -> documents (document_id));
 diesel::joinable!(document_metadatas -> metadata_types (metadata_type_id));

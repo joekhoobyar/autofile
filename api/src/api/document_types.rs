@@ -17,7 +17,6 @@ use axum::{
 };
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = document_types)]
@@ -34,7 +33,6 @@ struct NewDocumentType {
 struct DocumentTypeChangeset {
     name: Option<String>,
     description: Option<String>,
-    updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -93,12 +91,16 @@ pub async fn get_by_slug(
 }
 
 async fn create(
-    _user: AuthUser,
+    user: AuthUser,
     DbConn(mut db): DbConn,
     Json(input): Json<NewDocumentType>,
 ) -> Result<Json<DocumentType>, ApiError> {
     let inserted: DocumentType = diesel::insert_into(document_types::table)
-        .values(&input)
+        .values((
+            &input,
+            document_types::created_by.eq(user.user_id),
+            document_types::updated_by.eq(user.user_id),
+        ))
         .returning(DocumentType::as_returning())
         .get_result(&mut db)
         .await
@@ -108,18 +110,20 @@ async fn create(
 }
 
 async fn update(
-    _user: AuthUser,
+    user: AuthUser,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
     Json(input): Json<DocumentTypeChangeset>,
 ) -> Result<Json<DocumentType>, ApiError> {
-    let mut changes = input;
-    changes.updated_at = Some(Utc::now());
 
     // Update + return the updated row in one round-trip.
     let updated: DocumentType =
         diesel::update(document_types::table.filter(document_types::id.eq(id)))
-            .set(&changes)
+            .set((
+                &input,
+                document_types::updated_at.eq(diesel::dsl::now),
+                document_types::updated_by.eq(user.user_id),
+            )) // also update the timestamp
             .returning(DocumentType::as_returning())
             .get_result(&mut db)
             .await
@@ -151,7 +155,7 @@ async fn delete(
                 .set((
                     documents::document_type_id.eq(1),
                     documents::updated_by.eq(user.user_id),
-                    documents::updated_at.eq(Utc::now()),
+                    documents::updated_at.eq(diesel::dsl::now),
                 ))
                 .execute(conn)
                 .await?;

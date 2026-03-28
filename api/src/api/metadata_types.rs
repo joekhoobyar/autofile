@@ -17,7 +17,6 @@ use axum::{
 };
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
-use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 #[derive(Debug, Deserialize, Insertable)]
@@ -39,7 +38,6 @@ struct MetadataTypeChangeset {
     data_type: Option<DataType>,
     description: Option<String>,
     options: Option<Value>,
-    updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -99,12 +97,16 @@ pub async fn get_by_slug(
 }
 
 async fn create(
-    _user: AuthUser,
+    user: AuthUser,
     DbConn(mut db): DbConn,
     Json(input): Json<NewMetadataType>,
 ) -> Result<Json<MetadataType>, ApiError> {
     let inserted: MetadataType = diesel::insert_into(metadata_types::table)
-        .values(&input)
+        .values((
+            &input,
+            metadata_types::created_by.eq(user.user_id),
+            metadata_types::updated_by.eq(user.user_id),
+        ))
         .returning(MetadataType::as_returning())
         .get_result(&mut db)
         .await
@@ -114,18 +116,20 @@ async fn create(
 }
 
 async fn update(
-    _user: AuthUser,
+    user: AuthUser,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
     Json(input): Json<MetadataTypeChangeset>,
 ) -> Result<Json<MetadataType>, ApiError> {
-    let mut changes = input;
-    changes.updated_at = Some(Utc::now());
 
     // Update + return the updated row in one round-trip.
     let updated: MetadataType =
         diesel::update(metadata_types::table.filter(metadata_types::id.eq(id)))
-            .set(&changes)
+            .set((
+                &input,
+                metadata_types::updated_by.eq(user.user_id),
+                metadata_types::updated_at.eq(diesel::dsl::now),
+            ))
             .returning(MetadataType::as_returning())
             .get_result(&mut db)
             .await

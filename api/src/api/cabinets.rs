@@ -18,7 +18,6 @@ use axum::{
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = cabinets)]
@@ -39,8 +38,6 @@ struct CabinetChangeset {
 
     #[serde(default, deserialize_with = "de_present_option")]
     parent_id: Option<Option<i64>>,
-
-    updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -102,7 +99,7 @@ pub async fn get_by_slug(
 }
 
 async fn create(
-    _user: AuthUser,
+    user: AuthUser,
     DbConn(mut db): DbConn,
     Json(input): Json<NewCabinet>,
 ) -> Result<Json<Cabinet>, ApiError> {
@@ -113,7 +110,11 @@ async fn create(
     }
 
     let inserted: Cabinet = diesel::insert_into(cabinets::table)
-        .values(&input)
+        .values((
+            &input,
+            cabinets::created_by.eq(user.user_id),
+            cabinets::updated_by.eq(user.user_id),
+        ))
         .returning(Cabinet::as_returning())
         .get_result(&mut db)
         .await
@@ -123,7 +124,7 @@ async fn create(
 }
 
 async fn update(
-    _user: AuthUser,
+    user: AuthUser,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
     Json(input): Json<CabinetChangeset>,
@@ -134,7 +135,8 @@ async fn update(
     let common = (
         patch.name.map(|v| cabinets::name.eq(v)),
         patch.description.map(|v| cabinets::description.eq(v)),
-        cabinets::updated_at.eq(Utc::now()),
+        cabinets::updated_at.eq(diesel::dsl::now),
+        cabinets::updated_by.eq(user.user_id),
     );
 
     let base = diesel::update(cabinets::table.filter(cabinets::id.eq(id)));

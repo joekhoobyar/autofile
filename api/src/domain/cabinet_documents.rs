@@ -13,8 +13,6 @@ use crate::schema::cabinet_documents;
 pub struct CabinetDocument {
     pub cabinet_id: i64,
     pub document_id: i64,
-    pub created_at: DateTime<Utc>,
-    pub created_by: i64,
     pub updated_at: DateTime<Utc>,
     pub updated_by: i64,
 }

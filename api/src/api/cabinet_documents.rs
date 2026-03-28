@@ -34,7 +34,6 @@ struct NewCabinetDocument {
 struct InsertableCabinetDocument {
     cabinet_id: i64,
     document_id: i64,
-    created_by: i64,
     updated_by: i64,
 }
 
@@ -88,7 +87,6 @@ async fn upsert(
     let values: Vec<InsertableCabinetDocument> = input.into_iter().map(|m| InsertableCabinetDocument {
         cabinet_id,
         document_id: m.document_id,
-        created_by: user.user_id,
         updated_by: user.user_id,
     }).collect();
 
@@ -126,10 +124,6 @@ pub async fn list(
 
     let mut query = cabinet_documents::table.into_boxed();
     query = match (params.sf, params.sd) {
-        (Some(CabinetDocumentSortField::CreatedAt), Some(true)) =>
-            query.order((cabinet_documents::created_at.desc(), cabinet_documents::document_id.asc())),
-        (Some(CabinetDocumentSortField::CreatedAt), _) =>
-            query.order((cabinet_documents::created_at.asc(), cabinet_documents::document_id.asc())),
         (Some(CabinetDocumentSortField::UpdatedAt), Some(true)) =>
             query.order((cabinet_documents::updated_at.desc(), cabinet_documents::document_id.asc())),
         (Some(CabinetDocumentSortField::UpdatedAt), _) =>

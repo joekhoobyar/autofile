@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use serde::Serialize;
 
@@ -15,4 +16,5 @@ pub struct DocumentTypeMetadataType {
     pub document_type_id: i64,
     pub metadata_type_id: i64,
     pub required: bool,
+    pub updated_at: DateTime<Utc>,
 }

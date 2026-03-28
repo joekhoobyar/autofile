@@ -19,8 +19,6 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use diesel::upsert::excluded;
 
-use chrono::Utc;
-
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = document_metadatas)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -81,7 +79,7 @@ async fn upsert(
         .set((
             document_metadatas::value.eq(excluded(document_metadatas::value)),
             document_metadatas::updated_by.eq(excluded(document_metadatas::updated_by)),
-            document_metadatas::updated_at.eq(Utc::now()),
+            document_metadatas::updated_at.eq(diesel::dsl::now),
         ))
         .execute(&mut db)
         .await
