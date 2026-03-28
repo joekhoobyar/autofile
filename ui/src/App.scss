@@ -133,6 +133,15 @@ body {
   > .surface-border {
     border-color: var(--surface-border) !important;
   }
+
+  section.aut-document {
+    aside {
+      ul {
+        width: 100%;
+        li { width: 100%; }
+      }
+    }
+  }
 }
 
 .aut-document-grid {
