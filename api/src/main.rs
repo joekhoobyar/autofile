@@ -30,6 +30,7 @@ mod api {
     pub mod auth;
     pub mod cabinets;
     pub mod cabinet_documents;
+    pub mod document_indexes;
     pub mod document_metadatas;
     pub mod document_types;
     pub mod document_types_metadata_types;
@@ -43,6 +44,7 @@ mod domain {
     pub mod cabinets;
     pub mod cabinet_documents;
     pub mod document_files;
+    pub mod document_indexes;
     pub mod document_metadatas;
     pub mod document_types;
     pub mod document_types_metadata_types;
@@ -182,6 +184,7 @@ async fn main() {
         .nest("/auth", api::auth::routes())
         .nest("/cabinets", api::cabinets::routes())
         .nest("/cabinets", api::cabinet_documents::routes())
+        .nest("/document-indexes", api::document_indexes::routes())
         .nest("/document-types", api::document_types::routes())
         .nest("/document-types-metadata-types", api::document_types_metadata_types::routes())
         .nest("/documents", api::documents::routes())

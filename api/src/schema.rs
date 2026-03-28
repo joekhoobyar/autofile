@@ -42,6 +42,65 @@ diesel::table! {
 }
 
 diesel::table! {
+    document_index (id) {
+        id -> Int8,
+        slug -> Varchar,
+        name -> Varchar,
+        description -> Nullable<Varchar>,
+        enabled -> Bool,
+        created_at -> Timestamptz,
+        created_by -> Int8,
+        updated_at -> Timestamptz,
+        updated_by -> Int8,
+    }
+}
+
+diesel::table! {
+    document_index_documents (document_index_value_id, document_id) {
+        document_index_value_id -> Int8,
+        document_id -> Int8,
+    }
+}
+
+diesel::table! {
+    document_index_templates (id) {
+        id -> Int8,
+        template -> Varchar,
+        is_leaf -> Bool,
+        enabled -> Bool,
+        document_index_id -> Int8,
+        parent_id -> Nullable<Int8>,
+        created_at -> Timestamptz,
+        created_by -> Int8,
+        updated_at -> Timestamptz,
+        updated_by -> Int8,
+    }
+}
+
+diesel::table! {
+    document_index_values (id) {
+        id -> Int8,
+        value -> Varchar,
+        document_index_template_id -> Int8,
+        parent_id -> Nullable<Int8>,
+    }
+}
+
+diesel::table! {
+    document_indexes (id) {
+        id -> Int8,
+        slug -> Varchar,
+        name -> Varchar,
+        description -> Nullable<Varchar>,
+        enabled -> Bool,
+        created_at -> Timestamptz,
+        created_by -> Int8,
+        updated_at -> Timestamptz,
+        updated_by -> Int8,
+    }
+}
+
+diesel::table! {
     document_metadatas (document_id, metadata_type_id) {
         document_id -> Int8,
         metadata_type_id -> Int8,
@@ -144,6 +203,10 @@ diesel::joinable!(cabinet_documents -> cabinets (cabinet_id));
 diesel::joinable!(cabinet_documents -> documents (document_id));
 diesel::joinable!(cabinet_documents -> users (updated_by));
 diesel::joinable!(document_files -> documents (document_id));
+diesel::joinable!(document_index_documents -> document_index_values (document_index_value_id));
+diesel::joinable!(document_index_documents -> documents (document_id));
+diesel::joinable!(document_index_templates -> document_indexes (document_index_id));
+diesel::joinable!(document_index_values -> document_index_templates (document_index_template_id));
 diesel::joinable!(document_metadatas -> documents (document_id));
 diesel::joinable!(document_metadatas -> metadata_types (metadata_type_id));
 diesel::joinable!(document_types_metadata_types -> document_types (document_type_id));
@@ -157,6 +220,11 @@ diesel::allow_tables_to_appear_in_same_query!(
     cabinet_documents,
     cabinets,
     document_files,
+    document_index,
+    document_index_documents,
+    document_index_templates,
+    document_index_values,
+    document_indexes,
     document_metadatas,
     document_types,
     document_types_metadata_types,
