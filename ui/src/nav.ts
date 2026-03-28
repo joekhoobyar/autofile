@@ -8,6 +8,7 @@ import { useDocumentType } from "./queries/useDocumentTypes";
 import { useMetadataType } from "./queries/useMetadataTypes";
 import { useTag } from "./queries/useTags";
 import { useDocumentIndex } from "./queries/useDocumentIndexes";
+import { useDocumentIndexTemplate } from "./queries/useDocumentIndexTemplates";
 
 export type NavItem = {
   key: string;
@@ -31,12 +32,14 @@ export const NAV: NavItem[] = [
 type LabelState = { label?: string; loading?: boolean };
 
 export function useRouteResourceLabel(): LabelState {
-  const { id } = useParams<{ id: string }>();
+  const { id, document_index_id } = useParams<{ id: string; document_index_id: string }>();
   const { pathname } = useLocation();
+  const documentIndexId = document_index_id ? Number(document_index_id) : NaN;
 
   const inDocuments = pathname.startsWith("/documents/");
   const inCabinets = pathname.startsWith("/cabinets/");
-  const inIndexes = pathname.startsWith("/indexes/");
+  const inIndexTemplates = pathname.includes("/indexes/") && pathname.includes("/templates");
+  const inIndexes = pathname.startsWith("/indexes/") && !inIndexTemplates;
   const inDocTypes = pathname.startsWith("/document-types/");
   const inMetaTypes = pathname.startsWith("/metadata-types/");
   const inTags = pathname.startsWith("/tags/");
@@ -45,6 +48,9 @@ export function useRouteResourceLabel(): LabelState {
   const docQ = useDocument(id!, { enabled: !!id && inDocuments });
   const cabinetQ = useCabinet(id!, { enabled: !!id && inCabinets });
   const indexQ = useDocumentIndex(id!, { enabled: !!id && inIndexes });
+  const indexTemplateQ = useDocumentIndexTemplate(documentIndexId, id!, {
+    enabled: !!id && !!document_index_id && !Number.isNaN(documentIndexId) && inIndexTemplates,
+  });
   const docTypeQ = useDocumentType(id!, { enabled: !!id && inDocTypes });
   const metaTypeQ = useMetadataType(id!, { enabled: !!id && inMetaTypes });
   const tagQ = useTag(id!, { enabled: !!id && inMetaTypes });
@@ -53,6 +59,7 @@ export function useRouteResourceLabel(): LabelState {
 
   if (inDocuments) return { label: docQ.data?.title, loading: docQ.isLoading };
   if (inCabinets) return { label: cabinetQ.data?.name, loading: cabinetQ.isLoading };
+  if (inIndexTemplates) return { label: indexTemplateQ.data?.template, loading: indexTemplateQ.isLoading };
   if (inIndexes) return { label: indexQ.data?.name, loading: indexQ.isLoading };
   if (inDocTypes) return { label: docTypeQ.data?.name, loading: docTypeQ.isLoading };
   if (inMetaTypes) return { label: metaTypeQ.data?.name, loading: metaTypeQ.isLoading };
@@ -65,8 +72,13 @@ export function useRouteResourceLabel(): LabelState {
 export function useBreadcrumbs(): { home: MenuItem; model: MenuItem[] } {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { id } = useParams<{ id: string }>();
+  const { id, document_index_id } = useParams<{ id: string; document_index_id: string }>();
+  const documentIndexId = document_index_id ? Number(document_index_id) : NaN;
   const resource = useRouteResourceLabel();
+  const inIndexTemplates = pathname.includes("/indexes/") && pathname.includes("/templates");
+  const indexQ = useDocumentIndex(documentIndexId, {
+    enabled: !!document_index_id && !Number.isNaN(documentIndexId) && inIndexTemplates,
+  });
 
   const home: MenuItem = useMemo(
     () => ({ icon: "pi pi-home", command: () => navigate("/") }),
@@ -78,6 +90,12 @@ export function useBreadcrumbs(): { home: MenuItem; model: MenuItem[] } {
     if (!section) return [];
 
     const items: MenuItem[] = [{ label: section.label, command: () => navigate(section.to) }];
+
+    if (inIndexTemplates && document_index_id && !Number.isNaN(documentIndexId)) {
+      const indexLabel = indexQ.isLoading ? "Loading…" : (indexQ.data?.name ?? document_index_id);
+      items.push({ label: indexLabel, command: () => navigate(`/indexes/${document_index_id}/edit`) });
+      items.push({ label: "Templates", command: () => navigate(`/indexes/${document_index_id}/templates`) });
+    }
 
     if (pathname.endsWith("/new")) {
       items.push({ label: "New" });
@@ -94,7 +112,18 @@ export function useBreadcrumbs(): { home: MenuItem; model: MenuItem[] } {
     }
 
     return items;
-  }, [pathname, navigate, id, resource.loading, resource.label]);
+  }, [
+    pathname,
+    navigate,
+    id,
+    resource.loading,
+    resource.label,
+    inIndexTemplates,
+    document_index_id,
+    documentIndexId,
+    indexQ.isLoading,
+    indexQ.data?.name,
+  ]);
 
   return { home, model };
 }
