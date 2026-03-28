@@ -14,6 +14,7 @@ use crate::infrastructure::s3::upload_to_s3;
 use crate::schema::documents;
 use crate::schema::document_files;
 use crate::shared::app_state::AppState;
+use crate::shared::util::to_job_error;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerateThumbnail {
@@ -132,12 +133,4 @@ pub async fn generate_thumbnail(
     let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
 
     Ok(())
-}
-
-fn to_job_error<E>(err: E) -> Error
-where
-    E: std::error::Error + Send + Sync + 'static,
-{
-    let boxed: BoxDynError = Box::new(err);
-    Error::Failed(Arc::new(boxed))
 }

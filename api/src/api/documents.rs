@@ -7,7 +7,7 @@ use crate::schema::{cabinet_documents, document_files, document_metadatas, docum
 use crate::domain::documents::{Document, DocumentView};
 use crate::domain::document_files::DocumentFile;
 use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_to_s3};
-use crate::application::document_thumbnail::GenerateThumbnail;
+use crate::application::document_thumbnails::GenerateThumbnail;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{diesel_to_http, write_field_to_temp_file, ApiError, ResourceList};

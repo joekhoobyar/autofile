@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use apalis::prelude::*;
 use axum::{
     response::{IntoResponse, Response},
     http::StatusCode,
@@ -122,4 +125,15 @@ pub async fn write_field_to_temp_file(
         path: temp_path,
         size,
     })
+}
+
+/*
+ * Convert any error into a job error that can be returned from an Apalis job.
+ */
+pub fn to_job_error<E>(err: E) -> Error
+where
+    E: std::error::Error + Send + Sync + 'static,
+{
+    let boxed: BoxDynError = Box::new(err);
+    Error::Failed(Arc::new(boxed))
 }

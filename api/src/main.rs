@@ -42,7 +42,8 @@ mod api {
     pub mod tag_documents;
 }
 mod application {
-    pub mod document_thumbnail;
+    pub mod document_index_document;
+    pub mod document_thumbnails;
 }
 mod domain {
     pub mod cabinets;
@@ -72,7 +73,7 @@ use shared::extractors::DbConn;
 
 use crate::shared::app_state::AppState;
 use crate::shared::util::ApiError;
-use crate::application::document_thumbnail::{GenerateThumbnail, generate_thumbnail};
+use crate::application::document_thumbnails::{GenerateThumbnail, generate_thumbnail};
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
