@@ -7,6 +7,7 @@ import { useCabinet } from "./queries/useCabinets";
 import { useDocumentType } from "./queries/useDocumentTypes";
 import { useMetadataType } from "./queries/useMetadataTypes";
 import { useTag } from "./queries/useTags";
+import { useDocumentIndex } from "./queries/useDocumentIndexes";
 
 export type NavItem = {
   key: string;
@@ -19,6 +20,7 @@ export type NavItem = {
 export const NAV: NavItem[] = [
   { key: "documents", label: "Documents", icon: "pi pi-file", to: "/documents", matchPrefix: true },
   { key: "cabinets", label: "Cabinets", icon: "pi pi-inbox", to: "/cabinets", matchPrefix: true },
+  { key: "indexes", label: "Indexes", icon: "pi pi-database", to: "/indexes", matchPrefix: true },
   { key: "document-types", label: "Document Types", icon: "pi pi-file", to: "/document-types", matchPrefix: true },
   { key: "metadata-types", label: "Metadata Types", icon: "pi pi-list", to: "/metadata-types", matchPrefix: true },
   { key: "tags", label: "Tags", icon: "pi pi-tags", to: "/tags", matchPrefix: true },
@@ -34,6 +36,7 @@ export function useRouteResourceLabel(): LabelState {
 
   const inDocuments = pathname.startsWith("/documents/");
   const inCabinets = pathname.startsWith("/cabinets/");
+  const inIndexes = pathname.startsWith("/indexes/");
   const inDocTypes = pathname.startsWith("/document-types/");
   const inMetaTypes = pathname.startsWith("/metadata-types/");
   const inTags = pathname.startsWith("/tags/");
@@ -41,6 +44,7 @@ export function useRouteResourceLabel(): LabelState {
   // Call *one* query hook based on route; keep others disabled
   const docQ = useDocument(id!, { enabled: !!id && inDocuments });
   const cabinetQ = useCabinet(id!, { enabled: !!id && inCabinets });
+  const indexQ = useDocumentIndex(id!, { enabled: !!id && inIndexes });
   const docTypeQ = useDocumentType(id!, { enabled: !!id && inDocTypes });
   const metaTypeQ = useMetadataType(id!, { enabled: !!id && inMetaTypes });
   const tagQ = useTag(id!, { enabled: !!id && inMetaTypes });
@@ -49,6 +53,7 @@ export function useRouteResourceLabel(): LabelState {
 
   if (inDocuments) return { label: docQ.data?.title, loading: docQ.isLoading };
   if (inCabinets) return { label: cabinetQ.data?.name, loading: cabinetQ.isLoading };
+  if (inIndexes) return { label: indexQ.data?.name, loading: indexQ.isLoading };
   if (inDocTypes) return { label: docTypeQ.data?.name, loading: docTypeQ.isLoading };
   if (inMetaTypes) return { label: metaTypeQ.data?.name, loading: metaTypeQ.isLoading };
   if (inTags) return { label: tagQ.data?.name, loading: tagQ.isLoading };

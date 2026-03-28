@@ -20,6 +20,7 @@ import { Button } from 'primereact/button';
 import Login, { RequireAuth } from './pages/auth.tsx';
 import { AuthProvider } from './AuthProvider.tsx';
 import { EditDocumentMetadata } from './pages/documentMetadata.tsx';
+import { EditDocumentIndex, ListDocumentIndexes, NewDocumentIndex } from './pages/documentIndexes.tsx';
 
 export function SideNav() {
   const location = useLocation();
@@ -109,6 +110,13 @@ const router = createBrowserRouter([
           { path: 'new', element: <NewCabinet/> },
           { path: ':id/edit', element: <EditCabinet/> },
           { path: ':cabinetId/documents', element: <ListDocuments/> },
+        ]
+      },
+      { path: 'indexes', 
+        children: [
+          { index: true, element: <ListDocumentIndexes/> },
+          { path: 'new', element: <NewDocumentIndex/> },
+          { path: ':id/edit', element: <EditDocumentIndex/> },
         ]
       },
       { path: 'document-types', 
