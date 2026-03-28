@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Card } from 'primereact/card';
 import { Checkbox } from 'primereact/checkbox';
@@ -29,6 +29,7 @@ import { ProgressBar } from 'primereact/progressbar';
 import { Tag } from 'primereact/tag';
 import { InputText } from 'primereact/inputtext';
 import { Badge } from 'primereact/badge';
+import { Chip } from 'primereact/chip';
 
 type DocumentListItemProps = {
   doc: Readonly<Document>;
@@ -285,6 +286,7 @@ function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange, cabi
  * @returns HTML element for a list or grid of documents
  */
 export function ListDocuments() {
+  const navigate = useNavigate();
   const params = useParams();
   const initialListParams: DocumentListParams = {
     page: 1,
@@ -335,6 +337,18 @@ export function ListDocuments() {
     }
     return lookup;
   }, [tagOptions?.items]);
+
+  const activeFilterChips = useMemo(() => {
+    const chips: Array<{ key: string; label: string }> = [];
+    if (tagId && tagLookup[tagId]) {
+      chips.push({ key: `tag-${tagId}`, label: `🏷️ ${tagLookup[tagId].name}` });
+    }
+    if (cabinetId && cabinetLookup[cabinetId]) {
+      const cabinet = cabinetLookup[cabinetId];
+      chips.push({ key: `cabinet-${cabinetId}`, label: `🗄️ ${cabinet.displayName ?? cabinet.name ?? cabinet.slug}` });
+    }
+    return chips;
+  }, [tagId, cabinetId, tagLookup, cabinetLookup]);
 
   const sortOptions = [
     { label: 'ID (Ascending)', value: 'id:asc' },
@@ -537,6 +551,17 @@ export function ListDocuments() {
           className="w-15rem"
           aria-label="Sort documents"
         />
+        {activeFilterChips.map((chip) => (
+          <Chip
+            key={chip.key}
+            label={chip.label}
+            removable
+            onRemove={() => {
+              navigate('/documents');
+              return true;
+            }}
+          />
+        ))}
         <span>{options.first} - {options.last} of {options.totalRecords}</span>
       </div>
     ),
