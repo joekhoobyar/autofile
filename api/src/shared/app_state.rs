@@ -3,7 +3,7 @@ use std::sync::Arc;
 use diesel_async::{pooled_connection::bb8, AsyncPgConnection};
 use apalis_redis::RedisStorage;
 
-use crate::infrastructure::thumbnail::GenerateThumbnail;
+use crate::application::document_thumbnail::GenerateThumbnail;
 
 // Shared application state
 #[derive(Clone)]

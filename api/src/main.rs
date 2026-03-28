@@ -41,6 +41,9 @@ mod api {
     pub mod tags;
     pub mod tag_documents;
 }
+mod application {
+    pub mod document_thumbnail;
+}
 mod domain {
     pub mod cabinets;
     pub mod cabinet_documents;
@@ -57,7 +60,6 @@ mod domain {
 }
 mod infrastructure {
     pub mod s3;
-    pub mod thumbnail;
 }
 mod shared {
     pub mod app_state;
@@ -70,7 +72,7 @@ use shared::extractors::DbConn;
 
 use crate::shared::app_state::AppState;
 use crate::shared::util::ApiError;
-use crate::infrastructure::thumbnail::{GenerateThumbnail, generate_thumbnail};
+use crate::application::document_thumbnail::{GenerateThumbnail, generate_thumbnail};
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
