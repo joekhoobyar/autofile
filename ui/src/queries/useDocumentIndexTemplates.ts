@@ -33,7 +33,7 @@ export function useDocumentIndexTemplateTree(documentIndexId: string | number): 
           key: String(template.id),
           data: template,
           leaf: true,
-          expanded: false,
+          expanded: true,
           children: [],
         });
       });

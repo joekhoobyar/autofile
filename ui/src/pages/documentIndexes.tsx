@@ -46,6 +46,9 @@ export function ListDocumentIndexes() {
   const actionTemplate = (c: DocumentIndex) => {
     return (
       <div className="flex flex-wrap gap-2">
+        <Button type="button" icon="pi pi-folder-open" severity="info" rounded text raised aria-description="Edit"
+          onClick={() => navigate(`${c.id}/templates`)}
+        ></Button>
         <Button type="button" icon="pi pi-pencil" severity="success" rounded text raised aria-description="Edit"
           onClick={() => navigate(`${c.id}/edit`)}
         ></Button>
@@ -96,7 +99,7 @@ export function ListDocumentIndexes() {
         <Column field="name" header="Name" body={nameTemplate} sortable></Column>
         <Column field="description" header="Description" sortable></Column>
         <Column field="enabled" header="Enabled" body={enabledTemplate} sortable></Column>
-        <Column body={actionTemplate} headerClassName="w-9rem" />
+        <Column body={actionTemplate} headerClassName="w-13rem" />
       </DataTable>
     </Card>
     <Toast ref={toast} />
