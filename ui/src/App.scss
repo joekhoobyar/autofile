@@ -246,7 +246,7 @@ section.aut-document {
       li {
         text-align: center;
         overflow-wrap: break-word;
-        font-style: italic;
+        a:hover { text-decoration: none; }
       }
     }
   }
