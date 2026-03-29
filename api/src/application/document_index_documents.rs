@@ -429,6 +429,7 @@ async fn apply_document_index_value(
             document_index_values::document_index_template_id.eq(template.id),
             document_index_values::value.eq(rendered_value),
             document_index_values::parent_id.eq(parent_value_id),
+            document_index_values::is_leaf.eq(template.is_leaf),
         ))
         .on_conflict((
             document_index_values::document_index_template_id,
@@ -438,6 +439,7 @@ async fn apply_document_index_value(
         .set((
             document_index_values::document_index_id.eq(diesel::upsert::excluded(document_index_values::document_index_id)),
             document_index_values::parent_id.eq(diesel::upsert::excluded(document_index_values::parent_id)),
+            document_index_values::is_leaf.eq(diesel::upsert::excluded(document_index_values::is_leaf)),
         ))
         .returning(document_index_values::id)
         .get_result(db)

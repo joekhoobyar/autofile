@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use serde::Serialize;
 
-use crate::schema::{document_indexes, document_index_templates, document_index_values};
+use crate::schema::{document_index_templates, document_index_values, document_indexes};
 
 #[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
 #[diesel(table_name = document_indexes)]
@@ -44,4 +44,5 @@ pub struct DocumentIndexValue {
     pub document_index_id: i64,
     pub document_index_template_id: i64,
     pub parent_id: Option<i64>,
+    pub is_leaf: bool,
 }

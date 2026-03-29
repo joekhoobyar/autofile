@@ -42,20 +42,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    document_index (id) {
-        id -> Int8,
-        slug -> Varchar,
-        name -> Varchar,
-        description -> Nullable<Varchar>,
-        enabled -> Bool,
-        created_at -> Timestamptz,
-        created_by -> Int8,
-        updated_at -> Timestamptz,
-        updated_by -> Int8,
-    }
-}
-
-diesel::table! {
     document_index_documents (document_index_value_id, document_id) {
         document_index_value_id -> Int8,
         document_id -> Int8,
@@ -81,9 +67,10 @@ diesel::table! {
     document_index_values (id) {
         id -> Int8,
         value -> Varchar,
-        document_index_id -> Int8,
         document_index_template_id -> Int8,
         parent_id -> Nullable<Int8>,
+        document_index_id -> Int8,
+        is_leaf -> Bool,
     }
 }
 
@@ -222,7 +209,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     cabinet_documents,
     cabinets,
     document_files,
-    document_index,
     document_index_documents,
     document_index_templates,
     document_index_values,
