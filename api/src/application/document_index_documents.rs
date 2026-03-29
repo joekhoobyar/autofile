@@ -4,10 +4,8 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use apalis::prelude::*;
-use bb8::PooledConnection;
 use diesel::prelude::*;
 use diesel::dsl::{exists, not};
-use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
 use crate::application::documents::get_document_view;
@@ -35,7 +33,7 @@ pub async fn enqueue_document_index_document_updates(
     document_id: i64,
     state: Arc<AppState>,
 ) -> Result<(), ApiError> {
-    tracing::info!(?document_id, "Enqueueing document_index updates for document {:?}", document_id);
+    tracing::info!(?document_id, "Enqueueing document_index updates");
     let mut db = state
         .db_pool
         .get()
@@ -74,7 +72,7 @@ pub async fn update_document_index_document(
     job: UpdateDocumentIndexDocument,
     state: Data<Arc<AppState>>,
 ) -> Result<(), Error> {
-    tracing::info!(?job, "Updating document_index {:?} for document {:?}", job.document_index_id, job.document_id);
+    tracing::info!(?job, "Updating document_index for document");
 
     let document_view = {
         let db = state
@@ -102,97 +100,116 @@ pub async fn update_document_index_document(
     if matches!(document_index, Err(diesel::result::Error::NotFound)) {
         tracing::info!(
             document_index_id = job.document_index_id,
-            "document_index {:?} missing; skipping update", job.document_index_id
+            "document_index missing; skipping update"
         );
         return Ok(());
     }
     
-    // Find any existing document_index_document records for this document.
-    // We want the document_index_value_id(s), but only for this document_index_id.
-    // That will require joining document_index_documents to document_index_values to document_index_templates to filter by document_index_id.
-    // We will collect these values in a Set.
-    let existing_value_ids = document_index_documents::table
-        .inner_join(
-            document_index_values::table.on(
-                document_index_documents::document_index_value_id.eq(document_index_values::id),
-            ),
-        )
-        .inner_join(
-            document_index_templates::table.on(
-                document_index_values::document_index_template_id.eq(document_index_templates::id),
-            ),
-        )
-        .filter(document_index_documents::document_id.eq(job.document_id))
-        .filter(document_index_templates::document_index_id.eq(job.document_index_id))
-        .select(document_index_values::id)
-        .load::<i64>(&mut db)
-        .await
-        .map_err(to_job_error)?;
-    let mut existing_value_ids: HashSet<i64> = existing_value_ids.into_iter().collect();
+    let document_id = job.document_id;
+    let document_index_id = job.document_index_id;
+    let document_view = document_view;
 
-    // Next, start at the root(s) of the document index (the template with no parent) and traverse down the tree, matching the document's metadata to the template's criteria, and updating the document_index_documents records as needed.
-    // Call apply_document_index_value for each root template, passing the set of existing document_index_value_ids.
-    // This function will evaluate the template against the DocumentView, using minijinja.
-    let templates = document_index_templates::table
-        .filter(document_index_templates::document_index_id.eq(job.document_index_id))
-        .select(DocumentIndexTemplate::as_select())
-        .load::<DocumentIndexTemplate>(&mut db)
-        .await
-        .map_err(to_job_error)?;
+    db.build_transaction().run::<_, diesel::result::Error, _>(|conn| {
+        Box::pin(async move {
+            // Find any existing document_index_document records for this document.
+            // We want the document_index_value_id(s), but only for this document_index_id.
+            // That will require joining document_index_documents to document_index_values to document_index_templates to filter by document_index_id.
+            // We will collect these values in a Set.
+            let existing_value_ids = document_index_documents::table
+                .inner_join(
+                    document_index_values::table.on(
+                        document_index_documents::document_index_value_id.eq(document_index_values::id),
+                    ),
+                )
+                .inner_join(
+                    document_index_templates::table.on(
+                        document_index_values::document_index_template_id.eq(document_index_templates::id),
+                    ),
+                )
+                .filter(document_index_documents::document_id.eq(document_id))
+                .filter(document_index_templates::document_index_id.eq(document_index_id))
+                .select(document_index_values::id)
+                .load::<i64>(conn)
+                .await?;
+            let mut existing_value_ids: HashSet<i64> = existing_value_ids.into_iter().collect();
 
-    // Build a parent -> children index for templates so we can traverse the tree without recursion.
-    // The key is parent_id (None for roots), and the value is a list of indices into `templates`.
-    let mut children_by_parent: HashMap<Option<i64>, Vec<usize>> = HashMap::new();
-    for (idx, template) in templates.iter().enumerate() {
-        children_by_parent
-            .entry(template.parent_id)
-            .or_default()
-            .push(idx);
-    }
+            // Next, start at the root(s) of the document index (the template with no parent) and traverse down the tree, matching the document's metadata to the template's criteria, and updating the document_index_documents records as needed.
+            // Call apply_document_index_value for each root template, passing the set of existing document_index_value_ids.
+            // This function will evaluate the template against the DocumentView, using minijinja.
+            let templates = document_index_templates::table
+                .filter(document_index_templates::document_index_id.eq(document_index_id))
+                .select(DocumentIndexTemplate::as_select())
+                .load::<DocumentIndexTemplate>(conn)
+                .await?;
 
-    // Seed the stack with root templates (parent_id = None). Each stack entry carries the
-    // template index plus the parent document_index_value_id to attach to (None at root).
-    let mut stack: Vec<(usize, Option<i64>)> = Vec::new();
-    if let Some(root_ids) = children_by_parent.get(&None) {
-        for &idx in root_ids {
-            stack.push((idx, None));
-        }
-    }
+            // Build a parent -> children index for templates so we can traverse the tree without recursion.
+            // The key is parent_id (None for roots), and the value is a list of indices into `templates`.
+            let mut children_by_parent: HashMap<Option<i64>, Vec<usize>> = HashMap::new();
+            for (idx, template) in templates.iter().enumerate() {
+                children_by_parent
+                    .entry(template.parent_id)
+                    .or_default()
+                    .push(idx);
+            }
 
-    // Depth-first traversal using an explicit stack to avoid recursive async calls.
-    while let Some((idx, parent_value_id)) = stack.pop() {
-        let template = &templates[idx];
-        let value_id = apply_document_index_value(
-            &mut db,
-            &document_view,
-            template,
-            &mut existing_value_ids,
-            parent_value_id,
-        )
-        .await?;
-
-        if !template.is_leaf {
-            // Push children onto the stack with this node's value_id as their parent.
-            if let Some(child_ids) = children_by_parent.get(&Some(template.id)) {
-                for &child_idx in child_ids {
-                    stack.push((child_idx, Some(value_id)));
+            // Seed the stack with root templates (parent_id = None). Each stack entry carries the
+            // template index plus the parent document_index_value_id to attach to (None at root).
+            let mut stack: Vec<(usize, Option<i64>)> = Vec::new();
+            if let Some(root_ids) = children_by_parent.get(&None) {
+                for &idx in root_ids {
+                    stack.push((idx, None));
                 }
             }
-        }
-    }
 
-    // At the end of processing all templates, any document_index_value_ids remaining in the set should be deleted,
-    // as they no longer match the document.
-    delete_stale_document_index_values(&mut db, job.document_id, &existing_value_ids).await?;
+            // Depth-first traversal using an explicit stack to avoid recursive async calls.
+            while let Some((idx, parent_value_id)) = stack.pop() {
+                let template = &templates[idx];
+                let value_id = apply_document_index_value(
+                    conn,
+                    &document_view,
+                    template,
+                    &mut existing_value_ids,
+                    parent_value_id,
+                )
+                .await
+                .map_err(|err| {
+                    tracing::error!(error = %err, "document_index_values apply failed inside transaction");
+                    err
+                })?;
+
+                if !template.is_leaf {
+                    // Push children onto the stack with this node's value_id as their parent.
+                    if let Some(child_ids) = children_by_parent.get(&Some(template.id)) {
+                        for &child_idx in child_ids {
+                            stack.push((child_idx, Some(value_id)));
+                        }
+                    }
+                }
+            }
+
+            // At the end of processing all templates, any document_index_value_ids remaining in the set should be deleted,
+            // as they no longer match the document.
+            delete_stale_document_index_values(conn, document_id, &existing_value_ids)
+                .await
+                .map_err(|err| {
+                    tracing::error!(error = %err, "document_index_values cleanup failed inside transaction");
+                    err
+                })?;
+
+            Ok(())
+        })
+    })
+        .await
+        .map_err(to_job_error)?;
 
     Ok(())
 }
 
 async fn delete_stale_document_index_values(
-    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    db: &mut AsyncPgConnection,
     document_id: i64,
     remaining_value_ids: &HashSet<i64>,
-) -> Result<(), Error> {
+) -> Result<(), diesel::result::Error> {
     if remaining_value_ids.is_empty() {
         return Ok(());
     }
@@ -208,9 +225,7 @@ async fn delete_stale_document_index_values(
         ),
     )
         .execute(db)
-        .await
-        .map_err(to_job_error)?;
-
+        .await?;
     // Delete the original value leaf nodes only if no more document_index_documents exist,
     // and collect their parent_id values for ancestor cleanup.
     let remaining_parent_ids: Vec<i64> = diesel::delete(
@@ -224,8 +239,7 @@ async fn delete_stale_document_index_values(
     )
         .returning(document_index_values::parent_id)
         .get_results::<Option<i64>>(db)
-        .await
-        .map_err(to_job_error)?
+        .await?
         .into_iter()
         .flatten()
         .collect();
@@ -260,8 +274,7 @@ async fn delete_stale_document_index_values(
     )
         .bind::<diesel::sql_types::Array<diesel::sql_types::BigInt>, _>(remaining_parent_ids)
         .execute(db)
-        .await
-        .map_err(to_job_error)?;
+        .await?;
 
     Ok(())
 }
@@ -280,18 +293,21 @@ pub async fn update_document_index_document_logged(
 }
 
 async fn apply_document_index_value(
-    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    db: &mut AsyncPgConnection,
     doc: &DocumentView,
     template: &DocumentIndexTemplate,
     original_value_ids: &mut HashSet<i64>,
     parent_value_id: Option<i64>,
-) -> Result<i64, Error> {
+) -> Result<i64, diesel::result::Error> {
     // Evaluate the template against the DocumentView, using minijinja
     // We will pass this DocumentView to minijinja under the "doc" key.
     let env = minijinja::Environment::new();
     let rendered_value = env
         .render_str(&template.template, minijinja::context! { doc => doc })
-        .map_err(to_job_error)?;
+        .map_err(|err| {
+            tracing::error!(error = %err, "document_index_values template evaluation failed inside transaction");
+            diesel::result::Error::RollbackTransaction
+        })?;
 
     // Upsert the document_index_values record for the evaluated text value.
     let value_id: i64 = diesel::insert_into(document_index_values::table)
@@ -308,8 +324,7 @@ async fn apply_document_index_value(
         .set(document_index_values::value.eq(diesel::upsert::excluded(document_index_values::value)))
         .returning(document_index_values::id)
         .get_result(db)
-        .await
-        .map_err(to_job_error)?;
+        .await?;
 
     // If this is a leaf node, we need upsert a document_index_documents record for this document and the document_index_value_id we just upserted
     // We then remove the document_index_value_id from the set existing document_index_value_ids, if it exists.
@@ -327,8 +342,7 @@ async fn apply_document_index_value(
             ))
             .do_nothing()
             .execute(db)
-            .await
-            .map_err(to_job_error)?;
+            .await?;
 
         original_value_ids.remove(&value_id);
     }
