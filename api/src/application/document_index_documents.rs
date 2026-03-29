@@ -11,12 +11,15 @@ use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
 use crate::application::documents::get_document_view;
 use crate::domain::document_indexes::{DocumentIndex, DocumentIndexTemplate};
-use crate::domain::documents::DocumentView;
+use crate::domain::documents::TemplateDocumentView;
 use crate::schema::{
+    cabinets,
     document_index_documents,
     document_index_templates,
     document_index_values,
     document_indexes,
+    document_types,
+    tags,
 };
 use crate::shared::app_state::AppState;
 use crate::shared::util::{to_job_error, ApiError};
@@ -92,6 +95,55 @@ pub async fn update_document_index_document(
         .await
         .map_err(to_job_error)?;
 
+    let document_type_slug = document_types::table
+        .find(document_view.document_type_id)
+        .select(document_types::slug)
+        .first::<String>(&mut db)
+        .await
+        .map_err(to_job_error)?;
+
+    let tags: HashSet<String> = if document_view.tag_ids.is_empty() {
+        HashSet::new()
+    } else {
+        tags::table
+            .filter(tags::id.eq_any(&document_view.tag_ids))
+            .select(tags::slug)
+            .load::<String>(&mut db)
+            .await
+            .map_err(to_job_error)?
+            .into_iter()
+            .collect()
+    };
+
+    let cabinets: HashSet<String> = if document_view.cabinet_ids.is_empty() {
+        HashSet::new()
+    } else {
+        cabinets::table
+            .filter(cabinets::id.eq_any(&document_view.cabinet_ids))
+            .select(cabinets::slug)
+            .load::<String>(&mut db)
+            .await
+            .map_err(to_job_error)?
+            .into_iter()
+            .collect()
+    };
+
+    let template_document_view = TemplateDocumentView {
+        id: document_view.id,
+        title: document_view.title,
+        document_type_id: document_view.document_type_id,
+        document_type: document_type_slug,
+        metadata: document_view.metadata,
+        cabinet_ids: document_view.cabinet_ids,
+        tag_ids: document_view.tag_ids,
+        cabinets,
+        tags,
+        created_by: document_view.created_by,
+        created_at: document_view.created_at,
+        updated_by: document_view.updated_by,
+        updated_at: document_view.updated_at,
+    };
+
     // Check if the document index still exists - if not, we can skip this operation entirely.
     let document_index = document_indexes::table
         .find(job.document_index_id)
@@ -108,7 +160,7 @@ pub async fn update_document_index_document(
     
     let document_id = job.document_id;
     let document_index_id = job.document_index_id;
-    let document_view = document_view;
+    let document_view = template_document_view;
 
     let skip_due_to_empty_template = Arc::new(AtomicBool::new(false));
     let skip_due_to_empty_template_tx = Arc::clone(&skip_due_to_empty_template);
@@ -325,7 +377,7 @@ pub async fn update_document_index_document_logged(
 
 async fn apply_document_index_value(
     db: &mut AsyncPgConnection,
-    doc: &DocumentView,
+    doc: &TemplateDocumentView,
     template: &DocumentIndexTemplate,
     original_value_ids: &mut HashSet<i64>,
     parent_value_id: Option<i64>,
@@ -340,7 +392,7 @@ async fn apply_document_index_value(
             tracing::error!(error = %err, "document_index_values template evaluation failed inside transaction");
             diesel::result::Error::RollbackTransaction
         })?;
-
+    tracing::debug!({value = &rendered_value, template = template.template, tags = ?doc.tags}, "document_index_values template evaluation result");
     if rendered_value.trim().is_empty() {
         return Ok(None);
     }

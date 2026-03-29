@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
@@ -28,6 +28,23 @@ pub struct DocumentView {
     pub metadata: HashMap<String, String>,
     pub cabinet_ids: Vec<i64>,
     pub tag_ids: Vec<i64>,
+    pub created_by: i64,
+    pub created_at: DateTime<Utc>,
+    pub updated_by: i64,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, PartialEq)]
+pub struct TemplateDocumentView {
+    pub id: i64,
+    pub title: String,
+    pub document_type_id: i64,
+    pub document_type: String,
+    pub metadata: HashMap<String, String>,
+    pub cabinet_ids: Vec<i64>,
+    pub tag_ids: Vec<i64>,
+    pub cabinets: HashSet<String>,
+    pub tags: HashSet<String>,
     pub created_by: i64,
     pub created_at: DateTime<Utc>,
     pub updated_by: i64,
