@@ -112,6 +112,8 @@ pub async fn update_document_index_document(
 
     let skip_due_to_empty_template = Arc::new(AtomicBool::new(false));
     let skip_due_to_empty_template_tx = Arc::clone(&skip_due_to_empty_template);
+    let skip_due_to_no_leaf = Arc::new(AtomicBool::new(false));
+    let skip_due_to_no_leaf_tx = Arc::clone(&skip_due_to_no_leaf);
 
     let tx_result = db.build_transaction().run::<_, diesel::result::Error, _>(|conn| {
         Box::pin(async move {
@@ -156,42 +158,50 @@ pub async fn update_document_index_document(
                     .push(idx);
             }
 
-            // Seed the stack with root templates (parent_id = None). Each stack entry carries the
-            // template index plus the parent document_index_value_id to attach to (None at root).
-            let mut stack: Vec<(usize, Option<i64>)> = Vec::new();
+            // Seed the stack with root templates (parent_id = None). Each root is processed independently
+            // so we can detect whether any leaf template exists for that root.
             if let Some(root_ids) = children_by_parent.get(&None) {
-                for &idx in root_ids {
-                    stack.push((idx, None));
-                }
-            }
+                for &root_idx in root_ids {
+                    let mut stack: Vec<(usize, Option<i64>)> = vec![(root_idx, None)];
+                    let mut leaf_found = false;
 
-            // Depth-first traversal using an explicit stack to avoid recursive async calls.
-            while let Some((idx, parent_value_id)) = stack.pop() {
-                let template = &templates[idx];
-                let value_id = apply_document_index_value(
-                    conn,
-                    &document_view,
-                    template,
-                    &mut existing_value_ids,
-                    parent_value_id,
-                )
-                .await
-                .map_err(|err| {
-                    tracing::error!(error = %err, "document_index_values apply failed inside transaction");
-                    err
-                })?;
+                    // Depth-first traversal using an explicit stack to avoid recursive async calls.
+                    while let Some((idx, parent_value_id)) = stack.pop() {
+                        let template = &templates[idx];
 
-                let Some(value_id) = value_id else {
-                    skip_due_to_empty_template_tx.store(true, Ordering::Relaxed);
-                    return Err(diesel::result::Error::RollbackTransaction);
-                };
+                        let value_id = apply_document_index_value(
+                            conn,
+                            &document_view,
+                            template,
+                            &mut existing_value_ids,
+                            parent_value_id,
+                        )
+                        .await
+                        .map_err(|err| {
+                            tracing::error!(error = %err, "document_index_values apply failed inside transaction");
+                            err
+                        })?;
 
-                if !template.is_leaf {
-                    // Push children onto the stack with this node's value_id as their parent.
-                    if let Some(child_ids) = children_by_parent.get(&Some(template.id)) {
-                        for &child_idx in child_ids {
-                            stack.push((child_idx, Some(value_id)));
+                        let Some(value_id) = value_id else {
+                            skip_due_to_empty_template_tx.store(true, Ordering::Relaxed);
+                            return Err(diesel::result::Error::RollbackTransaction);
+                        };
+
+                        if !template.is_leaf {
+                            // Push children onto the stack with this node's value_id as their parent.
+                            if let Some(child_ids) = children_by_parent.get(&Some(template.id)) {
+                                for &child_idx in child_ids {
+                                    stack.push((child_idx, Some(value_id)));
+                                }
+                            }
+                        } else {
+                            leaf_found = true;
                         }
+                    }
+
+                    if !leaf_found {
+                        skip_due_to_no_leaf_tx.store(true, Ordering::Relaxed);
+                        return Err(diesel::result::Error::RollbackTransaction);
                     }
                 }
             }
@@ -210,8 +220,13 @@ pub async fn update_document_index_document(
     })
         .await;
 
+    // Skip logging errors for transactions that were rolled back due to empty templates or no leaf templates,
+    // as these are expected to occur and not indicative of a system issue.
     if let Err(diesel::result::Error::RollbackTransaction) = tx_result {
-        if skip_due_to_empty_template.as_ref().load(std::sync::atomic::Ordering::Relaxed) {
+        let should_skip =
+            skip_due_to_empty_template.as_ref().load(Ordering::Relaxed)
+                || skip_due_to_no_leaf.as_ref().load(Ordering::Relaxed);
+        if should_skip {
             return Ok(());
         }
     }
@@ -315,11 +330,12 @@ async fn apply_document_index_value(
     original_value_ids: &mut HashSet<i64>,
     parent_value_id: Option<i64>,
 ) -> Result<Option<i64>, diesel::result::Error> {
+
     // Evaluate the template against the DocumentView, using minijinja
     // We will pass this DocumentView to minijinja under the "doc" key.
     let env = minijinja::Environment::new();
     let rendered_value = env
-        .render_str(&template.template, minijinja::context! { doc => doc })
+        .render_str(&template.template, minijinja::context! { doc })
         .map_err(|err| {
             tracing::error!(error = %err, "document_index_values template evaluation failed inside transaction");
             diesel::result::Error::RollbackTransaction
