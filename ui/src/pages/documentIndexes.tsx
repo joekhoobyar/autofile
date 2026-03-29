@@ -27,13 +27,13 @@ export function ListDocumentIndexes() {
 
   const slugTemplate = (c: DocumentIndex) => {
     return (
-      <Link className="title" to={`${c.id}/edit`}>{c.slug}</Link>
+      <Link className="title" to={`${c.id}/values`}>{c.slug}</Link>
     );
   }
 
   const nameTemplate = (c: DocumentIndex) => {
     return (
-      <Link className="title" to={`${c.id}/edit`}>{c.name}</Link>
+      <Link className="title" to={`${c.id}/values`}>{c.name}</Link>
     );
   }
 

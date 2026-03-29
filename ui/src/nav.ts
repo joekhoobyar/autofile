@@ -38,7 +38,7 @@ export function useRouteResourceLabel(): LabelState {
 
   const inDocuments = pathname.startsWith("/documents/");
   const inCabinets = pathname.startsWith("/cabinets/");
-  const inIndexTemplates = pathname.includes("/indexes/") && pathname.includes("/templates");
+  const inIndexTemplates = pathname.includes("/indexes/") && pathname.includes("/templates") 
   const inIndexes = pathname.startsWith("/indexes/") && !inIndexTemplates;
   const inDocTypes = pathname.startsWith("/document-types/");
   const inMetaTypes = pathname.startsWith("/metadata-types/");
