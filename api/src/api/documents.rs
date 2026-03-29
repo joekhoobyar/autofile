@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::AppState;
+use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::documents::get_document_view;
 use crate::schema::{cabinet_documents, document_files, document_index_documents, document_metadatas, documents, metadata_types, tag_documents};
 use crate::domain::documents::{Document, DocumentView};
@@ -439,7 +440,13 @@ async fn create(
         .await;
 
     match result {
-        Ok(document) => Ok(Json(document)),
+        Ok(document) => {
+
+            // Enqueue jobs to update document indexes for this document, as the tags may be used in index rules.
+            enqueue_document_index_document_updates(document.id, state.clone()).await?;
+
+            Ok(Json(document))
+        },
         Err(e) => {
             // On transaction failure, attempt S3 cleanup (best-effort)
             if let Some((s3_prefix, filename, _, _)) = file_info_for_cleanup {
@@ -466,6 +473,7 @@ async fn create(
 
 async fn update(
     user: AuthUser,
+    State(state): State<Arc<AppState>>,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
     Json(input): Json<DocumentChangeset>,
@@ -482,6 +490,9 @@ async fn update(
             .get_result(&mut db)
             .await
             .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update document"))?;
+
+    // Enqueue jobs to update document indexes for this document, as the tags may be used in index rules.
+    enqueue_document_index_document_updates(id, state).await?;
 
     Ok(Json(updated))
 }
