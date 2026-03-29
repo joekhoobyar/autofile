@@ -5,13 +5,15 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use apalis::prelude::*;
+use bb8::PooledConnection;
 use diesel::prelude::*;
 use diesel::dsl::{exists, not};
+use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
 use crate::application::documents::get_document_view;
 use crate::domain::document_indexes::{DocumentIndex, DocumentIndexTemplate};
-use crate::domain::documents::TemplateDocumentView;
+use crate::domain::documents::{DocumentView, TemplateDocumentView};
 use crate::schema::{
     cabinets,
     document_index_documents,
@@ -76,6 +78,24 @@ pub async fn update_document_index_document(
     job: UpdateDocumentIndexDocument,
     state: Data<Arc<AppState>>,
 ) -> Result<(), Error> {
+    match do_update_document_index_document(job.clone(), state).await {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            tracing::error!(error = %err, "document_index {:?} update job failed for document {:?}", job.document_index_id, job.document_id);
+            Err(err)
+        }
+    }
+}
+
+/**
+ * Internal function to update a document index for a given document.
+ * 
+ * Separated from the public function to allow for more granular error handling and logging.
+ */
+async fn do_update_document_index_document(
+    job: UpdateDocumentIndexDocument,
+    state: Data<Arc<AppState>>,
+) -> Result<(), Error> {
     tracing::info!(?job, "Updating document_index for document");
 
     let mut db = state
@@ -88,54 +108,7 @@ pub async fn update_document_index_document(
         .await
         .map_err(to_job_error)?;
 
-    let document_type_slug = document_types::table
-        .find(document_view.document_type_id)
-        .select(document_types::slug)
-        .first::<String>(&mut db)
-        .await
-        .map_err(to_job_error)?;
-
-    let tags: HashSet<String> = if document_view.tag_ids.is_empty() {
-        HashSet::new()
-    } else {
-        tags::table
-            .filter(tags::id.eq_any(&document_view.tag_ids))
-            .select(tags::slug)
-            .load::<String>(&mut db)
-            .await
-            .map_err(to_job_error)?
-            .into_iter()
-            .collect()
-    };
-
-    let cabinets: HashSet<String> = if document_view.cabinet_ids.is_empty() {
-        HashSet::new()
-    } else {
-        cabinets::table
-            .filter(cabinets::id.eq_any(&document_view.cabinet_ids))
-            .select(cabinets::slug)
-            .load::<String>(&mut db)
-            .await
-            .map_err(to_job_error)?
-            .into_iter()
-            .collect()
-    };
-
-    let template_document_view = TemplateDocumentView {
-        id: document_view.id,
-        title: document_view.title,
-        document_type_id: document_view.document_type_id,
-        document_type: document_type_slug,
-        metadata: document_view.metadata,
-        cabinet_ids: document_view.cabinet_ids,
-        tag_ids: document_view.tag_ids,
-        cabinets,
-        tags,
-        created_by: document_view.created_by,
-        created_at: document_view.created_at,
-        updated_by: document_view.updated_by,
-        updated_at: document_view.updated_at,
-    };
+    let template_document_view = build_template_document_view(&mut db, document_view).await?;
 
     // Check if the document index still exists - if not, we can skip this operation entirely.
     let document_index = document_indexes::table
@@ -281,6 +254,72 @@ pub async fn update_document_index_document(
     Ok(())
 }
 
+/**
+ * Internal function to build a TemplateDocumentView for a given DocumentView,
+ * by loading the document type slug, tag slugs and cabinet slugs.
+ * 
+ * This is needed to evaluate the document index templates, which may reference these fields.
+ */
+async fn build_template_document_view(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_view: DocumentView,
+) -> Result<TemplateDocumentView, Error> {
+    let document_type_slug = document_types::table
+        .find(document_view.document_type_id)
+        .select(document_types::slug)
+        .first::<String>(db)
+        .await
+        .map_err(to_job_error)?;
+
+    let tags: HashSet<String> = if document_view.tag_ids.is_empty() {
+        HashSet::new()
+    } else {
+        tags::table
+            .filter(tags::id.eq_any(&document_view.tag_ids))
+            .select(tags::slug)
+            .load::<String>(db)
+            .await
+            .map_err(to_job_error)?
+            .into_iter()
+            .collect()
+    };
+
+    let cabinets: HashSet<String> = if document_view.cabinet_ids.is_empty() {
+        HashSet::new()
+    } else {
+        cabinets::table
+            .filter(cabinets::id.eq_any(&document_view.cabinet_ids))
+            .select(cabinets::slug)
+            .load::<String>(db)
+            .await
+            .map_err(to_job_error)?
+            .into_iter()
+            .collect()
+    };
+
+    Ok(TemplateDocumentView {
+        id: document_view.id,
+        title: document_view.title,
+        document_type_id: document_view.document_type_id,
+        document_type: document_type_slug,
+        metadata: document_view.metadata,
+        cabinet_ids: document_view.cabinet_ids,
+        tag_ids: document_view.tag_ids,
+        cabinets,
+        tags,
+        created_by: document_view.created_by,
+        created_at: document_view.created_at,
+        updated_by: document_view.updated_by,
+        updated_at: document_view.updated_at,
+    })
+}
+
+/**
+ * Internal function to delete document_index_document records for a given document_id
+ * and a set of document_index_value_ids, as well as any document_index_value records
+ * that are no longer linked to any document after the deletion, and their ancestor values
+ * if they no longer have children.
+ */
 async fn delete_stale_document_index_values(
     db: &mut AsyncPgConnection,
     document_id: i64,
@@ -355,19 +394,12 @@ async fn delete_stale_document_index_values(
     Ok(())
 }
 
-pub async fn update_document_index_document_logged(
-    job: UpdateDocumentIndexDocument,
-    state: Data<Arc<AppState>>,
-) -> Result<(), Error> {
-    match update_document_index_document(job.clone(), state).await {
-        Ok(()) => Ok(()),
-        Err(err) => {
-            tracing::error!(error = %err, "document_index {:?} update job failed for document {:?}", job.document_index_id, job.document_id);
-            Err(err)
-        }
-    }
-}
-
+/**
+ * Internal function to evaluate a document index template for a document, which may result in
+ * upserting document_index_value and document_index_document records.
+ * 
+ * Will remove the value_id from the set of existing_value_ids if a document_index_document record is upserted.
+ */
 async fn apply_document_index_value(
     db: &mut AsyncPgConnection,
     doc: &TemplateDocumentView,
@@ -393,16 +425,15 @@ async fn apply_document_index_value(
     // Upsert the document_index_values record for the evaluated text value.
     let value_id: i64 = diesel::insert_into(document_index_values::table)
         .values((
-            document_index_values::value.eq(rendered_value),
             document_index_values::document_index_template_id.eq(template.id),
+            document_index_values::value.eq(rendered_value),
             document_index_values::parent_id.eq(parent_value_id),
         ))
         .on_conflict((
             document_index_values::document_index_template_id,
             document_index_values::value,
         ))
-        .do_update()
-        .set(document_index_values::value.eq(diesel::upsert::excluded(document_index_values::value)))
+        .do_nothing()
         .returning(document_index_values::id)
         .get_result(db)
         .await?;

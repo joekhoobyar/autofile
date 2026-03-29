@@ -74,7 +74,7 @@ use shared::extractors::DbConn;
 
 use crate::application::document_index_documents::{
     UpdateDocumentIndexDocument,
-    update_document_index_document_logged,
+    update_document_index_document,
 };
 use crate::shared::app_state::AppState;
 use crate::shared::util::ApiError;
@@ -167,7 +167,7 @@ async fn main() {
                 .concurrency(2)
                 .data(app_state.clone())
                 .backend(app_state.index_jobs.as_ref().clone())
-                .build_fn(update_document_index_document_logged)
+                .build_fn(update_document_index_document)
         });
     tokio::spawn(async move {
         monitor.run().await.expect("Background worker failed");
