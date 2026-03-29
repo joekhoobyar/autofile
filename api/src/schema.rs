@@ -81,6 +81,7 @@ diesel::table! {
     document_index_values (id) {
         id -> Int8,
         value -> Varchar,
+        document_index_id -> Int8,
         document_index_template_id -> Int8,
         parent_id -> Nullable<Int8>,
     }
@@ -207,6 +208,7 @@ diesel::joinable!(document_index_documents -> document_index_values (document_in
 diesel::joinable!(document_index_documents -> documents (document_id));
 diesel::joinable!(document_index_templates -> document_indexes (document_index_id));
 diesel::joinable!(document_index_values -> document_index_templates (document_index_template_id));
+diesel::joinable!(document_index_values -> document_indexes (document_index_id));
 diesel::joinable!(document_metadatas -> documents (document_id));
 diesel::joinable!(document_metadatas -> metadata_types (metadata_type_id));
 diesel::joinable!(document_types_metadata_types -> document_types (document_type_id));

@@ -425,6 +425,7 @@ async fn apply_document_index_value(
     // Upsert the document_index_values record for the evaluated text value.
     let value_id: i64 = diesel::insert_into(document_index_values::table)
         .values((
+            document_index_values::document_index_id.eq(template.document_index_id),
             document_index_values::document_index_template_id.eq(template.id),
             document_index_values::value.eq(rendered_value),
             document_index_values::parent_id.eq(parent_value_id),
@@ -434,7 +435,10 @@ async fn apply_document_index_value(
             document_index_values::value,
         ))
         .do_update()
-        .set(document_index_values::value.eq(diesel::upsert::excluded(document_index_values::value)))
+        .set((
+            document_index_values::document_index_id.eq(diesel::upsert::excluded(document_index_values::document_index_id)),
+            document_index_values::parent_id.eq(diesel::upsert::excluded(document_index_values::parent_id)),
+        ))
         .returning(document_index_values::id)
         .get_result(db)
         .await?;

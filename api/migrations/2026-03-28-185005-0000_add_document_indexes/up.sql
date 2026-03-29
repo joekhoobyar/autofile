@@ -30,11 +30,14 @@ CREATE INDEX document_index_templates_document_index_id
 CREATE TABLE IF NOT EXISTS "document_index_values" (
 	"id" BIGSERIAL PRIMARY KEY,
 	"value" VARCHAR NOT NULL,
+    "document_index_id" INT8 NOT NULL REFERENCES document_indexes(id),
     "document_index_template_id" INT8 NOT NULL REFERENCES document_index_templates(id),
     "parent_id" INT8 NULL REFERENCES document_index_values(id),
     CONSTRAINT "document_index_values_template_value"
         UNIQUE (document_index_template_id, value)
 );
+CREATE INDEX document_index_values_index_id
+    ON document_index_values (document_index_id);
 CREATE INDEX document_index_values_parent_id
     ON document_index_values (parent_id);
 CREATE INDEX document_index_values_value
