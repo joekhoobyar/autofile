@@ -188,10 +188,10 @@ async fn upload_temp_file_to_s3(
 
 pub async fn get_by_id(
     _user: AuthUser,
-    DbConn(db): DbConn,
+    DbConn(mut db): DbConn,
     Path(id): Path<i64>,
 ) -> Result<Json<DocumentView>, ApiError> {
-    let document_view = get_document_view(db, id).await?;
+    let document_view = get_document_view(&mut db, id).await?;
     Ok(Json(document_view))
 }
 

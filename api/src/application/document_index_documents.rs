@@ -78,20 +78,13 @@ pub async fn update_document_index_document(
 ) -> Result<(), Error> {
     tracing::info!(?job, "Updating document_index for document");
 
-    let document_view = {
-        let db = state
-            .db_pool
-            .get()
-            .await
-            .map_err(to_job_error)?;
-        get_document_view(db, job.document_id)
-            .await
-            .map_err(to_job_error)?
-    };
-
     let mut db = state
         .db_pool
         .get()
+        .await
+        .map_err(to_job_error)?;
+
+    let document_view = get_document_view(&mut db, job.document_id)
         .await
         .map_err(to_job_error)?;
 
