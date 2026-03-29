@@ -22,6 +22,7 @@ import { AuthProvider } from './AuthProvider.tsx';
 import { EditDocumentMetadata } from './pages/documentMetadata.tsx';
 import { EditDocumentIndex, ListDocumentIndexes, NewDocumentIndex } from './pages/documentIndexes.tsx';
 import { EditDocumentIndexTemplate, ListDocumentIndexTemplates, NewDocumentIndexTemplate } from './pages/documentIndexTemplates.tsx';
+import { ListDocumentIndexValues } from './pages/documentIndexValues.tsx';
 
 export function SideNav() {
   const location = useLocation();
@@ -123,6 +124,11 @@ const router = createBrowserRouter([
               { index: true, element: <ListDocumentIndexTemplates/> },
               { path: 'new', element: <NewDocumentIndexTemplate/> },
               { path: ':id/edit', element: <EditDocumentIndexTemplate/> },
+            ]
+          },
+          { path: ':document_index_id/values', 
+            children: [
+              { index: true, element: <ListDocumentIndexValues/> },
             ]
           },
         ]
