@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -109,7 +110,10 @@ pub async fn update_document_index_document(
     let document_index_id = job.document_index_id;
     let document_view = document_view;
 
-    db.build_transaction().run::<_, diesel::result::Error, _>(|conn| {
+    let skip_due_to_empty_template = Arc::new(AtomicBool::new(false));
+    let skip_due_to_empty_template_tx = Arc::clone(&skip_due_to_empty_template);
+
+    let tx_result = db.build_transaction().run::<_, diesel::result::Error, _>(|conn| {
         Box::pin(async move {
             // Find any existing document_index_document records for this document.
             // We want the document_index_value_id(s), but only for this document_index_id.
@@ -177,6 +181,11 @@ pub async fn update_document_index_document(
                     err
                 })?;
 
+                let Some(value_id) = value_id else {
+                    skip_due_to_empty_template_tx.store(true, Ordering::Relaxed);
+                    return Err(diesel::result::Error::RollbackTransaction);
+                };
+
                 if !template.is_leaf {
                     // Push children onto the stack with this node's value_id as their parent.
                     if let Some(child_ids) = children_by_parent.get(&Some(template.id)) {
@@ -199,8 +208,15 @@ pub async fn update_document_index_document(
             Ok(())
         })
     })
-        .await
-        .map_err(to_job_error)?;
+        .await;
+
+    if let Err(diesel::result::Error::RollbackTransaction) = tx_result {
+        if skip_due_to_empty_template.as_ref().load(std::sync::atomic::Ordering::Relaxed) {
+            return Ok(());
+        }
+    }
+
+    tx_result.map_err(to_job_error)?;
 
     Ok(())
 }
@@ -298,7 +314,7 @@ async fn apply_document_index_value(
     template: &DocumentIndexTemplate,
     original_value_ids: &mut HashSet<i64>,
     parent_value_id: Option<i64>,
-) -> Result<i64, diesel::result::Error> {
+) -> Result<Option<i64>, diesel::result::Error> {
     // Evaluate the template against the DocumentView, using minijinja
     // We will pass this DocumentView to minijinja under the "doc" key.
     let env = minijinja::Environment::new();
@@ -308,6 +324,10 @@ async fn apply_document_index_value(
             tracing::error!(error = %err, "document_index_values template evaluation failed inside transaction");
             diesel::result::Error::RollbackTransaction
         })?;
+
+    if rendered_value.trim().is_empty() {
+        return Ok(None);
+    }
 
     // Upsert the document_index_values record for the evaluated text value.
     let value_id: i64 = diesel::insert_into(document_index_values::table)
@@ -347,5 +367,5 @@ async fn apply_document_index_value(
         original_value_ids.remove(&value_id);
     }
 
-    Ok(value_id)
+    Ok(Some(value_id))
 }
