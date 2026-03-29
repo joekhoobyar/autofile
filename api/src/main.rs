@@ -32,6 +32,7 @@ mod api {
     pub mod cabinet_documents;
     pub mod document_indexes;
     pub mod document_index_templates;
+    pub mod document_index_values;
     pub mod document_metadatas;
     pub mod document_types;
     pub mod document_types_metadata_types;
@@ -204,6 +205,7 @@ async fn main() {
         .nest("/cabinets", api::cabinet_documents::routes())
         .nest("/document-indexes", api::document_indexes::routes())
         .nest("/document-indexes", api::document_index_templates::routes())
+        .nest("/document-indexes", api::document_index_values::routes())
         .nest("/document-types", api::document_types::routes())
         .nest("/document-types-metadata-types", api::document_types_metadata_types::routes())
         .nest("/documents", api::documents::routes())
