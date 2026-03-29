@@ -8,6 +8,7 @@ import { Message } from 'primereact/message';
 import { Menu } from 'primereact/menu';
 import type { MenuItem } from 'primereact/menuitem';
 
+import { useDocumentIndex } from '../queries/useDocumentIndexes';
 import { useDocumentIndexValues } from '../queries/useDocumentIndexValues';
 import { type DocumentIndexValue, type DocumentIndexValueListParams } from '../models/documentIndex';
 
@@ -18,6 +19,7 @@ export function ListDocumentIndexValues() {
     parent_id: 'null',
   });
   const [parentStack, setParentStack] = useState<Array<{ id: number; value: string }>>([]);
+  const { data: documentIndex } = useDocumentIndex(documentIndexId);
   const { isPending, data, isFetching } = useDocumentIndexValues(documentIndexId, listParams);
 
   const onSort = (event: DataTableStateEvent) => {
@@ -46,7 +48,7 @@ export function ListDocumentIndexValues() {
 
   const parentMenuItems = useMemo<MenuItem[]>(() => {
     const rootItem: MenuItem = {
-      label: 'Root',
+      label: documentIndex?.name ?? 'Document Index',
       icon: 'pi pi-folder',
       command: () => {
         setParentStack([]);
@@ -63,7 +65,7 @@ export function ListDocumentIndexValues() {
       },
     }));
     return [rootItem, ...stackItems];
-  }, [parentStack]);
+  }, [documentIndex?.name, parentStack]);
 
   if (!document_index_id || Number.isNaN(documentIndexId))
     return <Message severity="error" text="Missing or invalid document index ID" />;
