@@ -1,12 +1,14 @@
 use std::sync::Arc;
 
 use crate::AppState;
+use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::schema::{document_metadatas};
 use crate::domain::document_metadatas::DocumentMetadata;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{diesel_to_http, ApiError};
 
+use axum::extract::State;
 use serde::Deserialize;
 
 use axum::{
@@ -56,6 +58,7 @@ pub async fn get_by_ids(
 
 async fn upsert(
     user: AuthUser,
+    State(state): State<Arc<AppState>>,
     DbConn(mut db): DbConn,
     Path(document_id): Path<i64>,
     Json(input): Json<Vec<NewDocumentMetadata>>,
@@ -84,6 +87,9 @@ async fn upsert(
         .execute(&mut db)
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to save document_metadata"))?;
+
+    // Enqueue jobs to update document indexes for this document, as the metadata may be used in index rules.
+    enqueue_document_index_document_updates(document_id, state).await?;
 
     // Fetch and return the updated rows.
     let rows = do_list(DbConn(db), document_id)
@@ -121,6 +127,7 @@ pub async fn list(
 
 async fn delete_junction(
     _user: AuthUser,
+    State(state): State<Arc<AppState>>,
     DbConn(mut db): DbConn,
     Path((document_id, metadata_type_id)): Path<(i64, i64)>,
 ) -> Result<Json<()>, ApiError> {
@@ -136,6 +143,9 @@ async fn delete_junction(
     if affected == 0 {
         return Err(ApiError::not_found("document_metadatas not found"));
     }
+
+    // Enqueue jobs to update document indexes for this document, as the metadata may be used in index rules.
+    enqueue_document_index_document_updates(document_id, state).await?;
 
     Ok(Json(()))
 }

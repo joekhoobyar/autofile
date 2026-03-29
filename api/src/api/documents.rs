@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::AppState;
+use crate::application::documents::get_document_view;
 use crate::schema::{cabinet_documents, document_files, document_metadatas, documents, metadata_types, tag_documents};
 use crate::domain::documents::{Document, DocumentView};
 use crate::domain::document_files::DocumentFile;
@@ -187,53 +188,11 @@ async fn upload_temp_file_to_s3(
 
 pub async fn get_by_id(
     _user: AuthUser,
-    DbConn(mut db): DbConn,
+    DbConn(db): DbConn,
     Path(id): Path<i64>,
 ) -> Result<Json<DocumentView>, ApiError> {
-    let document = documents::table
-        .find(id)
-        .select(Document::as_select())
-        .first::<Document>(&mut db)
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document"))?;
-
-    let metadata_rows: Vec<(String, String)> = document_metadatas::table
-        .inner_join(metadata_types::table)
-        .filter(document_metadatas::document_id.eq(document.id))
-        .select((metadata_types::slug, document_metadatas::value))
-        .load::<(String, String)>(&mut db)
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document metadata"))?;
-    let metadata: HashMap<String, String> = metadata_rows.into_iter().collect();
-
-    let cabinet_rows: Vec<i64> = cabinet_documents::table
-        .filter(cabinet_documents::document_id.eq(document.id))
-        .select(cabinet_documents::cabinet_id)
-        .load::<i64>(&mut db)
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list cabinets for document"))?;
-    let cabinet_ids: Vec<i64> = cabinet_rows.into_iter().collect();
-
-    let tag_rows: Vec<i64> = tag_documents::table
-        .filter(tag_documents::document_id.eq(document.id))
-        .select(tag_documents::tag_id)
-        .load::<i64>(&mut db)
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list tags for document"))?;
-    let tag_ids: Vec<i64> = tag_rows.into_iter().collect();
-
-    Ok(Json(DocumentView {
-        id: document.id,
-        title: document.title,
-        document_type_id: document.document_type_id,
-        cabinet_ids,
-        tag_ids,
-        metadata,
-        created_by: document.created_by,
-        created_at: document.created_at,
-        updated_by: document.updated_by,
-        updated_at: document.updated_at,
-    }))
+    let document_view = get_document_view(db, id).await?;
+    Ok(Json(document_view))
 }
 
 pub async fn delete(

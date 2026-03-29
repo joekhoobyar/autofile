@@ -35,3 +35,5 @@ uuid = { version = "1.7", features = ["v4"] }
 apalis = { version = "0.7", features = ["limit"] }
 apalis-redis = "0.7"
 redis = { version = "0.32", features = ["tokio-comp"] }
+
+minijinja = { version = "2.18" } 

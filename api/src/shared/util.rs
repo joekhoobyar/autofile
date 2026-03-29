@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::Arc;
 
 use apalis::prelude::*;
@@ -55,6 +56,14 @@ impl IntoResponse for ApiError {
         (self.status, Json(self)).into_response()
     }
 }
+
+impl fmt::Display for ApiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for ApiError {}
 
 // Map a Diesel error to an appropriate HTTP status code.
 pub fn diesel_to_http(e: DieselError) -> StatusCode {

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use diesel_async::{pooled_connection::bb8, AsyncPgConnection};
 use apalis_redis::RedisStorage;
 
+use crate::application::document_index_documents::UpdateDocumentIndexDocument;
 use crate::application::document_thumbnails::GenerateThumbnail;
 
 // Shared application state
@@ -13,4 +14,5 @@ pub struct AppState {
     pub s3_bucket: Arc<String>,
     pub jwt_secret: Arc<Vec<u8>>,
     pub thumb_jobs: Arc<RedisStorage<GenerateThumbnail>>,
+    pub index_jobs: Arc<RedisStorage<UpdateDocumentIndexDocument>>,
 }
