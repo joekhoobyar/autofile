@@ -1,12 +1,14 @@
 use std::sync::Arc;
 
 use crate::AppState;
+use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::schema::{tag_documents};
 use crate::domain::tag_documents::TagDocument;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
 
+use axum::extract::State;
 use serde::Deserialize;
 
 use axum::{
@@ -76,6 +78,7 @@ pub async fn get_by_ids(
 
 async fn upsert(
     user: AuthUser,
+    State(state): State<Arc<AppState>>,
     DbConn(mut db): DbConn,
     Path(tag_id): Path<i64>,
     Json(input): Json<Vec<NewTagDocument>>,
@@ -102,6 +105,11 @@ async fn upsert(
         .get_results(&mut db)
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to save tag_document"))?;
+
+    // Enqueue jobs to update document indexes for this document, as the tags may be used in index rules.
+    for doc in values {
+        enqueue_document_index_document_updates(doc.document_id, state.clone()).await?;
+    }
 
     Ok(Json(items))
 }
@@ -146,6 +154,7 @@ pub async fn list(
 
 async fn delete(
     _user: AuthUser,
+    State(state): State<Arc<AppState>>,
     DbConn(mut db): DbConn,
     Path(tag_id): Path<i64>,
     Json(input): Json<Vec<i64>>,
@@ -153,17 +162,23 @@ async fn delete(
     diesel::delete(
             tag_documents::table
                 .filter(tag_documents::tag_id.eq(tag_id))
-                .filter(tag_documents::document_id.eq_any(input))
+                .filter(tag_documents::document_id.eq_any(&input))
         )
         .execute(&mut db)
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete tag_documents"))?;
+
+    // Enqueue jobs to update document indexes for this document, as the tags may be used in index rules.
+    for document_id in input {
+        enqueue_document_index_document_updates(document_id, state.clone()).await?;
+    }
 
     Ok(Json(()))
 }
 
 async fn delete_junction(
     _user: AuthUser,
+    State(state): State<Arc<AppState>>,
     DbConn(mut db): DbConn,
     Path((tag_id, document_id)): Path<(i64, i64)>,
 ) -> Result<Json<()>, ApiError> {
@@ -179,6 +194,9 @@ async fn delete_junction(
     if affected == 0 {
         return Err(ApiError::not_found("tag_document not found"));
     }
+
+    // Enqueue jobs to update document indexes for this document, as the tags may be used in index rules.
+    enqueue_document_index_document_updates(document_id, state).await?;
 
     Ok(Json(()))
 }
