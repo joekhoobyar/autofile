@@ -18,6 +18,7 @@ export interface DocumentIndexTemplate {
 export interface DocumentIndexValue {
     id: number
     value: string
+    is_leaf: boolean
     document_index_id: number
     document_index_template_id: number
     parent_id?: number
