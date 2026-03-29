@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::AppState;
 use crate::application::documents::get_document_view;
-use crate::schema::{cabinet_documents, document_files, document_metadatas, documents, metadata_types, tag_documents};
+use crate::schema::{cabinet_documents, document_files, document_index_documents, document_metadatas, documents, metadata_types, tag_documents};
 use crate::domain::documents::{Document, DocumentView};
 use crate::domain::document_files::DocumentFile;
 use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_to_s3};
@@ -88,6 +88,8 @@ pub struct ListDocumentsQuery {
     pub cabinet_id: Option<i64>,
     // optional tag search
     pub tag_id: Option<i64>,
+    // optional document index value search
+    pub document_index_value_id: Option<i64>,
     // optional sort field
     pub sf: Option<DocumentSortField>,
     // optional sort descending
@@ -524,6 +526,15 @@ pub async fn list(
             let subquery = tag_documents::table
                 .filter(tag_documents::tag_id.eq(id))
                 .filter(tag_documents::document_id.eq(documents::id));
+
+            query = query.filter(exists(subquery));
+        }
+
+        // Filter by document index value ID
+        if let Some(id) = params.document_index_value_id {
+            let subquery = document_index_documents::table
+                .filter(document_index_documents::document_index_value_id.eq(id))
+                .filter(document_index_documents::document_id.eq(documents::id));
 
             query = query.filter(exists(subquery));
         }
