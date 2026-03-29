@@ -14,3 +14,11 @@ export interface DocumentIndexTemplate {
     document_index_id: number
     parent_id?: number
 }
+
+export interface DocumentIndexValue {
+    id: number
+    value: string
+    document_index_id: number
+    document_index_template_id: number
+    parent_id?: number
+}
