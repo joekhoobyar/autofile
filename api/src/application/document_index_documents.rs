@@ -1,11 +1,12 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use bb8::PooledConnection;
 use serde::{Deserialize, Serialize};
 
 use apalis::prelude::*;
+use bb8::PooledConnection;
 use diesel::prelude::*;
+use diesel::dsl::{exists, not};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
@@ -92,7 +93,7 @@ pub async fn update_document_index_document(
         .await
         .map_err(to_job_error)?;
 
-    // Load the document index.
+    // Check if the document index still exists - if not, we can skip this operation entirely.
     let document_index = document_indexes::table
         .find(job.document_index_id)
         .select(DocumentIndex::as_select())
@@ -182,18 +183,85 @@ pub async fn update_document_index_document(
 
     // At the end of processing all templates, any document_index_value_ids remaining in the set should be deleted,
     // as they no longer match the document.
-    if !existing_value_ids.is_empty() {
-        diesel::delete(
-            document_index_documents::table.filter(
-                document_index_documents::document_id
-                    .eq(job.document_id)
-                    .and(document_index_documents::document_index_value_id.eq_any(existing_value_ids)),
-            ),
-        )
-        .execute(&mut db)
+    delete_stale_document_index_values(&mut db, job.document_id, &existing_value_ids).await?;
+
+    Ok(())
+}
+
+async fn delete_stale_document_index_values(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    remaining_value_ids: &HashSet<i64>,
+) -> Result<(), Error> {
+    if remaining_value_ids.is_empty() {
+        return Ok(());
+    }
+
+    let remaining_value_ids: Vec<i64> = remaining_value_ids.iter().copied().collect();
+
+    // Delete the original document links.
+    diesel::delete(
+        document_index_documents::table.filter(
+            document_index_documents::document_id
+                .eq(document_id)
+                .and(document_index_documents::document_index_value_id.eq_any(&remaining_value_ids)),
+        ),
+    )
+        .execute(db)
         .await
         .map_err(to_job_error)?;
+
+    // Delete the original value leaf nodes only if no more document_index_documents exist,
+    // and collect their parent_id values for ancestor cleanup.
+    let remaining_parent_ids: Vec<i64> = diesel::delete(
+        document_index_values::table
+            .filter(document_index_values::id.eq_any(&remaining_value_ids))
+            .filter(not(exists(
+                document_index_documents::table.filter(
+                    document_index_documents::document_index_value_id.eq(document_index_values::id),
+                ),
+            ))),
+    )
+        .returning(document_index_values::parent_id)
+        .get_results::<Option<i64>>(db)
+        .await
+        .map_err(to_job_error)?
+        .into_iter()
+        .flatten()
+        .collect();
+    if remaining_parent_ids.is_empty() {
+        return Ok(());
     }
+
+    // Delete any ancestor values that no longer have children after leaf removal.
+    diesel::sql_query(
+        r#"
+        WITH RECURSIVE deletable AS (
+            SELECT t.id, t.parent_id
+            FROM document_index_values t
+            WHERE t.id = ANY($1)
+
+            UNION ALL
+
+            SELECT p.id, p.parent_id
+            FROM document_index_values p
+            JOIN deletable d
+            ON p.id = d.parent_id
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM document_index_values c
+                WHERE c.parent_id = p.id
+                AND c.id <> d.id
+            )
+        )
+        DELETE FROM document_index_values
+        WHERE id IN (SELECT id FROM deletable)
+        "#
+    )
+        .bind::<diesel::sql_types::Array<diesel::sql_types::BigInt>, _>(remaining_parent_ids)
+        .execute(db)
+        .await
+        .map_err(to_job_error)?;
 
     Ok(())
 }
