@@ -433,7 +433,8 @@ async fn apply_document_index_value(
             document_index_values::document_index_template_id,
             document_index_values::value,
         ))
-        .do_nothing()
+        .do_update()
+        .set(document_index_values::value.eq(diesel::upsert::excluded(document_index_values::value)))
         .returning(document_index_values::id)
         .get_result(db)
         .await?;
