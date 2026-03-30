@@ -23,8 +23,8 @@ const MAX_DOCUMENT_INDEX_TEMPLATES = 200;
 
 export function ListDocumentIndexTemplates() {
   const toast = useRef(null);
-  const { document_index_id } = useParams();
-  const documentIndexId = Number(document_index_id);
+  const { documentIndexId: documentIndexIdParam } = useParams();
+  const documentIndexId = Number(documentIndexIdParam);
   const deleteTemplate = useDeleteDocumentIndexTemplate(documentIndexId);
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useDocumentIndexTemplateTree(documentIndexId);
@@ -70,7 +70,7 @@ export function ListDocumentIndexTemplates() {
     return keys;
   }, [data]);
 
-  if (!document_index_id || Number.isNaN(documentIndexId))
+  if (!documentIndexIdParam || Number.isNaN(documentIndexId))
     return <Message severity="error" text="Missing or invalid document index ID" />;
 
   const actionTemplate = (c: TreeNode) => {
@@ -128,11 +128,11 @@ export function ListDocumentIndexTemplates() {
 
 export function EditDocumentIndexTemplate() {
   const id = useId('id');
-  const { document_index_id } = useParams();
-  const documentIndexId = Number(document_index_id);
+  const { documentIndexId: documentIndexIdParam } = useParams();
+  const documentIndexId = Number(documentIndexIdParam);
   const { isLoading, isError, data, error } = useDocumentIndexTemplate(documentIndexId, id);
 
-  if (!document_index_id || Number.isNaN(documentIndexId))
+  if (!documentIndexIdParam || Number.isNaN(documentIndexId))
     return <Message severity="error" text="Missing or invalid document index ID" />;
   if (!id)
     return <Message severity="error" text="Missing or invalid ID" />;
@@ -149,10 +149,10 @@ export function EditDocumentIndexTemplate() {
 }
 
 export function NewDocumentIndexTemplate() {
-  const { document_index_id } = useParams();
-  const documentIndexId = Number(document_index_id);
+  const { documentIndexId: documentIndexIdParam } = useParams();
+  const documentIndexId = Number(documentIndexIdParam);
 
-  if (!document_index_id || Number.isNaN(documentIndexId))
+  if (!documentIndexIdParam || Number.isNaN(documentIndexId))
     return <Message severity="error" text="Missing or invalid document index ID" />;
 
   return (

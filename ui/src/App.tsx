@@ -119,16 +119,21 @@ const router = createBrowserRouter([
           { index: true, element: <ListDocumentIndexes/> },
           { path: 'new', element: <NewDocumentIndex/> },
           { path: ':id/edit', element: <EditDocumentIndex/> },
-          { path: ':document_index_id/templates', 
+          { path: ':documentIndexId/templates', 
             children: [
               { index: true, element: <ListDocumentIndexTemplates/> },
               { path: 'new', element: <NewDocumentIndexTemplate/> },
               { path: ':id/edit', element: <EditDocumentIndexTemplate/> },
             ]
           },
-          { path: ':document_index_id/values', 
+          { path: ':documentIndexId/values', 
             children: [
               { index: true, element: <ListDocumentIndexValues/> },
+            ]
+          },
+          { path: ':documentIndexId/documents', 
+            children: [
+              { index: true, element: <ListDocuments/> },
             ]
           },
         ]

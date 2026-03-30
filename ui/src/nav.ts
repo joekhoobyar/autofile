@@ -32,9 +32,9 @@ export const NAV: NavItem[] = [
 type LabelState = { label?: string; loading?: boolean };
 
 export function useRouteResourceLabel(): LabelState {
-  const { id, document_index_id } = useParams<{ id: string; document_index_id: string }>();
+  const { id, documentIndexId } = useParams<{ id: string; documentIndexId: string }>();
   const { pathname } = useLocation();
-  const documentIndexId = document_index_id ? Number(document_index_id) : NaN;
+  const documentIndexIdNum = documentIndexId ? Number(documentIndexId) : NaN;
 
   const inDocuments = pathname.startsWith("/documents/");
   const inCabinets = pathname.startsWith("/cabinets/");
@@ -48,8 +48,8 @@ export function useRouteResourceLabel(): LabelState {
   const docQ = useDocument(id!, { enabled: !!id && inDocuments });
   const cabinetQ = useCabinet(id!, { enabled: !!id && inCabinets });
   const indexQ = useDocumentIndex(id!, { enabled: !!id && inIndexes });
-  const indexTemplateQ = useDocumentIndexTemplate(documentIndexId, id!, {
-    enabled: !!id && !!document_index_id && !Number.isNaN(documentIndexId) && inIndexTemplates,
+  const indexTemplateQ = useDocumentIndexTemplate(documentIndexIdNum, id!, {
+    enabled: !!id && !!documentIndexId && !Number.isNaN(documentIndexIdNum) && inIndexTemplates,
   });
   const docTypeQ = useDocumentType(id!, { enabled: !!id && inDocTypes });
   const metaTypeQ = useMetadataType(id!, { enabled: !!id && inMetaTypes });
@@ -72,12 +72,12 @@ export function useRouteResourceLabel(): LabelState {
 export function useBreadcrumbs(): { home: MenuItem; model: MenuItem[] } {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { id, document_index_id } = useParams<{ id: string; document_index_id: string }>();
-  const documentIndexId = document_index_id ? Number(document_index_id) : NaN;
+  const { id, documentIndexId } = useParams<{ id: string; documentIndexId: string }>();
+  const documentIndexIdNum = documentIndexId ? Number(documentIndexId) : NaN;
   const resource = useRouteResourceLabel();
   const inIndexTemplates = pathname.includes("/indexes/") && pathname.includes("/templates");
-  const indexQ = useDocumentIndex(documentIndexId, {
-    enabled: !!document_index_id && !Number.isNaN(documentIndexId) && inIndexTemplates,
+  const indexQ = useDocumentIndex(documentIndexIdNum, {
+    enabled: !!documentIndexId && !Number.isNaN(documentIndexIdNum) && inIndexTemplates,
   });
 
   const home: MenuItem = useMemo(
@@ -91,10 +91,10 @@ export function useBreadcrumbs(): { home: MenuItem; model: MenuItem[] } {
 
     const items: MenuItem[] = [{ label: section.label, command: () => navigate(section.to) }];
 
-    if (inIndexTemplates && document_index_id && !Number.isNaN(documentIndexId)) {
-      const indexLabel = indexQ.isLoading ? "Loading…" : (indexQ.data?.name ?? document_index_id);
-      items.push({ label: indexLabel, command: () => navigate(`/indexes/${document_index_id}/edit`) });
-      items.push({ label: "Templates", command: () => navigate(`/indexes/${document_index_id}/templates`) });
+    if (inIndexTemplates && documentIndexId && !Number.isNaN(documentIndexIdNum)) {
+      const indexLabel = indexQ.isLoading ? "Loading…" : (indexQ.data?.name ?? documentIndexId);
+      items.push({ label: indexLabel, command: () => navigate(`/indexes/${documentIndexId}/edit`) });
+      items.push({ label: "Templates", command: () => navigate(`/indexes/${documentIndexId}/templates`) });
     }
 
     if (pathname.endsWith("/new")) {
@@ -119,8 +119,8 @@ export function useBreadcrumbs(): { home: MenuItem; model: MenuItem[] } {
     resource.loading,
     resource.label,
     inIndexTemplates,
-    document_index_id,
     documentIndexId,
+    documentIndexIdNum,
     indexQ.isLoading,
     indexQ.data?.name,
   ]);

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import { DataTable, type DataTableStateEvent } from 'primereact/datatable';
 import { Column } from 'primereact/column';
@@ -13,8 +13,9 @@ import { useDocumentIndexValues } from '../queries/useDocumentIndexValues';
 import { type DocumentIndexValue, type DocumentIndexValueListParams } from '../models/documentIndex';
 
 export function ListDocumentIndexValues() {
-  const { document_index_id } = useParams();
-  const documentIndexId = Number(document_index_id);
+  const { documentIndexId: documentIndexIdParam } = useParams();
+  const documentIndexId = Number(documentIndexIdParam);
+  const navigate = useNavigate();
   const [listParams, setListParams] = useState<DocumentIndexValueListParams>({
     parent_id: 'null',
   });
@@ -37,6 +38,10 @@ export function ListDocumentIndexValues() {
         href="#"
         onClick={(event) => {
           event.preventDefault();
+          if (row.is_leaf) {
+            navigate(`/indexes/${documentIndexId}/documents`);
+            return;
+          }
           setParentStack((prev) => [...prev, { id: row.id, value: row.value }]);
           setListParams((prev) => ({ ...prev, parent_id: row.id, page: 0 }));
         }}
@@ -67,7 +72,7 @@ export function ListDocumentIndexValues() {
     return [rootItem, ...stackItems];
   }, [documentIndex?.name, parentStack]);
 
-  if (!document_index_id || Number.isNaN(documentIndexId))
+  if (!documentIndexIdParam || Number.isNaN(documentIndexId))
     return <Message severity="error" text="Missing or invalid document index ID" />;
 
   return (
