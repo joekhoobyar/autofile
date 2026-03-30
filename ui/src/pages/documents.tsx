@@ -296,10 +296,12 @@ export function ListDocuments() {
   const [listParams, setListParams] = useState<DocumentListParams>(initialListParams);
   const tagId = params.tagId ? Number.parseInt(params.tagId) : undefined;
   const cabinetId = params.cabinetId ? Number.parseInt(params.cabinetId) : undefined;
+  const documentIndexValueId = params.documentIndexValueId ? Number.parseInt(params.documentIndexValueId) : undefined;
   const effectiveListParams: DocumentListParams = {
     ...listParams,
     tag_id: tagId,
     cabinet_id: cabinetId,
+    document_index_value_id: documentIndexValueId,
   };
   const [layout, setLayout] = useState<'list' | 'grid'>('grid');
   const [previewVisible, setPreviewVisible] = useState(false);

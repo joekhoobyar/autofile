@@ -39,7 +39,7 @@ export function ListDocumentIndexValues() {
         onClick={(event) => {
           event.preventDefault();
           if (row.is_leaf) {
-            navigate(`/indexes/${documentIndexId}/documents`);
+            navigate(`/indexes/${documentIndexId}/values/${row.id}/documents`);
             return;
           }
           setParentStack((prev) => [...prev, { id: row.id, value: row.value }]);

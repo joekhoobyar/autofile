@@ -126,12 +126,12 @@ const router = createBrowserRouter([
               { path: ':id/edit', element: <EditDocumentIndexTemplate/> },
             ]
           },
-          { path: ':documentIndexId/values', 
+          { path: ':documentIndexId/values',
             children: [
               { index: true, element: <ListDocumentIndexValues/> },
             ]
           },
-          { path: ':documentIndexId/documents', 
+          { path: ':documentIndexId/values/:documentIndexValueId/documents',
             children: [
               { index: true, element: <ListDocuments/> },
             ]
