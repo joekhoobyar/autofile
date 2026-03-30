@@ -12,6 +12,8 @@ import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 
 import { apiFetchRaw } from '../api';
 import { useDeleteDocument, useDocuments, useDocumentThumbnail, useRemoveCabinetDocument, useRemoveTagDocument, useSaveCabinetDocument, useSaveTagDocument } from '../queries/useDocuments';
+import { useDocumentIndex } from '../queries/useDocumentIndexes';
+import { useDocumentIndexValueAncestors } from '../queries/useDocumentIndexValues';
 import { type Document, type DocumentListParams } from '../models/document';
 import { useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { useDocumentTypes, useDocumentTypesMap } from '../queries/useDocumentTypes';
@@ -291,12 +293,16 @@ export function ListDocuments() {
   const tagId = params.tagId ? Number.parseInt(params.tagId) : undefined;
   const cabinetId = params.cabinetId ? Number.parseInt(params.cabinetId) : undefined;
   const documentIndexValueId = params.documentIndexValueId ? Number.parseInt(params.documentIndexValueId) : undefined;
+  const documentIndexId = params.documentIndexId ? Number.parseInt(params.documentIndexId) : undefined;
   const effectiveListParams: DocumentListParams = {
     ...listParams,
     tag_id: tagId,
     cabinet_id: cabinetId,
     document_index_value_id: documentIndexValueId,
   };
+  const showIndexMenu = !!documentIndexId && !!documentIndexValueId;
+  const { data: indexAncestors } = useDocumentIndexValueAncestors(documentIndexId ?? 0, documentIndexValueId ?? 0);
+  const { data: documentIndex } = useDocumentIndex(documentIndexId ?? 0, { enabled: !!documentIndexId });
   const [layout, setLayout] = useState<'list' | 'grid'>('grid');
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewSrc, setPreviewSrc] = useState<string | undefined>(undefined);
@@ -575,7 +581,24 @@ export function ListDocuments() {
     { icon: 'pi pi-trash', label: 'Delete Documents', command: () => { confirmDeleteSelectedDocuments(); }, disabled: selectedIds.size === 0 },
   ];
 
-  return (
+  const indexMenuItems = useMemo<MenuItem[]>(() => {
+    if (!showIndexMenu) return [];
+    const rootItem: MenuItem = {
+      label: documentIndex?.name ?? 'Document Index',
+      icon: 'pi pi-folder',
+      command: () => navigate(`/indexes/${documentIndexId}/values`),
+    };
+
+    const stackItems = (indexAncestors ?? []).map((item) => ({
+      label: item.value,
+      icon: 'pi pi-folder',
+      command: () => navigate(`/indexes/${documentIndexId}/values/${item.id}/documents`),
+    }));
+
+    return [rootItem, ...stackItems];
+  }, [documentIndex?.name, documentIndexId, indexAncestors, navigate, showIndexMenu]);
+
+  const mainContent = (
     <>
     <Menu model={actionMenuItems} popup ref={actionMenu} popupAlignment="right" id="action_menu"/>
     <Button
@@ -756,6 +779,19 @@ export function ListDocuments() {
     </Dialog>
     <ConfirmDialog />
     </>
+  );
+
+  if (!showIndexMenu) {
+    return mainContent;
+  }
+
+  return (
+    <div className="flex gap-3 align-items-start">
+      <Menu model={indexMenuItems} style={{ minWidth: '14rem' }} />
+      <div className="flex-1">
+        {mainContent}
+      </div>
+    </div>
   );
 }
 
