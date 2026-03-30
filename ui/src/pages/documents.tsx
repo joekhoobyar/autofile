@@ -67,18 +67,12 @@ function DocumentThumbnail({
     if (src) {
       setLoadedSrc(src);
       setErrorSrc(undefined);
-      if (src.startsWith('blob:')) {
-        URL.revokeObjectURL(src);
-      }
     }
   };
 
   const handleError = () => {
     if (src) {
       setErrorSrc(src);
-      if (src.startsWith('blob:')) {
-        URL.revokeObjectURL(src);
-      }
     }
   };
 
@@ -92,7 +86,7 @@ function DocumentThumbnail({
             src={src}
             onLoad={handleLoad}
             onError={handleError}
-            style={{ maxHeight: '200px', display: isLoaded ? 'block' : 'none' }}
+            style={{ maxHeight: '200px', visibility: isLoaded ? 'visible' : 'hidden' }}
           />
         ) : (
           <div
