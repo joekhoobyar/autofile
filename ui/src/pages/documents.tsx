@@ -221,7 +221,7 @@ function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange, cabi
     return (
       <div className="col-12 sm:col-6 lg:col-4 xl:col-2 p-2 aut-document-grid" key={doc.id}>
         <div className="border-1 surface-border surface-card border-round">
-          <section className="flex flex-column aut-document">
+          <section className="flex flex-column aut-document w-full">
             <header className="flex align-items-center gap-2 aut-document-header">
               <Checkbox
                 inputId={`document-select-${doc.id}`}
