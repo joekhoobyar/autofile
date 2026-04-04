@@ -589,11 +589,14 @@ export function ListDocuments() {
       command: () => navigate(`/indexes/${documentIndexId}/values`),
     };
 
-    const stackItems = (indexAncestors ?? []).map((item) => ({
-      label: item.value,
-      icon: 'pi pi-folder',
-      command: () => navigate(`/indexes/${documentIndexId}/values/${item.id}`),
-    }));
+    const stackItems = (indexAncestors ?? []).map((item, index, items) => {
+      const suffix = index === items.length - 1 ? '/documents' : '';
+      return {
+        label: item.value,
+        icon: 'pi pi-folder',
+        command: () => navigate(`/indexes/${documentIndexId}/values/${item.id}${suffix}`),
+      };
+    });
 
     return [rootItem, ...stackItems];
   }, [documentIndex?.name, documentIndexId, indexAncestors, navigate, showIndexMenu]);
