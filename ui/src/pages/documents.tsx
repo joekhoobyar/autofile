@@ -592,7 +592,7 @@ export function ListDocuments() {
     const stackItems = (indexAncestors ?? []).map((item) => ({
       label: item.value,
       icon: 'pi pi-folder',
-      command: () => navigate(`/indexes/${documentIndexId}/values/${item.id}/documents`),
+      command: () => navigate(`/indexes/${documentIndexId}/values/${item.id}`),
     }));
 
     return [rootItem, ...stackItems];

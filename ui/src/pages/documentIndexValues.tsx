@@ -9,19 +9,25 @@ import { Menu } from 'primereact/menu';
 import type { MenuItem } from 'primereact/menuitem';
 
 import { useDocumentIndex } from '../queries/useDocumentIndexes';
-import { useDocumentIndexValues } from '../queries/useDocumentIndexValues';
+import { useDocumentIndexValueAncestors, useDocumentIndexValues } from '../queries/useDocumentIndexValues';
 import { type DocumentIndexValue, type DocumentIndexValueListParams } from '../models/documentIndex';
 
 export function ListDocumentIndexValues() {
-  const { documentIndexId: documentIndexIdParam } = useParams();
+  const { documentIndexId: documentIndexIdParam, documentIndexValueId: documentIndexValueIdParam } = useParams();
   const documentIndexId = Number(documentIndexIdParam);
+  const parsedDocumentIndexValueId = documentIndexValueIdParam ? Number(documentIndexValueIdParam) : undefined;
+  const documentIndexValueId = parsedDocumentIndexValueId && !Number.isNaN(parsedDocumentIndexValueId)
+    ? parsedDocumentIndexValueId
+    : undefined;
   const navigate = useNavigate();
-  const [listParams, setListParams] = useState<DocumentIndexValueListParams>({
-    parent_id: 'null',
-  });
-  const [parentStack, setParentStack] = useState<Array<{ id: number; value: string }>>([]);
+  const [listParams, setListParams] = useState<DocumentIndexValueListParams>({});
   const { data: documentIndex } = useDocumentIndex(documentIndexId);
-  const { isPending, data, isFetching } = useDocumentIndexValues(documentIndexId, listParams);
+  const effectiveListParams: DocumentIndexValueListParams = {
+    ...listParams,
+    parent_id: documentIndexValueId ?? 'null',
+  };
+  const { isPending, data, isFetching } = useDocumentIndexValues(documentIndexId, effectiveListParams);
+  const { data: indexAncestors } = useDocumentIndexValueAncestors(documentIndexId, documentIndexValueId ?? 0);
 
   const onSort = (event: DataTableStateEvent) => {
     setListParams((prev) => ({ ...prev, sf: event.sortField, sd: event.sortOrder === -1 }));
@@ -42,8 +48,7 @@ export function ListDocumentIndexValues() {
             navigate(`/indexes/${documentIndexId}/values/${row.id}/documents`);
             return;
           }
-          setParentStack((prev) => [...prev, { id: row.id, value: row.value }]);
-          setListParams((prev) => ({ ...prev, parent_id: row.id, page: 0 }));
+          navigate(`/indexes/${documentIndexId}/values/${row.id}`);
         }}
       >
         {row.value}
@@ -56,21 +61,19 @@ export function ListDocumentIndexValues() {
       label: documentIndex?.name ?? 'Document Index',
       icon: 'pi pi-folder',
       command: () => {
-        setParentStack([]);
-        setListParams((prev) => ({ ...prev, parent_id: 'null', page: 0 }));
+        navigate(`/indexes/${documentIndexId}/values`);
       },
     };
 
-    const stackItems = parentStack.map((item, index) => ({
+    const stackItems = (indexAncestors ?? []).map((item) => ({
       label: item.value,
       icon: 'pi pi-folder',
       command: () => {
-        setParentStack(parentStack.slice(0, index + 1));
-        setListParams((prev) => ({ ...prev, parent_id: item.id, page: 0 }));
+        navigate(`/indexes/${documentIndexId}/values/${item.id}`);
       },
     }));
     return [rootItem, ...stackItems];
-  }, [documentIndex?.name, parentStack]);
+  }, [documentIndex?.name, documentIndexId, indexAncestors, navigate]);
 
   if (!documentIndexIdParam || Number.isNaN(documentIndexId))
     return <Message severity="error" text="Missing or invalid document index ID" />;

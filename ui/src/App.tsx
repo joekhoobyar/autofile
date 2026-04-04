@@ -134,6 +134,11 @@ const router = createBrowserRouter([
               { index: true, element: <ListDocumentIndexValues/> },
             ]
           },
+          { path: ':documentIndexId/values/:documentIndexValueId',
+            children: [
+              { index: true, element: <ListDocumentIndexValues/> },
+            ]
+          },
           { path: ':documentIndexId/values/:documentIndexValueId/documents',
             children: [
               { index: true, element: <ListDocuments/> },
