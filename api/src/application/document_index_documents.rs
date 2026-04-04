@@ -82,6 +82,22 @@ pub async fn update_document_index_document(
 }
 
 /**
+ * This job removes a document from all relevant index nodes.
+ */
+pub async fn delete_document_index_document(
+    document_id: i64,
+    state: Data<Arc<AppState>>,
+) -> Result<(), Error> {
+    match do_delete_document_index_document(document_id, state).await {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            tracing::error!(error = %err, "document_index delete job failed for document {:?}", document_id);
+            Err(err)
+        }
+    }
+}
+
+/**
  * Internal function to update a document index for a given document.
  * 
  * Separated from the public function to allow for more granular error handling and logging.
@@ -257,7 +273,29 @@ async fn do_update_document_index_document(
         .build_transaction()
         .run::<_, diesel::result::Error, _>(|conn| {
             Box::pin(async move {
-                delete_stale_document_index_values(conn, document_id, &existing_value_ids)
+                // Any existing document_index_document records for this document that were not matched by the traversal
+                // need to be removed, as they are no longer relevant.
+                let stale_value_ids: Vec<i64> = existing_value_ids.iter().copied().collect();
+                if stale_value_ids.is_empty() {
+                    return Ok(());
+                }
+
+                // Next, delete the document_index_document records for these stale value ids, and collect the deleted value ids
+                // to check if any document_index_value records need to be removed as well.
+                let deleted_value_ids: Vec<i64> = diesel::delete(
+                    document_index_documents::table.filter(
+                        document_index_documents::document_id
+                            .eq(document_id)
+                            .and(document_index_documents::document_index_value_id.eq_any(&stale_value_ids)),
+                    ),
+                )
+                .returning(document_index_documents::document_index_value_id)
+                .get_results(conn)
+                .await?;
+
+                // Finally, delete any document_index_value records that are no longer linked to any document_index_documents
+                // after removal, and their ancestor values if they no longer have children.
+                delete_stale_document_index_values(conn, deleted_value_ids)
                     .await
                     .map_err(|err| {
                         tracing::error!(error = %err, "document_index_values cleanup failed inside transaction");
@@ -269,6 +307,48 @@ async fn do_update_document_index_document(
         .await;
 
     cleanup_result.map_err(to_job_error)?;
+
+    Ok(())
+}
+
+async fn do_delete_document_index_document(
+    document_id: i64,
+    state: Data<Arc<AppState>>,
+) -> Result<(), Error> {
+    tracing::info!(document_id, "Deleting document_index values for document");
+
+    let mut db = state
+        .db_pool
+        .get()
+        .await
+        .map_err(to_job_error)?;
+
+    let tx_result = db
+        .build_transaction()
+        .run::<_, diesel::result::Error, _>(|conn| {
+            Box::pin(async move {
+                let deleted_value_ids: Vec<i64> = diesel::delete(
+                    document_index_documents::table
+                        .filter(document_index_documents::document_id.eq(document_id)),
+                )
+                .returning(document_index_documents::document_index_value_id)
+                .get_results(conn)
+                .await?;
+                if deleted_value_ids.is_empty() {
+                    return Ok(());
+                }
+                delete_stale_document_index_values(conn, deleted_value_ids)
+                    .await
+                    .map_err(|err| {
+                        tracing::error!(error = %err, "document_index_values cleanup failed inside transaction");
+                        err
+                    })?;
+                Ok(())
+            })
+        })
+        .await;
+
+    tx_result.map_err(to_job_error)?;
 
     Ok(())
 }
@@ -334,32 +414,16 @@ async fn build_template_document_view(
 }
 
 /**
- * Internal function to delete document_index_document records for a given document_id
- * and a set of document_index_value_ids, as well as any document_index_value records
- * that are no longer linked to any document after the deletion, and their ancestor values
- * if they no longer have children.
+ * Internal function to delete document_index_value records that are no longer linked to any
+ * document_index_documents after removal, and their ancestor values if they no longer have children.
  */
 async fn delete_stale_document_index_values(
     db: &mut AsyncPgConnection,
-    document_id: i64,
-    remaining_value_ids: &HashSet<i64>,
+    remaining_value_ids: Vec<i64>,
 ) -> Result<(), diesel::result::Error> {
     if remaining_value_ids.is_empty() {
         return Ok(());
     }
-
-    let remaining_value_ids: Vec<i64> = remaining_value_ids.iter().copied().collect();
-
-    // Delete the original document links.
-    diesel::delete(
-        document_index_documents::table.filter(
-            document_index_documents::document_id
-                .eq(document_id)
-                .and(document_index_documents::document_index_value_id.eq_any(&remaining_value_ids)),
-        ),
-    )
-        .execute(db)
-        .await?;
 
     // Delete any ancestor values that no longer have children after leaf removal.
     diesel::sql_query(

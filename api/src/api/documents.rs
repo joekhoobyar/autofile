@@ -257,6 +257,12 @@ pub async fn delete(
         }
     }
 
+    let mut fast_jobs = state.fast_jobs.as_ref().clone();
+    fast_jobs
+        .push(FastJob::DeleteDocumentIndexDocument { document_id: id })
+        .await
+        .map_err(|e| ApiError::internal_server_error(&format!("Failed to enqueue delete index job: {}", e)))?;
+
     Ok(Json(()))
 }
 
