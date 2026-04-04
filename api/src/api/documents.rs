@@ -9,6 +9,7 @@ use crate::schema::{cabinet_documents, document_files, document_index_documents,
 use crate::domain::documents::{Document, DocumentView};
 use crate::domain::document_files::DocumentFile;
 use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_to_s3};
+use crate::application::document_index_documents::delete_document_index_document;
 use crate::application::jobs::FastJob;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
@@ -206,6 +207,9 @@ pub async fn delete(
 ) -> Result<Json<()>, ApiError> {
     let prefixes = db.transaction::<_, diesel::result::Error, _>(move |conn| {
         Box::pin(async move {
+            // Remove document index associations before deleting the document row.
+            delete_document_index_document(conn, id).await?;
+
             // Delete the cabinet document associations
             diesel::delete(cabinet_documents::table.filter(cabinet_documents::document_id.eq(id)))
                 .execute(conn)
@@ -256,12 +260,6 @@ pub async fn delete(
                 })?;
         }
     }
-
-    let mut fast_jobs = state.fast_jobs.as_ref().clone();
-    fast_jobs
-        .push(FastJob::DeleteDocumentIndexDocument { document_id: id })
-        .await
-        .map_err(|e| ApiError::internal_server_error(&format!("Failed to enqueue delete index job: {}", e)))?;
 
     Ok(Json(()))
 }

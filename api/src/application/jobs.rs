@@ -4,10 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use apalis::prelude::*;
 
-use crate::application::document_index_documents::{
-    delete_document_index_document,
-    update_document_index_document,
-};
+use crate::application::document_index_documents::update_document_index_document;
 use crate::application::document_thumbnails::generate_thumbnail;
 use crate::shared::app_state::AppState;
 
@@ -20,9 +17,6 @@ pub enum FastJob {
     },
     UpdateDocumentIndexDocument {
         document_index_id: i64,
-        document_id: i64,
-    },
-    DeleteDocumentIndexDocument {
         document_id: i64,
     },
 }
@@ -43,8 +37,5 @@ pub async fn handle_fast_job(job: FastJob, state: Data<Arc<AppState>>) -> Result
             document_index_id,
             document_id,
         } => update_document_index_document(document_index_id, document_id, state).await,
-        FastJob::DeleteDocumentIndexDocument { document_id } => {
-            delete_document_index_document(document_id, state).await
-        }
     }
 }

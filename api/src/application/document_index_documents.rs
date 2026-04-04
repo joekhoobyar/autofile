@@ -84,18 +84,6 @@ pub async fn update_document_index_document(
 /**
  * This job removes a document from all relevant index nodes.
  */
-pub async fn delete_document_index_document(
-    document_id: i64,
-    state: Data<Arc<AppState>>,
-) -> Result<(), Error> {
-    match do_delete_document_index_document(document_id, state).await {
-        Ok(()) => Ok(()),
-        Err(err) => {
-            tracing::error!(error = %err, "document_index delete job failed for document {:?}", document_id);
-            Err(err)
-        }
-    }
-}
 
 /**
  * Internal function to update a document index for a given document.
@@ -311,46 +299,21 @@ async fn do_update_document_index_document(
     Ok(())
 }
 
-async fn do_delete_document_index_document(
+pub async fn delete_document_index_document(
+    db: &mut AsyncPgConnection,
     document_id: i64,
-    state: Data<Arc<AppState>>,
-) -> Result<(), Error> {
-    tracing::info!(document_id, "Deleting document_index values for document");
-
-    let mut db = state
-        .db_pool
-        .get()
-        .await
-        .map_err(to_job_error)?;
-
-    let tx_result = db
-        .build_transaction()
-        .run::<_, diesel::result::Error, _>(|conn| {
-            Box::pin(async move {
-                let deleted_value_ids: Vec<i64> = diesel::delete(
-                    document_index_documents::table
-                        .filter(document_index_documents::document_id.eq(document_id)),
-                )
-                .returning(document_index_documents::document_index_value_id)
-                .get_results(conn)
-                .await?;
-                if deleted_value_ids.is_empty() {
-                    return Ok(());
-                }
-                delete_stale_document_index_values(conn, deleted_value_ids)
-                    .await
-                    .map_err(|err| {
-                        tracing::error!(error = %err, "document_index_values cleanup failed inside transaction");
-                        err
-                    })?;
-                Ok(())
-            })
-        })
-        .await;
-
-    tx_result.map_err(to_job_error)?;
-
-    Ok(())
+) -> Result<(), diesel::result::Error> {
+    let deleted_value_ids: Vec<i64> = diesel::delete(
+        document_index_documents::table
+            .filter(document_index_documents::document_id.eq(document_id)),
+    )
+    .returning(document_index_documents::document_index_value_id)
+    .get_results(db)
+    .await?;
+    if deleted_value_ids.is_empty() {
+        return Ok(());
+    }
+    delete_stale_document_index_values(db, deleted_value_ids).await
 }
 
 /**
