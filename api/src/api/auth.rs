@@ -121,7 +121,7 @@ pub async fn logout(
     cookie.set_http_only(true);
     cookie.set_secure(is_production());
     cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
-    cookie.set_path("/auth");
+    cookie.set_path("/api/v1/auth");
     cookie.set_max_age(tower_cookies::cookie::time::Duration::ZERO);
     cookies.add(cookie);
 
