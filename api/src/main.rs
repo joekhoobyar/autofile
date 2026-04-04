@@ -46,6 +46,7 @@ mod application {
     pub mod document_index_documents;
     pub mod document_thumbnails;
     pub mod documents;
+    pub mod jobs;
 }
 mod domain {
     pub mod cabinets;
@@ -73,13 +74,9 @@ mod shared {
 
 use shared::extractors::DbConn;
 
-use crate::application::document_index_documents::{
-    UpdateDocumentIndexDocument,
-    update_document_index_document,
-};
+use crate::application::jobs::{FastJob, handle_fast_job};
 use crate::shared::app_state::AppState;
 use crate::shared::util::ApiError;
-use crate::application::document_thumbnails::{GenerateThumbnail, generate_thumbnail};
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
@@ -97,8 +94,7 @@ async fn main() {
         .unwrap_or_else(|_| "redis://127.0.0.1:6379/?connect_timeout=2&timeout=2".to_string());
     check_redis(&redis_url).await.expect("Redis not reachable");
     let redis_conn = apalis_redis::connect(redis_url).await.expect("Could not connect to Redis");
-    let thumb_storage: RedisStorage<GenerateThumbnail> = RedisStorage::new(redis_conn.clone());
-    let index_storage: RedisStorage<UpdateDocumentIndexDocument> = RedisStorage::new(redis_conn);
+    let fast_storage: RedisStorage<FastJob> = RedisStorage::new(redis_conn);
 
     // Get database URL from environment
     let database_url = std::env::var("DATABASE_URL")
@@ -149,26 +145,18 @@ async fn main() {
         s3_client: Arc::new(s3_client),
         s3_bucket: Arc::new(s3_bucket),
         jwt_secret: Arc::new(jwt_secret),
-        thumb_jobs: Arc::new(thumb_storage),
-        index_jobs: Arc::new(index_storage),
+        fast_jobs: Arc::new(fast_storage),
     });
 
     // Spawn apalis workers (in-process).
     let monitor = Monitor::new()
         .register({
             // One or more workers pulling from Redis
-            WorkerBuilder::new("thumb-worker")
-                .concurrency(2) // Adjust concurrency as needed
+            WorkerBuilder::new("fast-job-worker")
+                .concurrency(4) // Adjust concurrency as needed
                 .data(app_state.clone())
-                .backend(app_state.thumb_jobs.as_ref().clone())
-                .build_fn(generate_thumbnail)
-        })
-        .register({
-            WorkerBuilder::new("index-worker")
-                .concurrency(2)
-                .data(app_state.clone())
-                .backend(app_state.index_jobs.as_ref().clone())
-                .build_fn(update_document_index_document)
+                .backend(app_state.fast_jobs.as_ref().clone())
+                .build_fn(handle_fast_job)
         });
     tokio::spawn(async move {
         monitor.run().await.expect("Background worker failed");

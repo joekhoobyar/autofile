@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
 
 use apalis::prelude::*;
 use bb8::PooledConnection;
@@ -11,6 +10,7 @@ use diesel::dsl::{exists, not};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
+use crate::application::jobs::FastJob;
 use crate::application::documents::get_document_view;
 use crate::domain::document_indexes::{DocumentIndex, DocumentIndexTemplate};
 use crate::domain::documents::{DocumentView, TemplateDocumentView};
@@ -25,12 +25,6 @@ use crate::schema::{
 };
 use crate::shared::app_state::AppState;
 use crate::shared::util::{to_job_error, ApiError};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateDocumentIndexDocument {
-    pub document_index_id: i64,
-    pub document_id: i64,
-}
 
 /**
  * This function is responsible for enqueueing jobs to update all document indexes for a given document.
@@ -55,10 +49,10 @@ pub async fn enqueue_document_index_document_updates(
         .map_err(|e| ApiError::internal_server_error(&format!("Failed to fetch document indexes: {}", e)))?;
 
     // Enqueue a job for each document index, passing the document_id and document_index_id.
-    let mut index_jobs = state.index_jobs.as_ref().clone();
+    let mut fast_jobs = state.fast_jobs.as_ref().clone();
     for index_id in index_ids {
-        index_jobs
-            .push(UpdateDocumentIndexDocument {
+        fast_jobs
+            .push(FastJob::UpdateDocumentIndexDocument {
                 document_index_id: index_id,
                 document_id,
             })
@@ -75,13 +69,14 @@ pub async fn enqueue_document_index_document_updates(
  * It is responsible for adding, updating or removing the document from relevant index nodes.
  */
 pub async fn update_document_index_document(
-    job: UpdateDocumentIndexDocument,
+    document_index_id: i64,
+    document_id: i64,
     state: Data<Arc<AppState>>,
 ) -> Result<(), Error> {
-    match do_update_document_index_document(job.clone(), state).await {
+    match do_update_document_index_document(document_index_id, document_id, state).await {
         Ok(()) => Ok(()),
         Err(err) => {
-            tracing::error!(error = %err, "document_index {:?} update job failed for document {:?}", job.document_index_id, job.document_id);
+            tracing::error!(error = %err, "document_index {:?} update job failed for document {:?}", document_index_id, document_id);
             Err(err)
         }
     }
@@ -93,10 +88,11 @@ pub async fn update_document_index_document(
  * Separated from the public function to allow for more granular error handling and logging.
  */
 async fn do_update_document_index_document(
-    job: UpdateDocumentIndexDocument,
+    document_index_id: i64,
+    document_id: i64,
     state: Data<Arc<AppState>>,
 ) -> Result<(), Error> {
-    tracing::info!(?job, "Updating document_index for document");
+    tracing::info!(document_index_id, document_id, "Updating document_index for document");
 
     let mut db = state
         .db_pool
@@ -104,29 +100,28 @@ async fn do_update_document_index_document(
         .await
         .map_err(to_job_error)?;
 
-    let document_view = get_document_view(&mut db, job.document_id)
+    // Build a TemplateDocumentView for this document, which includes loading the document type slug,
+    // tag slugs and cabinet slugs, as these may be needed to evaluate the document index templates.
+    let document_view = get_document_view(&mut db, document_id)
         .await
         .map_err(to_job_error)?;
-
     let template_document_view = build_template_document_view(&mut db, document_view).await?;
 
     // Check if the document index still exists - if not, we can skip this operation entirely.
     let document_index = document_indexes::table
-        .find(job.document_index_id)
+        .find(document_index_id)
         .select(DocumentIndex::as_select())
         .first::<DocumentIndex>(&mut db)
         .await;
     if matches!(document_index, Err(diesel::result::Error::NotFound)) {
         tracing::info!(
-            document_index_id = job.document_index_id,
+            document_index_id,
             "document_index missing; skipping update"
         );
         return Ok(());
     }
-    
-    let document_id = job.document_id;
-    let document_index_id = job.document_index_id;
-    let document_view = template_document_view;
+
+    let document_view = Arc::new(template_document_view);
 
     // Find any existing document_index_document records for this document.
     // We want the document_index_value_id(s), but only for this document_index_id.
@@ -169,15 +164,21 @@ async fn do_update_document_index_document(
             .or_default()
             .push(idx);
     }
+    let templates = Arc::new(templates);
+    let children_by_parent = Arc::new(children_by_parent);
 
     // Seed the stack with root templates (parent_id = None). Each root is processed independently
     // so a rollback only affects the current root.
     if let Some(root_ids) = children_by_parent.get(&None) {
-        for &root_idx in root_ids {
+        let root_ids: Vec<usize> = root_ids.clone();
+        for root_idx in root_ids {
             let skip_due_to_empty_template = Arc::new(AtomicBool::new(false));
             let skip_due_to_empty_template_tx = Arc::clone(&skip_due_to_empty_template);
             let skip_due_to_no_leaf = Arc::new(AtomicBool::new(false));
             let skip_due_to_no_leaf_tx = Arc::clone(&skip_due_to_no_leaf);
+            let templates = Arc::clone(&templates);
+            let children_by_parent = Arc::clone(&children_by_parent);
+            let document_view = Arc::clone(&document_view);
 
             let tx_result = db
                 .build_transaction()

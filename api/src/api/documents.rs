@@ -9,7 +9,7 @@ use crate::schema::{cabinet_documents, document_files, document_index_documents,
 use crate::domain::documents::{Document, DocumentView};
 use crate::domain::document_files::DocumentFile;
 use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_to_s3};
-use crate::application::document_thumbnails::GenerateThumbnail;
+use crate::application::jobs::FastJob;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{diesel_to_http, write_field_to_temp_file, ApiError, ResourceList};
@@ -383,8 +383,8 @@ async fn create(
     // Clone file_info for potential cleanup in error path
     let file_info_for_cleanup = file_info.clone();
 
-    // Clone the thumbnail job queue handle for use inside the transaction closure
-    let thumb_jobs = state.thumb_jobs.as_ref().clone();
+    // Clone the fast job queue handle for use inside the transaction closure
+    let fast_jobs = state.fast_jobs.as_ref().clone();
     let thumb_enqueue_failed = Arc::new(AtomicBool::new(false));
     let thumb_enqueue_failed_for_tx = Arc::clone(&thumb_enqueue_failed);
 
@@ -392,7 +392,7 @@ async fn create(
     let result = db.build_transaction()
         .run::<_, diesel::result::Error, _>(|conn| {
             Box::pin(async move {
-                let mut thumb_jobs = thumb_jobs;
+                let mut fast_jobs = fast_jobs;
                 // Insert document record
                 let inserted_document: Document = diesel::insert_into(documents::table)
                     .values((
@@ -421,8 +421,8 @@ async fn create(
                         .get_result(conn)
                         .await?;
 
-                    if let Err(_) = thumb_jobs
-                        .push(GenerateThumbnail {
+                    if let Err(_) = fast_jobs
+                        .push(FastJob::GenerateThumbnail {
                             document_file_id: inserted_file.id,
                             page: 1,
                             width: 800,

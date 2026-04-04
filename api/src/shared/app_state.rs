@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
-use diesel_async::{pooled_connection::bb8, AsyncPgConnection};
 use apalis_redis::RedisStorage;
+use diesel_async::{pooled_connection::bb8, AsyncPgConnection};
 
-use crate::application::document_index_documents::UpdateDocumentIndexDocument;
-use crate::application::document_thumbnails::GenerateThumbnail;
+use crate::application::jobs::FastJob;
 
 // Shared application state
 #[derive(Clone)]
@@ -13,6 +12,5 @@ pub struct AppState {
     pub s3_client: Arc<aws_sdk_s3::Client>,
     pub s3_bucket: Arc<String>,
     pub jwt_secret: Arc<Vec<u8>>,
-    pub thumb_jobs: Arc<RedisStorage<GenerateThumbnail>>,
-    pub index_jobs: Arc<RedisStorage<UpdateDocumentIndexDocument>>,
+    pub fast_jobs: Arc<RedisStorage<FastJob>>,
 }

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use aws_sdk_s3::primitives::ByteStream;
-use serde::{Deserialize, Serialize};
 
 use apalis::prelude::*;
 use diesel::prelude::*;
@@ -16,22 +15,17 @@ use crate::schema::document_files;
 use crate::shared::app_state::AppState;
 use crate::shared::util::to_job_error;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GenerateThumbnail {
-    pub document_file_id: i64,
-    pub page: u32,
-    pub width: u32,
-}
-
 /**
  * This job generates a thumbnail for a given document file and page number,
  * and updates the document record with the thumbnail's S3 key.
  */
 pub async fn generate_thumbnail(
-    job: GenerateThumbnail,
+    document_file_id: i64,
+    page: u32,
+    width: u32,
     state: Data<Arc<AppState>>,
 ) -> Result<(), Error> {
-    tracing::info!(?job, "generating thumbnail");
+    tracing::info!(document_file_id, page, width, "generating thumbnail");
 
     // Load the document file from the database to get the S3 location.
     let mut db = state
@@ -40,7 +34,7 @@ pub async fn generate_thumbnail(
         .await
         .map_err(to_job_error)?;
     let document_file = document_files::table
-        .find(job.document_file_id)
+        .find(document_file_id)
         .select(DocumentFile::as_select())
         .first::<DocumentFile>(&mut db)
         .await
@@ -79,11 +73,11 @@ pub async fn generate_thumbnail(
         .arg("-png")
         .arg("-singlefile")
         .arg("-f")
-        .arg(job.page.to_string())
+        .arg(page.to_string())
         .arg("-l")
-        .arg(job.page.to_string())
+        .arg(page.to_string())
         .arg("-scale-to-x")
-        .arg(job.width.to_string())
+        .arg(width.to_string())
         .arg("-scale-to-y")
         .arg("-1")
         .arg(&input_path)
