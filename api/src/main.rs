@@ -43,6 +43,7 @@ mod api {
     pub mod tag_documents;
 }
 mod application {
+    pub mod document_files;
     pub mod document_index_documents;
     pub mod document_thumbnails;
     pub mod documents;

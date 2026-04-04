@@ -391,6 +391,8 @@ async fn create(
     let fast_jobs = state.fast_jobs.as_ref().clone();
     let thumb_enqueue_failed = Arc::new(AtomicBool::new(false));
     let thumb_enqueue_failed_for_tx = Arc::clone(&thumb_enqueue_failed);
+    let pages_enqueue_failed = Arc::new(AtomicBool::new(false));
+    let pages_enqueue_failed_for_tx = Arc::clone(&pages_enqueue_failed);
 
     // Begin database transaction
     let result = db.build_transaction()
@@ -436,6 +438,16 @@ async fn create(
                         thumb_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
                         return Err(diesel::result::Error::RollbackTransaction);
                     }
+
+                    if let Err(_) = fast_jobs
+                        .push(FastJob::ProcessFilePages {
+                            document_file_id: inserted_file.id,
+                        })
+                        .await
+                    {
+                        pages_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
+                        return Err(diesel::result::Error::RollbackTransaction);
+                    }
                 }
 
                 Ok(inserted_document)
@@ -461,13 +473,27 @@ async fn create(
                     &s3_key,
                 ).await;
             }
-            if matches!(e, diesel::result::Error::RollbackTransaction)
-                && thumb_enqueue_failed.as_ref().load(Ordering::Relaxed)
-            {
-                Err(ApiError::new(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Failed to enqueue thumbnail job",
-                ))
+            if matches!(e, diesel::result::Error::RollbackTransaction) {
+                let thumb_failed = thumb_enqueue_failed.as_ref().load(Ordering::Relaxed);
+                let pages_failed = pages_enqueue_failed.as_ref().load(Ordering::Relaxed);
+                if thumb_failed && pages_failed {
+                    Err(ApiError::new(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to enqueue document processing jobs",
+                    ))
+                } else if thumb_failed {
+                    Err(ApiError::new(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to enqueue thumbnail job",
+                    ))
+                } else if pages_failed {
+                    Err(ApiError::new(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to enqueue file pages job",
+                    ))
+                } else {
+                    Err(ApiError::new(diesel_to_http(e), "Failed to create document"))
+                }
             } else {
                 Err(ApiError::new(diesel_to_http(e), "Failed to create document"))
             }

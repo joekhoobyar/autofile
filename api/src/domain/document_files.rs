@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use serde::Serialize;
 
-use crate::schema::document_files;
+use crate::schema::{document_files, document_file_pages};
 
 #[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
 #[diesel(table_name = document_files)]
@@ -18,4 +18,13 @@ pub struct DocumentFile {
     pub created_by: i64,
     pub updated_at: DateTime<Utc>,
     pub updated_by: i64,
+}
+
+#[derive(Debug, Serialize, PartialEq, Queryable, Selectable)]
+#[diesel(table_name = document_file_pages)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct DocumentFilePage {
+    pub document_file_id: i64,
+    pub page_number: i32,
+    pub text_content: Option<String>,
 }

@@ -24,6 +24,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    document_file_pages (document_file_id, page_number) {
+        document_file_id -> Int8,
+        page_number -> Int4,
+        text_content -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     document_files (id) {
         id -> Int8,
         document_id -> Int8,
@@ -38,6 +46,7 @@ diesel::table! {
         created_by -> Int8,
         updated_at -> Timestamptz,
         updated_by -> Int8,
+        pages -> Int4,
     }
 }
 
@@ -190,6 +199,7 @@ diesel::table! {
 diesel::joinable!(cabinet_documents -> cabinets (cabinet_id));
 diesel::joinable!(cabinet_documents -> documents (document_id));
 diesel::joinable!(cabinet_documents -> users (updated_by));
+diesel::joinable!(document_file_pages -> document_files (document_file_id));
 diesel::joinable!(document_files -> documents (document_id));
 diesel::joinable!(document_index_documents -> document_index_values (document_index_value_id));
 diesel::joinable!(document_index_documents -> documents (document_id));
@@ -208,6 +218,7 @@ diesel::joinable!(tag_documents -> users (updated_by));
 diesel::allow_tables_to_appear_in_same_query!(
     cabinet_documents,
     cabinets,
+    document_file_pages,
     document_files,
     document_index_documents,
     document_index_templates,
