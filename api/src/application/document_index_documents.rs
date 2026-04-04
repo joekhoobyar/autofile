@@ -6,7 +6,6 @@ use std::sync::Arc;
 use apalis::prelude::*;
 use bb8::PooledConnection;
 use diesel::prelude::*;
-use diesel::dsl::{exists, not};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
@@ -361,26 +360,6 @@ async fn delete_stale_document_index_values(
     )
         .execute(db)
         .await?;
-    // Delete the original value leaf nodes only if no more document_index_documents exist,
-    // and collect their parent_id values for ancestor cleanup.
-    let remaining_parent_ids: Vec<i64> = diesel::delete(
-        document_index_values::table
-            .filter(document_index_values::id.eq_any(&remaining_value_ids))
-            .filter(not(exists(
-                document_index_documents::table.filter(
-                    document_index_documents::document_index_value_id.eq(document_index_values::id),
-                ),
-            ))),
-    )
-        .returning(document_index_values::parent_id)
-        .get_results::<Option<i64>>(db)
-        .await?
-        .into_iter()
-        .flatten()
-        .collect();
-    if remaining_parent_ids.is_empty() {
-        return Ok(());
-    }
 
     // Delete any ancestor values that no longer have children after leaf removal.
     diesel::sql_query(
@@ -389,6 +368,11 @@ async fn delete_stale_document_index_values(
             SELECT t.id, t.parent_id
             FROM document_index_values t
             WHERE t.id = ANY($1)
+            AND NOT EXISTS (
+                SELECT 1
+                FROM document_index_documents d
+                WHERE d.document_index_value_id = t.id
+            )
 
             UNION ALL
 
@@ -407,7 +391,7 @@ async fn delete_stale_document_index_values(
         WHERE id IN (SELECT id FROM deletable)
         "#
     )
-        .bind::<diesel::sql_types::Array<diesel::sql_types::BigInt>, _>(remaining_parent_ids)
+        .bind::<diesel::sql_types::Array<diesel::sql_types::BigInt>, _>(remaining_value_ids)
         .execute(db)
         .await?;
 
