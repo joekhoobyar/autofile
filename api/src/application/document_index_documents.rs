@@ -82,10 +82,6 @@ pub async fn update_document_index_document(
 }
 
 /**
- * This job removes a document from all relevant index nodes.
- */
-
-/**
  * Internal function to update a document index for a given document.
  * 
  * Separated from the public function to allow for more granular error handling and logging.
