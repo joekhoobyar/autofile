@@ -20,6 +20,37 @@ body {
   overflow: auto;
 }
 
+.aut-document-view-layout {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.aut-document-view-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.aut-document-view-menu {
+  width: 100%;
+  max-width: 13rem;
+  flex: 0 0 auto;
+}
+
+.aut-document-view-menu-list {
+  font-size: 0.95rem;
+}
+
+.aut-document-view-menu-mobile {
+  display: none;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.aut-document-view-menu-desktop {
+  display: block;
+}
+
 .app-backdrop { display: none; }
 
 .p-breadcrumb {
@@ -61,6 +92,22 @@ body {
   .app-shell.nav-open .app-backdrop {
     opacity: 1;
     pointer-events: auto;
+  }
+
+  .aut-document-view-layout {
+    flex-direction: column;
+  }
+
+  .aut-document-view-menu {
+    max-width: 100%;
+  }
+
+  .aut-document-view-menu-desktop {
+    display: none;
+  }
+
+  .aut-document-view-menu-mobile {
+    display: flex;
   }
 }
 

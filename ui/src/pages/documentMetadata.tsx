@@ -13,6 +13,7 @@ import { Dropdown } from 'primereact/dropdown';
 
 import { useId } from '../util';
 import { useDocumentTypeMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
+import { DocumentViewLayout } from '../components/DocumentViewLayout';
 
 export function EditDocumentMetadata() {
   const navigate = useNavigate();
@@ -176,19 +177,21 @@ export function EditDocumentMetadata() {
     return <div>Loading</div>;
 
   return (
-    <Card title={`Document Metadata: ${doc?.title}`}>
-      <DataTable value={rows} editMode="cell" tableStyle={{ minWidth: '50rem' }}>
-        {columns}
-      </DataTable>
+    <DocumentViewLayout documentId={id}>
+      <Card title={`Document Metadata: ${doc?.title}`}>
+        <DataTable value={rows} editMode="cell" tableStyle={{ minWidth: '50rem' }}>
+          {columns}
+        </DataTable>
 
-      <div className="text-end">
-        {saveDocumentMetadata.isError && (
-          <Message className="float-start" severity="error" text={saveDocumentMetadata.error.message} />
-        )}
+        <div className="text-end">
+          {saveDocumentMetadata.isError && (
+            <Message className="float-start" severity="error" text={saveDocumentMetadata.error.message} />
+          )}
 
-        <Button label="Save" type="submit" icon="pi pi-check" onClick={onSave} raised disabled={saveDocumentMetadata.isPending} />
-        <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" raised onClick={() => navigate('/documents')} />
-      </div>
-    </Card>
+          <Button label="Save" type="submit" icon="pi pi-check" onClick={onSave} raised disabled={saveDocumentMetadata.isPending} />
+          <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" raised onClick={() => navigate('/documents')} />
+        </div>
+      </Card>
+    </DocumentViewLayout>
   );
 }
