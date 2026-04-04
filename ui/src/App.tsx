@@ -17,7 +17,7 @@ import { EditDocumentType, ListDocumentTypes, NewDocumentType } from './pages/do
 import { EditTag, ListTags, NewTag } from './pages/tags.tsx';
 import { NAV, useBreadcrumbs } from './nav.ts';
 import { Button } from 'primereact/button';
-import Login, { RequireAuth } from './pages/auth.tsx';
+import Login, { Logout, RequireAuth } from './pages/auth.tsx';
 import { AuthProvider } from './AuthProvider.tsx';
 import { EditDocumentMetadata } from './pages/documentMetadata.tsx';
 import { EditDocumentIndex, ListDocumentIndexes, NewDocumentIndex } from './pages/documentIndexes.tsx';
@@ -94,6 +94,9 @@ function Layout() {
 const router = createBrowserRouter([
   {
     path: '/login', element: <Login />
+  },
+  {
+    path: '/logout', element: <Logout />
   },
   {
     path: '/',

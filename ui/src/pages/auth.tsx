@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useNavigate, Navigate, Outlet, useLocation } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { InputText } from "primereact/inputtext";
 import { classNames } from "primereact/utils";
@@ -10,7 +11,7 @@ import { Button } from "primereact/button";
 import { HttpError } from "../api";
 import type { LoginRequest } from "../models/auth";
 import { Card } from "primereact/card";
-import { login, useAuth  } from "../auth";
+import { login, logout, useAuth } from "../auth";
 
 export function RequireAuth() {
   const auth = useAuth();
@@ -25,7 +26,10 @@ export function RequireAuth() {
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryClient = useQueryClient();
   const [loginError, setLoginError] = useState<HttpError | null>(null);
+  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? "/";
   
   const {
     control,
@@ -41,7 +45,8 @@ export default function Login() {
       return;
     }
 
-    navigate('/');
+    queryClient.setQueryData(["auth", "bootstrap"], true);
+    navigate(from, { replace: true });
   };
 
   // PrimeReact-friendly error helper
@@ -93,6 +98,44 @@ export default function Login() {
         <Button label="Login" type="submit" icon="pi pi-check" disabled={!isValid || isSubmitting} />
 
       </form>
+    </Card>
+  );
+}
+
+export function Logout() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [logoutError, setLogoutError] = useState<HttpError | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const doLogout = async () => {
+      try {
+        await logout();
+        await queryClient.resetQueries({ queryKey: ["auth", "bootstrap"] });
+        if (!active) return;
+        navigate("/login", { replace: true });
+      } catch (err: unknown) {
+        if (!active) return;
+        setLogoutError(err as HttpError | null);
+      }
+    };
+
+    void doLogout();
+
+    return () => {
+      active = false;
+    };
+  }, [navigate, queryClient]);
+
+  return (
+    <Card title="Logout">
+      {logoutError ? (
+        <Message severity="error" text={logoutError.message} />
+      ) : (
+        <Message severity="info" text="Signing you out..." />
+      )}
     </Card>
   );
 }
