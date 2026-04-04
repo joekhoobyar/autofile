@@ -140,7 +140,7 @@ function DocumentListItem({ doc, index, onImageClick, selected, onSelectionChang
                   onChange={(event) => onSelectionChange(doc.id, !!event.checked)}
                   checked={selected}
                 />
-                <Link to={`${doc.id}/metadata`}>{doc.title}</Link>
+                <Link to={`/documents/${doc.id}/metadata`}>{doc.title}</Link>
               </header>
             </div>
             <aside className="flex flex-column align-items-center sm:align-items-start">
@@ -224,7 +224,7 @@ function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange, cabi
                 onChange={(event) => onSelectionChange(doc.id, !!event.checked)}
                 checked={selected}
               />
-              <Link to={`${doc.id}/metadata`}>{doc.title}</Link>
+              <Link to={`/documents/${doc.id}/metadata`}>{doc.title}</Link>
             </header>
             <aside>
               <DocumentThumbnail
