@@ -8,11 +8,12 @@ use crate::application::document_index_documents::enqueue_document_index_documen
 use crate::application::documents::get_document_view;
 use crate::application::jobs::{FastJob, MediumJob};
 use crate::domain::document_files::DocumentFile;
+use crate::domain::document_indexes::DocumentIndexValue;
 use crate::domain::documents::{Document, DocumentView};
 use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_to_s3};
 use crate::schema::{
-    cabinet_documents, document_files, document_index_documents, document_metadatas, documents,
-    metadata_types, tag_documents,
+    cabinet_documents, document_files, document_index_documents, document_index_values,
+    document_metadatas, documents, metadata_types, tag_documents,
 };
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
@@ -783,10 +784,28 @@ pub async fn list(
     }))
 }
 
+pub async fn list_index_values(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+) -> Result<Json<Vec<DocumentIndexValue>>, ApiError> {
+    let items = document_index_documents::table
+        .inner_join(document_index_values::table)
+        .filter(document_index_documents::document_id.eq(id))
+        .select(DocumentIndexValue::as_select())
+        .order(document_index_values::id.asc())
+        .load::<DocumentIndexValue>(&mut db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_index_values"))?;
+
+    Ok(Json(items))
+}
+
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(list).post(create))
         .route("/{id}", get(get_by_id).patch(update).delete(delete))
+        .route("/{id}/index-values", get(list_index_values))
         .route("/{id}/thumbnail", get(thumbnail_get))
         .route("/{id}/process-file-pages", post(process_file_pages))
 }
