@@ -29,7 +29,7 @@ use axum::{
     extract::{Multipart, Path, Query, State},
     http::{HeaderMap, StatusCode, header},
     response::Response,
-    routing::get,
+    routing::{get, post},
 };
 use chrono::Utc;
 use diesel::prelude::*;
@@ -277,6 +277,39 @@ pub async fn delete(
                         e
                     ))
                 })?;
+        }
+    }
+
+    Ok(Json(()))
+}
+
+pub async fn process_file_pages(
+    _user: AuthUser,
+    State(state): State<Arc<AppState>>,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+) -> Result<Json<()>, ApiError> {
+    let file_ids: Vec<i64> = document_files::table
+        .filter(document_files::document_id.eq(id))
+        .select(document_files::id)
+        .order(document_files::id.asc())
+        .load::<i64>(&mut db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document files"))?;
+
+    if file_ids.is_empty() {
+        return Ok(Json(()));
+    }
+
+    let mut medium_jobs = state.medium_jobs.as_ref().clone();
+    for document_file_id in file_ids {
+        if let Err(_) = medium_jobs
+            .push(MediumJob::ProcessFilePages { document_file_id })
+            .await
+        {
+            return Err(ApiError::internal_server_error(
+                "Failed to enqueue file pages job",
+            ));
         }
     }
 
@@ -755,4 +788,5 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/", get(list).post(create))
         .route("/{id}", get(get_by_id).patch(update).delete(delete))
         .route("/{id}/thumbnail", get(thumbnail_get))
+        .route("/{id}/process-file-pages", post(process_file_pages))
 }

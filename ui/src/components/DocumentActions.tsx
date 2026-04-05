@@ -9,7 +9,7 @@ import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 
 import { useCabinets } from '../queries/useCabinets';
 import { useTags } from '../queries/useTags';
-import { useDeleteDocument, useRemoveCabinetDocument, useRemoveTagDocument, useSaveCabinetDocument, useSaveTagDocument } from '../queries/useDocuments';
+import { useDeleteDocument, useProcessDocumentFilePages, useRemoveCabinetDocument, useRemoveTagDocument, useSaveCabinetDocument, useSaveTagDocument } from '../queries/useDocuments';
 import { MAX_CABINETS } from '../models/cabinet';
 
 type DocumentActionsProps = {
@@ -33,6 +33,7 @@ export function DocumentActions({
   const menuId = useId();
   const hasSelection = documentIds.length > 0;
   const deleteDocument = useDeleteDocument();
+  const processDocumentFilePages = useProcessDocumentFilePages();
   const saveCabinetDocument = useSaveCabinetDocument();
   const removeCabinetDocument = useRemoveCabinetDocument();
   const saveTagDocument = useSaveTagDocument();
@@ -124,6 +125,12 @@ export function DocumentActions({
     onAfterAction?.();
   };
 
+  const reprocessSelectedDocuments = async () => {
+    if (!hasSelection) return;
+    await Promise.all(documentIds.map((id) => processDocumentFilePages.mutateAsync(id)));
+    onAfterAction?.();
+  };
+
   const confirmDeleteSelectedDocuments = () => {
     if (!hasSelection) return;
     const count = documentIds.length;
@@ -151,6 +158,8 @@ export function DocumentActions({
     { separator: true },
     { icon: 'pi pi-plus-circle', label: 'Add Tag', command: () => { openAddTagDialog(); }, disabled: !hasSelection },
     { icon: 'pi pi-minus-circle', label: 'Remove Tag', command: () => { openRemoveTagDialog(); }, disabled: !hasSelection },
+    { separator: true },
+    { icon: 'pi pi-refresh', label: 'Reprocess Pages', command: () => { void reprocessSelectedDocuments(); }, disabled: !hasSelection || processDocumentFilePages.isPending },
     { separator: true },
     { icon: 'pi pi-trash', label: 'Delete Document', command: () => { confirmDeleteSelectedDocuments(); }, disabled: !hasSelection },
   );

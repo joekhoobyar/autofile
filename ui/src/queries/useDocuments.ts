@@ -101,6 +101,16 @@ export function useDeleteDocument(): UseMutationResult<void, HttpError, number> 
   });
 }
 
+export function useProcessDocumentFilePages(): UseMutationResult<void, HttpError, number> {
+  return useMutation<void, HttpError, number>({
+    mutationFn: async (input) => {
+      return apiMutate<void, void>(`api/v1/documents/${input}/process-file-pages`, {
+        method: "POST",
+      });
+    },
+  });
+}
+
 export function useSaveCabinetDocument(): UseMutationResult<CabinetDocument[], HttpError, CabinetDocumentInput> {
   const qc = useQueryClient();
 
