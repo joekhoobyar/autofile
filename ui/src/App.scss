@@ -397,6 +397,21 @@ section.aut-document {
   overflow-wrap: anywhere;
 }
 
+.aut-document-file-header-row {
+  width: 100%;
+}
+
+.aut-document-file-download-button {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.aut-document-file-grid-actions {
+  display: flex;
+  justify-content: center;
+  padding: 0 0.75rem 0.75rem;
+}
+
 .aut-document-file-thumbnail-wrapper {
   min-width: 10rem;
 }

@@ -68,6 +68,18 @@ pub struct RefreshClaims {
     pub typ: String, // "refresh"
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DownloadClaims {
+    pub uid: i64,
+    pub document_id: i64,
+    pub document_file_id: i64,
+    pub exp: usize,
+    pub iat: usize,
+    pub iss: String,
+    pub aud: String,
+    pub typ: String,
+}
+
 pub fn sign_access(
     secret: &[u8],
     uid: i64,
@@ -116,6 +128,34 @@ pub fn sign_refresh(
     )
 }
 
+pub fn sign_download(
+    secret: &[u8],
+    uid: i64,
+    document_id: i64,
+    document_file_id: i64,
+    ttl_seconds: i64,
+) -> jsonwebtoken::errors::Result<String> {
+    let now = Utc::now().timestamp() as usize;
+    let exp = (Utc::now().timestamp() + ttl_seconds) as usize;
+
+    let claims = DownloadClaims {
+        uid,
+        document_id,
+        document_file_id,
+        iat: now,
+        exp,
+        iss: ISS.to_string(),
+        aud: AUD.to_string(),
+        typ: "download".into(),
+    };
+
+    jsonwebtoken::encode(
+        &Header::new(Algorithm::HS256),
+        &claims,
+        &EncodingKey::from_secret(secret),
+    )
+}
+
 pub fn verify_access(
     secret: &[u8],
     token: &str,
@@ -145,6 +185,25 @@ pub fn verify_refresh(
 
     let data = jsonwebtoken::decode::<RefreshClaims>(token, &DecodingKey::from_secret(secret), &v)?;
     if data.claims.typ != "refresh" {
+        return Err(jsonwebtoken::errors::Error::from(
+            jsonwebtoken::errors::ErrorKind::InvalidToken,
+        ));
+    }
+    Ok(data.claims)
+}
+
+pub fn verify_download(
+    secret: &[u8],
+    token: &str,
+) -> Result<DownloadClaims, jsonwebtoken::errors::Error> {
+    let mut v = Validation::new(Algorithm::HS256);
+    v.set_issuer(&[ISS]);
+    v.set_audience(&[AUD]);
+    v.validate_exp = true;
+
+    let data =
+        jsonwebtoken::decode::<DownloadClaims>(token, &DecodingKey::from_secret(secret), &v)?;
+    if data.claims.typ != "download" {
         return Err(jsonwebtoken::errors::Error::from(
             jsonwebtoken::errors::ErrorKind::InvalidToken,
         ));

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
+import { Button } from 'primereact/button';
 import { Card } from 'primereact/card';
 import { DataView, DataViewLayoutOptions } from 'primereact/dataview';
 import { Divider } from 'primereact/divider';
@@ -9,6 +10,7 @@ import { Message } from 'primereact/message';
 import { classNames } from 'primereact/utils';
 import { format } from 'date-fns';
 
+import { API_HOST, HttpError, apiFetch } from '../api';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { type DocumentFile } from '../models/documentFile';
 import { useDocument } from '../queries/useDocuments';
@@ -31,12 +33,16 @@ type DocumentFileListItemProps = {
   file: DocumentFile;
   index: number;
   onOpenPreview: (fileId: number) => void;
+  onDownload: (event: React.MouseEvent, file: DocumentFile) => void;
+  isDownloading: boolean;
 };
 
 type DocumentFileGridItemProps = {
   documentId: number;
   file: DocumentFile;
   onOpenPreview: (fileId: number) => void;
+  onDownload: (event: React.MouseEvent, file: DocumentFile) => void;
+  isDownloading: boolean;
 };
 
 function formatBytes(size: number) {
@@ -117,7 +123,28 @@ function FileMetadata({ file }: Readonly<{ file: DocumentFile }>) {
   );
 }
 
-function DocumentFileListItem({ documentId, file, index, onOpenPreview }: Readonly<DocumentFileListItemProps>) {
+function DownloadButton({ file, onDownload, isDownloading }: Readonly<{
+  file: DocumentFile;
+  onDownload: (event: React.MouseEvent, file: DocumentFile) => void;
+  isDownloading: boolean;
+}>) {
+  return (
+    <Button
+      type="button"
+      label={isDownloading ? 'Downloading' : 'Download'}
+      icon={isDownloading ? 'pi pi-spin pi-spinner' : 'pi pi-download'}
+      severity="contrast"
+      outlined
+      size="small"
+      className="aut-document-file-download-button"
+      aria-label={`Download ${file.filename}`}
+      onClick={(event) => onDownload(event, file)}
+      disabled={isDownloading}
+    />
+  );
+}
+
+function DocumentFileListItem({ documentId, file, index, onOpenPreview, onDownload, isDownloading }: Readonly<DocumentFileListItemProps>) {
   return (
     <div className="col-12 aut-document-list aut-document-file-list" key={file.id}>
       <div
@@ -137,8 +164,9 @@ function DocumentFileListItem({ documentId, file, index, onOpenPreview }: Readon
         <DocumentFileThumbnail documentId={documentId} file={file} />
         <section className="flex flex-column sm:flex-row justify-content-between align-items-center xl:align-items-start flex-1 gap-4 aut-document">
           <div className="flex flex-column align-items-center sm:align-items-start gap-3 aut-document-header">
-            <header className="flex align-items-center gap-2 aut-document-header-row">
+            <header className="flex align-items-center justify-content-between gap-2 aut-document-header-row aut-document-file-header-row">
               <span className="aut-document-file-name">{file.filename}</span>
+              <DownloadButton file={file} onDownload={onDownload} isDownloading={isDownloading} />
             </header>
           </div>
           <aside className="flex flex-column align-items-center sm:align-items-start">
@@ -150,7 +178,7 @@ function DocumentFileListItem({ documentId, file, index, onOpenPreview }: Readon
   );
 }
 
-function DocumentFileGridItem({ documentId, file, onOpenPreview }: Readonly<DocumentFileGridItemProps>) {
+function DocumentFileGridItem({ documentId, file, onOpenPreview, onDownload, isDownloading }: Readonly<DocumentFileGridItemProps>) {
   return (
     <div className="col-12 sm:col-6 lg:col-4 xl:col-3 p-2 aut-document-grid aut-document-file-grid" key={file.id}>
       <div
@@ -166,12 +194,15 @@ function DocumentFileGridItem({ documentId, file, onOpenPreview }: Readonly<Docu
         }}
       >
         <section className="flex flex-column aut-document w-full">
-          <header className="flex align-items-center gap-2 aut-document-header aut-document-header-row">
+          <header className="flex align-items-center gap-2 aut-document-header aut-document-header-row aut-document-file-header-row">
             <span className="aut-document-file-name">{file.filename}</span>
           </header>
           <aside>
             <DocumentFileThumbnail documentId={documentId} file={file} />
             <FileMetadata file={file} />
+            <div className="aut-document-file-grid-actions">
+              <DownloadButton file={file} onDownload={onDownload} isDownloading={isDownloading} />
+            </div>
           </aside>
         </section>
       </div>
@@ -185,9 +216,38 @@ export function ListDocumentFiles() {
   const { data: document, isLoading: isDocumentLoading, isError: isDocumentError, error: documentError } = useDocument(documentId);
   const { data: files, isLoading: isFilesLoading, isError: isFilesError, error: filesError } = useDocumentFiles(documentId);
   const [layout, setLayout] = useState<'list' | 'grid'>('grid');
+  const [downloadingIds, setDownloadingIds] = useState<Set<number>>(new Set());
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const openPreview = (fileId: number) => {
     navigate(`/documents/${documentId}/preview?file_id=${fileId}`);
+  };
+
+  const handleDownload = async (event: React.MouseEvent, file: DocumentFile) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDownloadError(null);
+    setDownloadingIds((current) => new Set(current).add(file.id));
+
+    try {
+      const ticket = await apiFetch<{ url: string }>(`api/v1/documents/${documentId}/files/${file.id}/download-ticket`, {
+        method: 'POST',
+      });
+      const link = window.document.createElement('a');
+      link.href = `${API_HOST}/${ticket.url}`;
+      link.download = file.filename;
+      window.document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      setDownloadError(error instanceof HttpError ? error.message : 'Failed to download file');
+    } finally {
+      setDownloadingIds((current) => {
+        const next = new Set(current);
+        next.delete(file.id);
+        return next;
+      });
+    }
   };
 
   const itemTemplate = (file: DocumentFile, currentLayout: 'list' | 'grid', index: number) => {
@@ -200,6 +260,8 @@ export function ListDocumentFiles() {
           file={file}
           index={index}
           onOpenPreview={openPreview}
+          onDownload={handleDownload}
+          isDownloading={downloadingIds.has(file.id)}
         />
       );
     }
@@ -210,6 +272,8 @@ export function ListDocumentFiles() {
         documentId={documentId}
         file={file}
         onOpenPreview={openPreview}
+        onDownload={handleDownload}
+        isDownloading={downloadingIds.has(file.id)}
       />
     );
   };
@@ -236,6 +300,7 @@ export function ListDocumentFiles() {
     <DocumentViewLayout documentId={documentId}>
       <Card title={`Document Files${document?.title ? `: ${document.title}` : ''}`}>
         {isFilesError && <Message severity="error" text={filesError.message} />}
+        {downloadError && <Message severity="error" text={downloadError} />}
         {!isFilesLoading && !isFilesError && !files?.length && (
           <Message severity="info" text="No files available for this document." />
         )}
