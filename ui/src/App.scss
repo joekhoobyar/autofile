@@ -41,6 +41,12 @@ body {
   font-size: 0.95rem;
 }
 
+.aut-document-text-content {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
 .aut-document-view-menu-mobile {
   display: none;
   justify-content: flex-end;

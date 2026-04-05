@@ -22,6 +22,11 @@ export function DocumentViewLayout({ documentId, children }: DocumentViewLayoutP
         icon: 'pi pi-database',
         command: () => navigate(`/documents/${documentId}/metadata`),
       },
+      {
+        label: 'Document Text',
+        icon: 'pi pi-align-left',
+        command: () => navigate(`/documents/${documentId}/text-content`),
+      },
     ],
     [documentId, navigate]
   );
