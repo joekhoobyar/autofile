@@ -237,7 +237,6 @@ async fn count_pages(file: String, _state: Data<Arc<AppState>>) -> JobResult<u32
     .into())
 }
 
-
 /**
  * Downloads a document file from S3 into a temporary file.
  * Returns the path to the temp directory as a PathBuf, and the path to the temp file as a String.

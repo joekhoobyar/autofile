@@ -24,9 +24,7 @@ pub enum FastJob {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MediumJob {
-    ProcessFilePages {
-        document_file_id: i64,
-    },
+    ProcessFilePages { document_file_id: i64 },
 }
 
 /**
