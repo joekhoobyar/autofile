@@ -66,6 +66,23 @@ export function useDocumentThumbnail(id: string | number, options = {}): UseQuer
   } as unknown as UseQueryResult<string | undefined, HttpError>;
 }
 
+export function useSaveDocument(): UseMutationResult<Document, HttpError, Partial<Document> & { id: number }> {
+  const qc = useQueryClient();
+
+  return useMutation<Document, HttpError, Partial<Document> & { id: number }>({
+    mutationFn: async (input) => {
+      return apiMutate<Document, Partial<Document>>(`api/v1/documents/${input.id}`, {
+        method: 'PATCH',
+        body: input,
+      });
+    },
+
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['document'] });
+    },
+  });
+}
+
 export function useSaveDocumentMetadata(id: string | number): UseMutationResult<DocumentMetadata[], HttpError, NewDocumentMetadata[]> {
   const qc = useQueryClient();
 

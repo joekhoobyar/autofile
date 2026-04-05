@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Controller, useForm } from 'react-hook-form';
 
 import { Card } from 'primereact/card';
 import { Checkbox } from 'primereact/checkbox';
@@ -32,6 +33,10 @@ import { InputText } from 'primereact/inputtext';
 import { Badge } from 'primereact/badge';
 import { Chip } from 'primereact/chip';
 import { DocumentActions } from '../components/DocumentActions';
+import { DocumentViewLayout } from '../components/DocumentViewLayout';
+import { Message } from 'primereact/message';
+import { useId } from '../util';
+import { useDocument, useSaveDocument } from '../queries/useDocuments';
 
 type DocumentListItemProps = {
   doc: Readonly<Document>;
@@ -540,6 +545,107 @@ export function ListDocuments() {
         {mainContent}
       </div>
     </div>
+  );
+}
+
+type DocumentPropertiesFormValues = {
+  title: string;
+  document_type_id: number | null;
+};
+
+export function EditDocumentProperties() {
+  const navigate = useNavigate();
+  const id = useId('id');
+  const saveDocument = useSaveDocument();
+  const { isLoading, isError, data: doc, error } = useDocument(id);
+  const { data: documentTypes, isPending: isDocumentTypesPending, isFetching: isDocumentTypesFetching } = useDocumentTypes({ page: 1, per_page: 200 });
+  const {
+    control,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<DocumentPropertiesFormValues>({
+    mode: 'onChange',
+    values: {
+      title: doc?.title ?? '',
+      document_type_id: doc?.document_type_id ?? null,
+    },
+  });
+
+  const submitter = async (values: DocumentPropertiesFormValues) => {
+    await saveDocument.mutateAsync({
+      id,
+      title: values.title,
+      document_type_id: values.document_type_id ?? undefined,
+    });
+    navigate(`/documents/${id}/preview`);
+  };
+
+  if (isError)
+    return <Message severity="error" text={error.message} />;
+  if (isLoading)
+    return <div>Loading</div>;
+
+  return (
+    <DocumentViewLayout documentId={id}>
+      <Card title={`Document Properties: ${doc?.title ?? ''}`}>
+        <form onSubmit={handleSubmit(submitter)}>
+          <div className="grid p-fluid">
+            <div className="col-12 md:col-6">
+              <label htmlFor="document_title" className="font-medium mb-2 block">Title</label>
+              <Controller
+                name="title"
+                control={control}
+                rules={{
+                  required: 'Title is required',
+                  minLength: { value: 2, message: 'Title must be at least 2 characters' },
+                }}
+                render={({ field }) => (
+                  <InputText
+                    id="document_title"
+                    {...field}
+                    className={classNames({ 'p-invalid': !!errors.title })}
+                    placeholder="Enter document title"
+                  />
+                )}
+              />
+              {errors.title?.message && <small className="p-error">{String(errors.title.message)}</small>}
+            </div>
+
+            <div className="col-12 md:col-6">
+              <label htmlFor="document_type_id" className="font-medium mb-2 block">Document Type</label>
+              <Controller
+                name="document_type_id"
+                control={control}
+                rules={{ required: 'Document type is required' }}
+                render={({ field }) => (
+                  <Dropdown
+                    id="document_type_id"
+                    value={field.value}
+                    onChange={(event) => field.onChange(event.value as number)}
+                    options={documentTypes?.items ?? []}
+                    optionLabel="name"
+                    optionValue="id"
+                    placeholder="Select a document type"
+                    loading={isDocumentTypesPending || isDocumentTypesFetching}
+                    className={classNames('w-full', { 'p-invalid': !!errors.document_type_id })}
+                  />
+                )}
+              />
+              {errors.document_type_id?.message && <small className="p-error">{String(errors.document_type_id.message)}</small>}
+            </div>
+          </div>
+
+          <div className="text-end">
+            {saveDocument.isError && (
+              <Message className="float-start" severity="error" text={saveDocument.error.message} />
+            )}
+
+            <Button label="Save" type="submit" icon="pi pi-check" raised disabled={saveDocument.isPending || isSubmitting} />
+            <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" raised onClick={() => navigate(`/documents/${id}/preview`)} />
+          </div>
+        </form>
+      </Card>
+    </DocumentViewLayout>
   );
 }
 

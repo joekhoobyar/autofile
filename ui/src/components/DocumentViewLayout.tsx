@@ -21,6 +21,11 @@ export function DocumentViewLayout({ documentId, children }: Readonly<DocumentVi
     () => {
       const items = [
         {
+          label: 'Properties',
+          icon: 'pi pi-info',
+          path: `/documents/${documentId}/properties`,
+        },
+        {
           label: 'Preview',
           icon: 'pi pi-eye',
           path: `/documents/${documentId}/preview`,
