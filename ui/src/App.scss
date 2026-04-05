@@ -31,14 +31,23 @@ body {
   min-width: 0;
 }
 
+.aut-document-view-side {
+  width: 13rem;
+  max-width: 13rem;
+  flex: 0 0 13rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
 .aut-document-view-menu {
   width: 100%;
-  max-width: 13rem;
-  flex: 0 0 auto;
+  align-self: stretch;
 }
 
 .aut-document-view-menu-list {
   font-size: 0.95rem;
+  width: 13rem;
 }
 
 .aut-document-view-menu-list .aut-document-view-menu-active > .p-menuitem-content {
@@ -60,6 +69,13 @@ body {
 
 .aut-document-view-menu-desktop {
   display: block;
+}
+
+.aut-document-view-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
+  width: 100%;
 }
 
 .app-backdrop { display: none; }
@@ -107,6 +123,11 @@ body {
 
   .aut-document-view-layout {
     flex-direction: column;
+  }
+
+  .aut-document-view-side {
+    max-width: 100%;
+    align-items: stretch;
   }
 
   .aut-document-view-menu {
