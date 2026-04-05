@@ -2,12 +2,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use apalis::prelude::*;
+use aws_sdk_s3::primitives::ByteStream;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use tokio::process::Command;
 use uuid::Uuid;
 
 use crate::domain::document_files::DocumentFile;
+use crate::infrastructure::s3::upload_to_s3;
 use crate::schema::{document_file_pages, document_files};
 use crate::shared::app_state::AppState;
 use crate::shared::util::JobResult;
@@ -79,14 +81,24 @@ async fn process_file_pages_inner(
                 )
                 .execute(&mut db)
                 .await?;
+
+            tracing::info!(document_file_id, page, "extracting image for page");
+            extract_page_image(
+                temp_file.clone(),
+                page,
+                &temp_dir,
+                &document_file.s3_prefix,
+                state.clone(),
+            )
+            .await?;
         }
 
         Ok(())
     }
     .await;
 
-    if let Err(err) = tokio::fs::remove_file(&temp_file).await {
-        tracing::warn!(error = %err, path = %temp_file, "failed to remove temp file");
+    if let Err(err) = tokio::fs::remove_dir_all(&temp_dir).await {
+        tracing::warn!(error = %err, path = %temp_file, "failed to remove temp dir");
     }
 
     result
@@ -134,6 +146,56 @@ async fn extract_page_text(
 
     let text = String::from_utf8(output.stdout)?;
     Ok(text)
+}
+
+/**
+ * Internal function to extract the image content of a specific page in a PDF document
+ * by running `pdftocairo` on the file and capturing the output.
+ */
+async fn extract_page_image(
+    file: String,
+    page: u32,
+    temp_dir: &PathBuf,
+    s3_prefix: &str,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
+    let output_prefix = temp_dir.join(format!("page-{}", page));
+    let status = Command::new("pdftocairo")
+        .arg("-png")
+        .arg("-singlefile")
+        .arg("-f")
+        .arg(page.to_string())
+        .arg("-l")
+        .arg(page.to_string())
+        .arg("-scale-to-x")
+        .arg("2400")
+        .arg("-scale-to-y")
+        .arg("-1")
+        .arg(file)
+        .arg(&output_prefix)
+        .status()
+        .await?;
+    if !status.success() {
+        let error = std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("pdftocairo failed with status {status}"),
+        );
+        return Err(error.into());
+    }
+
+    let output_path = temp_dir.join(format!("page-{}.png", page));
+    let s3_key = format!("{}/pages/{}.png", s3_prefix, page);
+    let body = ByteStream::from_path(&output_path).await?;
+    upload_to_s3(
+        &state.s3_client,
+        state.s3_bucket.as_str(),
+        &s3_key,
+        body,
+        Some("image/png"),
+    )
+    .await?;
+
+    Ok(())
 }
 
 /**
