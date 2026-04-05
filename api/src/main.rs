@@ -1,26 +1,22 @@
-use std::sync::OnceLock;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use axum::{
+    Json, Router,
+    http::{HeaderValue, Method},
     routing::get,
-    Router,
-    Json,
-    http::{Method, HeaderValue},
 };
 use tower::ServiceBuilder;
-use tower_http::{
-    trace::TraceLayer,
-    cors::CorsLayer,
-};
 use tower_cookies::CookieManagerLayer;
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use diesel_async::{
-    pooled_connection::{bb8, AsyncDieselConnectionManager},
     AsyncPgConnection,
+    pooled_connection::{AsyncDieselConnectionManager, bb8},
 };
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use tokio::time::{timeout, Duration};
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use redis::AsyncCommands;
+use tokio::time::{Duration, timeout};
 
 use apalis::prelude::*;
 use apalis_redis::RedisStorage;
@@ -28,21 +24,21 @@ use apalis_redis::RedisStorage;
 mod schema;
 mod api {
     pub mod auth;
-    pub mod cabinets;
     pub mod cabinet_documents;
+    pub mod cabinets;
     pub mod document_file_pages;
     pub mod document_files;
-    pub mod document_indexes;
     pub mod document_index_templates;
     pub mod document_index_values;
+    pub mod document_indexes;
     pub mod document_metadatas;
     pub mod document_types;
     pub mod document_types_metadata_types;
     pub mod documents;
     pub mod metadata_types;
-    pub mod users;
-    pub mod tags;
     pub mod tag_documents;
+    pub mod tags;
+    pub mod users;
 }
 mod application {
     pub mod document_files;
@@ -52,8 +48,8 @@ mod application {
     pub mod jobs;
 }
 mod domain {
-    pub mod cabinets;
     pub mod cabinet_documents;
+    pub mod cabinets;
     pub mod document_files;
     pub mod document_indexes;
     pub mod document_metadatas;
@@ -61,9 +57,9 @@ mod domain {
     pub mod document_types_metadata_types;
     pub mod documents;
     pub mod metadata_types;
-    pub mod users;
-    pub mod tags;
     pub mod tag_documents;
+    pub mod tags;
+    pub mod users;
 }
 mod infrastructure {
     pub mod s3;
@@ -87,21 +83,20 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 async fn main() {
     // Initialize tracing
     tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-        )
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
     // Redis storage (queue) for thumbnail generation.
     let redis_url = std::env::var("REDIS_URL")
         .unwrap_or_else(|_| "redis://127.0.0.1:6379/?connect_timeout=2&timeout=2".to_string());
     check_redis(&redis_url).await.expect("Redis not reachable");
-    let redis_conn = apalis_redis::connect(redis_url).await.expect("Could not connect to Redis");
+    let redis_conn = apalis_redis::connect(redis_url)
+        .await
+        .expect("Could not connect to Redis");
     let fast_storage: RedisStorage<FastJob> = RedisStorage::new(redis_conn);
 
     // Get database URL from environment
-    let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set");
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
     // Create bb8 connection pool for diesel-async
     let config = AsyncDieselConnectionManager::<AsyncPgConnection>::new(&database_url);
@@ -114,8 +109,7 @@ async fn main() {
     run_migrations(&database_url).await;
 
     // Initialize S3 client
-    let s3_endpoint = std::env::var("AWS_ENDPOINT_URL_S3")
-        .expect("AWS_ENDPOINT_URL_S3 not set");
+    let s3_endpoint = std::env::var("AWS_ENDPOINT_URL_S3").expect("AWS_ENDPOINT_URL_S3 not set");
     let s3_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
         .endpoint_url(&s3_endpoint)
         .load()
@@ -128,15 +122,12 @@ async fn main() {
             .credentials_provider(s3_config.credentials_provider().unwrap())
             .region(s3_config.region().cloned())
             .endpoint_url(&s3_endpoint)
-            .force_path_style(true)  // Required for minio
-            .build()
+            .force_path_style(true) // Required for minio
+            .build(),
     );
-    let s3_bucket = std::env::var("S3_BUCKET")
-        .expect("S3_BUCKET not set");
+    let s3_bucket = std::env::var("S3_BUCKET").expect("S3_BUCKET not set");
 
-    let allowed_origins = vec![
-        "http://localhost:5173".to_string(),
-    ];
+    let allowed_origins = vec!["http://localhost:5173".to_string()];
 
     let jwt_secret = std::env::var("JWT_SECRET")
         .expect("JWT_SECRET not set")
@@ -152,15 +143,14 @@ async fn main() {
     });
 
     // Spawn apalis workers (in-process).
-    let monitor = Monitor::new()
-        .register({
-            // One or more workers pulling from Redis
-            WorkerBuilder::new("fast-job-worker")
-                .concurrency(4) // Adjust concurrency as needed
-                .data(app_state.clone())
-                .backend(app_state.fast_jobs.as_ref().clone())
-                .build_fn(handle_fast_job)
-        });
+    let monitor = Monitor::new().register({
+        // One or more workers pulling from Redis
+        WorkerBuilder::new("fast-job-worker")
+            .concurrency(4) // Adjust concurrency as needed
+            .data(app_state.clone())
+            .backend(app_state.fast_jobs.as_ref().clone())
+            .build_fn(handle_fast_job)
+    });
     tokio::spawn(async move {
         monitor.run().await.expect("Background worker failed");
     });
@@ -172,7 +162,7 @@ async fn main() {
             allowed_origins
                 .iter()
                 .map(|origin| origin.parse::<HeaderValue>().unwrap())
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>(),
         )
         .allow_methods([
             Method::GET,
@@ -183,13 +173,9 @@ async fn main() {
             Method::OPTIONS,
         ])
         .allow_credentials(true)
-        .allow_headers([
-            header::AUTHORIZATION,
-            header::CONTENT_TYPE,
-            header::ACCEPT,
-        ]);
+        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT]);
 
-    let api_v1= Router::new()
+    let api_v1 = Router::new()
         .route("/health/ready", get(health_ready))
         .nest("/auth", api::auth::routes())
         .nest("/cabinets", api::cabinets::routes())
@@ -198,7 +184,10 @@ async fn main() {
         .nest("/document-indexes", api::document_index_templates::routes())
         .nest("/document-indexes", api::document_index_values::routes())
         .nest("/document-types", api::document_types::routes())
-        .nest("/document-types-metadata-types", api::document_types_metadata_types::routes())
+        .nest(
+            "/document-types-metadata-types",
+            api::document_types_metadata_types::routes(),
+        )
         .nest("/documents", api::documents::routes())
         .nest("/documents", api::document_file_pages::routes())
         .nest("/documents", api::document_files::routes())
@@ -215,13 +204,12 @@ async fn main() {
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
                 .layer(CookieManagerLayer::new())
-                .layer(cors)
+                .layer(cors),
         )
         .with_state(app_state.clone());
 
     // Get bind address from environment or use default
-    let bind_addr = std::env::var("BIND_ADDR")
-        .unwrap_or_else(|_| "0.0.0.0:8000".to_string());
+    let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8000".to_string());
 
     tracing::info!("Starting server on {}", bind_addr);
 
@@ -230,9 +218,7 @@ async fn main() {
         .await
         .expect("Failed to bind address");
 
-    axum::serve(listener, app)
-        .await
-        .expect("Server failed");
+    axum::serve(listener, app).await.expect("Server failed");
 }
 
 async fn check_redis(redis_url: &str) -> anyhow::Result<()> {
@@ -243,8 +229,7 @@ async fn check_redis(redis_url: &str) -> anyhow::Result<()> {
     )
     .await??;
 
-    timeout(Duration::from_secs(3), conn.ping::<String>())
-        .await??;
+    timeout(Duration::from_secs(3), conn.ping::<String>()).await??;
 
     Ok(())
 }
@@ -261,7 +246,10 @@ async fn health_ready(DbConn(mut conn): DbConn) -> Result<Json<ReadyResponse>, A
 
     let db_ok = one == 1;
 
-    Ok(Json(ReadyResponse { ok: db_ok, db: db_ok }))
+    Ok(Json(ReadyResponse {
+        ok: db_ok,
+        db: db_ok,
+    }))
 }
 
 #[derive(serde::Serialize)]

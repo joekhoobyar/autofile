@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::AppState;
-use crate::schema::tags;
 use crate::domain::tags::Tag;
+use crate::schema::tags;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
@@ -10,14 +10,13 @@ use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
 use serde::Deserialize;
 
 use axum::{
-    Router,
-    routing::get,
-    Json,
+    Json, Router,
     extract::{Path, Query},
+    routing::get,
 };
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = tags)]
@@ -25,7 +24,7 @@ use chrono::{DateTime, Utc};
 struct NewTag {
     slug: String,
     name: String,
-    color: String
+    color: String,
 }
 
 #[derive(Debug, Deserialize, AsChangeset)]
@@ -171,8 +170,9 @@ pub async fn list(
         if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
             let pattern = format!("%{}%", q);
             query = query.filter(
-                tags::slug.ilike(pattern.clone())
-                    .or(tags::name.ilike(pattern.clone()))
+                tags::slug
+                    .ilike(pattern.clone())
+                    .or(tags::name.ilike(pattern.clone())),
             )
         }
 
@@ -187,26 +187,20 @@ pub async fn list(
 
     let mut query: tags::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
-        (Some(TagSortField::Slug), Some(true)) =>
-            query.order((tags::slug.desc(), tags::id.asc())),
-        (Some(TagSortField::Slug), _) =>
-            query.order((tags::slug.asc(), tags::id.asc())),
-        (Some(TagSortField::Name), Some(true)) =>
-            query.order((tags::name.desc(), tags::id.asc())),
-        (Some(TagSortField::Name), _) =>
-            query.order((tags::name.asc(), tags::id.asc())),
-        (Some(TagSortField::CreatedAt), Some(true)) =>
-            query.order((tags::created_at.desc(), tags::id.asc())),
-        (Some(TagSortField::CreatedAt), _) =>
-            query.order((tags::created_at.asc(), tags::id.asc())),
-        (Some(TagSortField::UpdatedAt), Some(true)) =>
-            query.order((tags::updated_at.desc(), tags::id.asc())),
-        (Some(TagSortField::UpdatedAt), _) =>
-            query.order((tags::updated_at.asc(), tags::id.asc())),
-        (Some(TagSortField::Id), Some(true)) =>
-            query.order(tags::id.desc()),
-        _ =>
-            query.order(tags::id.asc()),
+        (Some(TagSortField::Slug), Some(true)) => query.order((tags::slug.desc(), tags::id.asc())),
+        (Some(TagSortField::Slug), _) => query.order((tags::slug.asc(), tags::id.asc())),
+        (Some(TagSortField::Name), Some(true)) => query.order((tags::name.desc(), tags::id.asc())),
+        (Some(TagSortField::Name), _) => query.order((tags::name.asc(), tags::id.asc())),
+        (Some(TagSortField::CreatedAt), Some(true)) => {
+            query.order((tags::created_at.desc(), tags::id.asc()))
+        }
+        (Some(TagSortField::CreatedAt), _) => query.order((tags::created_at.asc(), tags::id.asc())),
+        (Some(TagSortField::UpdatedAt), Some(true)) => {
+            query.order((tags::updated_at.desc(), tags::id.asc()))
+        }
+        (Some(TagSortField::UpdatedAt), _) => query.order((tags::updated_at.asc(), tags::id.asc())),
+        (Some(TagSortField::Id), Some(true)) => query.order(tags::id.desc()),
+        _ => query.order(tags::id.asc()),
     };
 
     let items = query
@@ -217,7 +211,12 @@ pub async fn list(
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list tags"))?;
 
-    Ok(Json(ResourceList { total, page, per_page, items }))
+    Ok(Json(ResourceList {
+        total,
+        page,
+        per_page,
+        items,
+    }))
 }
 
 pub fn routes() -> Router<Arc<AppState>> {

@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use apalis::prelude::*;
 use bb8::PooledConnection;
@@ -9,18 +8,13 @@ use diesel::prelude::*;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
-use crate::application::jobs::FastJob;
 use crate::application::documents::get_document_view;
+use crate::application::jobs::FastJob;
 use crate::domain::document_indexes::{DocumentIndex, DocumentIndexTemplate};
 use crate::domain::documents::{DocumentView, TemplateDocumentView};
 use crate::schema::{
-    cabinets,
-    document_index_documents,
-    document_index_templates,
-    document_index_values,
-    document_indexes,
-    document_types,
-    tags,
+    cabinets, document_index_documents, document_index_templates, document_index_values,
+    document_indexes, document_types, tags,
 };
 use crate::shared::app_state::AppState;
 use crate::shared::util::{ApiError, JobResult};
@@ -33,11 +27,9 @@ pub async fn enqueue_document_index_document_updates(
     state: Arc<AppState>,
 ) -> Result<(), ApiError> {
     tracing::info!(?document_id, "Enqueueing document_index updates");
-    let mut db = state
-        .db_pool
-        .get()
-        .await
-        .map_err(|e| ApiError::internal_server_error(&format!("Failed to fetch db connection: {}", e)))?;
+    let mut db = state.db_pool.get().await.map_err(|e| {
+        ApiError::internal_server_error(&format!("Failed to fetch db connection: {}", e))
+    })?;
 
     // Load the document index ids for all document_index rows where enabled = true.
     let index_ids = document_indexes::table
@@ -45,7 +37,9 @@ pub async fn enqueue_document_index_document_updates(
         .select(document_indexes::id)
         .load::<i64>(&mut db)
         .await
-        .map_err(|e| ApiError::internal_server_error(&format!("Failed to fetch document indexes: {}", e)))?;
+        .map_err(|e| {
+            ApiError::internal_server_error(&format!("Failed to fetch document indexes: {}", e))
+        })?;
 
     // Enqueue a job for each document index, passing the document_id and document_index_id.
     let mut fast_jobs = state.fast_jobs.as_ref().clone();
@@ -56,7 +50,9 @@ pub async fn enqueue_document_index_document_updates(
                 document_id,
             })
             .await
-            .map_err(|e| ApiError::internal_server_error(&format!("Failed to enqueue index job: {}", e)))?;
+            .map_err(|e| {
+                ApiError::internal_server_error(&format!("Failed to enqueue index job: {}", e))
+            })?;
     }
 
     Ok(())
@@ -64,7 +60,7 @@ pub async fn enqueue_document_index_document_updates(
 
 /**
  * This job updates a document index for a given document.
- * 
+ *
  * It is responsible for adding, updating or removing the document from relevant index nodes.
  */
 pub async fn update_document_index_document(
@@ -83,7 +79,7 @@ pub async fn update_document_index_document(
 
 /**
  * Internal function to update a document index for a given document.
- * 
+ *
  * Separated from the public function to allow for more granular error handling and logging.
  */
 async fn do_update_document_index_document(
@@ -91,17 +87,17 @@ async fn do_update_document_index_document(
     document_id: i64,
     state: Data<Arc<AppState>>,
 ) -> JobResult<()> {
-    tracing::info!(document_index_id, document_id, "Updating document_index for document");
+    tracing::info!(
+        document_index_id,
+        document_id,
+        "Updating document_index for document"
+    );
 
-    let mut db = state
-        .db_pool
-        .get()
-        .await?;
+    let mut db = state.db_pool.get().await?;
 
     // Build a TemplateDocumentView for this document, which includes loading the document type slug,
     // tag slugs and cabinet slugs, as these may be needed to evaluate the document index templates.
-    let document_view = get_document_view(&mut db, document_id)
-        .await?;
+    let document_view = get_document_view(&mut db, document_id).await?;
     let template_document_view = build_template_document_view(&mut db, document_view).await?;
 
     // Check if the document index still exists - if not, we can skip this operation entirely.
@@ -111,10 +107,7 @@ async fn do_update_document_index_document(
         .first::<DocumentIndex>(&mut db)
         .await;
     if matches!(document_index, Err(diesel::result::Error::NotFound)) {
-        tracing::info!(
-            document_index_id,
-            "document_index missing; skipping update"
-        );
+        tracing::info!(document_index_id, "document_index missing; skipping update");
         return Ok(());
     }
 
@@ -124,22 +117,19 @@ async fn do_update_document_index_document(
     // We want the document_index_value_id(s), but only for this document_index_id.
     // That will require joining document_index_documents to document_index_values to document_index_templates to filter by document_index_id.
     // We will collect these values in a Set.
-    let existing_value_ids = document_index_documents::table
-        .inner_join(
-            document_index_values::table.on(
+    let existing_value_ids =
+        document_index_documents::table
+            .inner_join(document_index_values::table.on(
                 document_index_documents::document_index_value_id.eq(document_index_values::id),
-            ),
-        )
-        .inner_join(
-            document_index_templates::table.on(
+            ))
+            .inner_join(document_index_templates::table.on(
                 document_index_values::document_index_template_id.eq(document_index_templates::id),
-            ),
-        )
-        .filter(document_index_documents::document_id.eq(document_id))
-        .filter(document_index_templates::document_index_id.eq(document_index_id))
-        .select(document_index_values::id)
-        .load::<i64>(&mut db)
-        .await?;
+            ))
+            .filter(document_index_documents::document_id.eq(document_id))
+            .filter(document_index_templates::document_index_id.eq(document_index_id))
+            .select(document_index_values::id)
+            .load::<i64>(&mut db)
+            .await?;
     let mut existing_value_ids: HashSet<i64> = existing_value_ids.into_iter().collect();
 
     // Next, start at the root(s) of the document index (the template with no parent) and traverse down the tree, matching the document's metadata to the template's criteria, and updating the document_index_documents records as needed.
@@ -234,9 +224,8 @@ async fn do_update_document_index_document(
                     }
                 }
                 Err(diesel::result::Error::RollbackTransaction) => {
-                    let should_skip =
-                        skip_due_to_empty_template.as_ref().load(Ordering::Relaxed)
-                            || skip_due_to_no_leaf.as_ref().load(Ordering::Relaxed);
+                    let should_skip = skip_due_to_empty_template.as_ref().load(Ordering::Relaxed)
+                        || skip_due_to_no_leaf.as_ref().load(Ordering::Relaxed);
                     if should_skip {
                         continue;
                     }
@@ -311,7 +300,7 @@ pub async fn delete_document_index_document(
 /**
  * Internal function to build a TemplateDocumentView for a given DocumentView,
  * by loading the document type slug, tag slugs and cabinet slugs.
- * 
+ *
  * This is needed to evaluate the document index templates, which may reference these fields.
  */
 async fn build_template_document_view(
@@ -405,11 +394,11 @@ async fn delete_stale_document_index_values(
         )
         DELETE FROM document_index_values
         WHERE id IN (SELECT id FROM deletable)
-        "#
+        "#,
     )
-        .bind::<diesel::sql_types::Array<diesel::sql_types::BigInt>, _>(remaining_value_ids)
-        .execute(db)
-        .await?;
+    .bind::<diesel::sql_types::Array<diesel::sql_types::BigInt>, _>(remaining_value_ids)
+    .execute(db)
+    .await?;
 
     Ok(())
 }
@@ -417,7 +406,7 @@ async fn delete_stale_document_index_values(
 /**
  * Internal function to evaluate a document index template for a document, which may result in
  * upserting document_index_value and document_index_document records.
- * 
+ *
  * Will remove the value_id from the set of existing_value_ids if a document_index_document record is upserted.
  */
 async fn apply_document_index_value(
@@ -426,7 +415,6 @@ async fn apply_document_index_value(
     template: &DocumentIndexTemplate,
     parent_value_id: Option<i64>,
 ) -> Result<Option<i64>, diesel::result::Error> {
-
     // Evaluate the template against the DocumentView, using minijinja
     // We will pass this DocumentView to minijinja under the "doc" key.
     let env = minijinja::Environment::new();
@@ -456,9 +444,13 @@ async fn apply_document_index_value(
         ))
         .do_update()
         .set((
-            document_index_values::document_index_id.eq(diesel::upsert::excluded(document_index_values::document_index_id)),
-            document_index_values::parent_id.eq(diesel::upsert::excluded(document_index_values::parent_id)),
-            document_index_values::is_leaf.eq(diesel::upsert::excluded(document_index_values::is_leaf)),
+            document_index_values::document_index_id.eq(diesel::upsert::excluded(
+                document_index_values::document_index_id,
+            )),
+            document_index_values::parent_id
+                .eq(diesel::upsert::excluded(document_index_values::parent_id)),
+            document_index_values::is_leaf
+                .eq(diesel::upsert::excluded(document_index_values::is_leaf)),
         ))
         .returning(document_index_values::id)
         .get_result(db)

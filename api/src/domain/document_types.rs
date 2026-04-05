@@ -15,5 +15,5 @@ pub struct DocumentType {
     pub created_at: DateTime<Utc>,
     pub updated_by: i64,
     pub updated_at: DateTime<Utc>,
-    pub description: Option<String>
+    pub description: Option<String>,
 }

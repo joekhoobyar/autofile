@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use crate::AppState;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
-use crate::schema::{tag_documents};
 use crate::domain::tag_documents::TagDocument;
+use crate::schema::tag_documents;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
@@ -12,14 +12,13 @@ use axum::extract::State;
 use serde::Deserialize;
 
 use axum::{
-    Router,
-    routing::get,
-    Json,
+    Json, Router,
     extract::{Path, Query},
+    routing::get,
 };
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
 use diesel::upsert::excluded;
+use diesel_async::RunQueryDsl;
 
 use chrono::Utc;
 
@@ -38,7 +37,6 @@ struct InsertableTagDocument {
     document_id: i64,
     updated_by: i64,
 }
-
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -59,7 +57,6 @@ pub struct ListTagDocumentsQuery {
     pub sd: Option<bool>,
 }
 
-
 pub async fn get_by_ids(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -75,7 +72,6 @@ pub async fn get_by_ids(
     Ok(Json(row))
 }
 
-
 async fn upsert(
     user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -83,14 +79,16 @@ async fn upsert(
     Path(tag_id): Path<i64>,
     Json(input): Json<Vec<NewTagDocument>>,
 ) -> Result<Json<Vec<TagDocument>>, ApiError> {
-
     // Prepare the rows to upsert, setting created_by and updated_by to the current user.
     // It is worth allocating memory so that we can bulk upsert with Diesel, rather than doing individual queries in a loop.
-    let values: Vec<InsertableTagDocument> = input.into_iter().map(|m| InsertableTagDocument {
-        tag_id,
-        document_id: m.document_id,
-        updated_by: user.user_id,
-    }).collect();
+    let values: Vec<InsertableTagDocument> = input
+        .into_iter()
+        .map(|m| InsertableTagDocument {
+            tag_id,
+            document_id: m.document_id,
+            updated_by: user.user_id,
+        })
+        .collect();
 
     // Bulk upsert with Diesel.
     let items = diesel::insert_into(tag_documents::table)
@@ -131,14 +129,18 @@ pub async fn list(
 
     let mut query = tag_documents::table.into_boxed();
     query = match (params.sf, params.sd) {
-        (Some(TagDocumentSortField::UpdatedAt), Some(true)) =>
-            query.order((tag_documents::updated_at.desc(), tag_documents::document_id.asc())),
-        (Some(TagDocumentSortField::UpdatedAt), _) =>
-            query.order((tag_documents::updated_at.asc(), tag_documents::document_id.asc())),
-        (Some(TagDocumentSortField::DocumentId), Some(true)) =>
-            query.order(tag_documents::document_id.desc()),
-        _ =>
-            query.order(tag_documents::document_id.asc()),
+        (Some(TagDocumentSortField::UpdatedAt), Some(true)) => query.order((
+            tag_documents::updated_at.desc(),
+            tag_documents::document_id.asc(),
+        )),
+        (Some(TagDocumentSortField::UpdatedAt), _) => query.order((
+            tag_documents::updated_at.asc(),
+            tag_documents::document_id.asc(),
+        )),
+        (Some(TagDocumentSortField::DocumentId), Some(true)) => {
+            query.order(tag_documents::document_id.desc())
+        }
+        _ => query.order(tag_documents::document_id.asc()),
     };
 
     let items = query
@@ -149,7 +151,12 @@ pub async fn list(
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list tag_documents"))?;
 
-    Ok(Json(ResourceList { total, page, per_page, items }))
+    Ok(Json(ResourceList {
+        total,
+        page,
+        per_page,
+        items,
+    }))
 }
 
 async fn delete(
@@ -160,13 +167,13 @@ async fn delete(
     Json(input): Json<Vec<i64>>,
 ) -> Result<Json<()>, ApiError> {
     diesel::delete(
-            tag_documents::table
-                .filter(tag_documents::tag_id.eq(tag_id))
-                .filter(tag_documents::document_id.eq_any(&input))
-        )
-        .execute(&mut db)
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete tag_documents"))?;
+        tag_documents::table
+            .filter(tag_documents::tag_id.eq(tag_id))
+            .filter(tag_documents::document_id.eq_any(&input)),
+    )
+    .execute(&mut db)
+    .await
+    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete tag_documents"))?;
 
     // Enqueue jobs to update document indexes for this document, as the tags may be used in index rules.
     for document_id in input {
@@ -183,13 +190,13 @@ async fn delete_junction(
     Path((tag_id, document_id)): Path<(i64, i64)>,
 ) -> Result<Json<()>, ApiError> {
     let affected = diesel::delete(
-            tag_documents::table
-                .filter(tag_documents::tag_id.eq(tag_id))
-                .filter(tag_documents::document_id.eq(document_id))
-        )
-        .execute(&mut db)
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete tag_document"))?;
+        tag_documents::table
+            .filter(tag_documents::tag_id.eq(tag_id))
+            .filter(tag_documents::document_id.eq(document_id)),
+    )
+    .execute(&mut db)
+    .await
+    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete tag_document"))?;
 
     if affected == 0 {
         return Err(ApiError::not_found("tag_document not found"));
@@ -205,6 +212,8 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/{tag_id}/documents", get(list).post(upsert))
         .route("/{tag_id}/documents/delete", axum::routing::post(delete))
-        .route("/{tag_id}/documents/{document_id}",
-            get(get_by_ids).delete(delete_junction))
+        .route(
+            "/{tag_id}/documents/{document_id}",
+            get(get_by_ids).delete(delete_junction),
+        )
 }

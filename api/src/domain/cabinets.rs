@@ -16,5 +16,5 @@ pub struct Cabinet {
     pub updated_by: i64,
     pub updated_at: DateTime<Utc>,
     pub description: Option<String>,
-    pub parent_id: Option<i64>
+    pub parent_id: Option<i64>,
 }

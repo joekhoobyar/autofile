@@ -5,19 +5,18 @@ use crate::domain::users::User;
 use crate::schema::users;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{diesel_to_http, ApiError};
+use crate::shared::util::{ApiError, diesel_to_http};
 
 use serde::Deserialize;
 
 use axum::{
-    Router,
-    routing::get,
-    Json,
+    Json, Router,
     extract::{Path, Query},
+    routing::get,
 };
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = users)]
@@ -102,13 +101,12 @@ async fn update(
     changes.updated_at = Some(Utc::now());
 
     // Update + return the updated row in one round-trip.
-    let updated: User =
-        diesel::update(users::table.filter(users::id.eq(id)))
-            .set(&changes)
-            .returning(User::as_returning())
-            .get_result(&mut db)
-            .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update user"))?;
+    let updated: User = diesel::update(users::table.filter(users::id.eq(id)))
+        .set(&changes)
+        .returning(User::as_returning())
+        .get_result(&mut db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update user"))?;
 
     Ok(Json(updated))
 }
@@ -129,7 +127,9 @@ pub async fn list(
     if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
         let pattern = format!("%{}%", q);
         query = query.filter(
-            users::username.ilike(pattern.clone()).or(users::display_name.ilike(pattern)),
+            users::username
+                .ilike(pattern.clone())
+                .or(users::display_name.ilike(pattern)),
         );
     }
 

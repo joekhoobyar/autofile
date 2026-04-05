@@ -31,10 +31,7 @@ async fn process_file_pages_inner(
     tracing::info!(document_file_id, "processing file pages");
 
     // Load the document file from the database.
-    let mut db = state
-        .db_pool
-        .get()
-        .await?;
+    let mut db = state.db_pool.get().await?;
     let document_file = document_files::table
         .find(document_file_id)
         .select(DocumentFile::as_select())
@@ -42,14 +39,13 @@ async fn process_file_pages_inner(
         .await?;
 
     // Download the file from S3 into a temp file.
-    let (temp_dir, temp_file) = stage_document_file_from_s3(&document_file, "autofile-pages", state.clone())
-        .await?;
+    let (temp_dir, temp_file) =
+        stage_document_file_from_s3(&document_file, "autofile-pages", state.clone()).await?;
 
     let result = async {
         tracing::info!(document_file_id, "counting pages");
         // Count the pages in the document, then update the database
-        let pages = count_pages(temp_file.clone(), state.clone())
-            .await?;
+        let pages = count_pages(temp_file.clone(), state.clone()).await?;
 
         diesel::update(document_files::table.find(document_file_id))
             .set(document_files::pages.eq(pages as i32))
@@ -61,8 +57,7 @@ async fn process_file_pages_inner(
         // in a DocumentFilePage record.
         for page in 1..=pages {
             tracing::info!(document_file_id, page, "extracting text for page");
-            let text = extract_page_text(temp_file.clone(), page, state.clone())
-                .await?;
+            let text = extract_page_text(temp_file.clone(), page, state.clone()).await?;
             diesel::insert_into(document_file_pages::table)
                 .values(&NewDocumentFilePage {
                     document_file_id,
@@ -107,7 +102,6 @@ async fn extract_page_text(
     page: u32,
     _state: Data<Arc<AppState>>,
 ) -> JobResult<String> {
-
     // 2) run `pdftotext -f {page} -l {page} input.pdf -` to extract text for the page
     let output = Command::new("pdftotext")
         .arg("-f")
@@ -135,16 +129,9 @@ async fn extract_page_text(
     Ok(text)
 }
 
-async fn count_pages(
-    file: String,
-    _state: Data<Arc<AppState>>,
-) -> JobResult<u32> {
-
+async fn count_pages(file: String, _state: Data<Arc<AppState>>) -> JobResult<u32> {
     // 2) run `pdfinfo input.pdf` and parse the output to get the page count
-    let output = Command::new("pdfinfo")
-        .arg(file)
-        .output()
-        .await?;
+    let output = Command::new("pdfinfo").arg(file).output().await?;
 
     if !output.status.success() {
         let error = std::io::Error::new(
@@ -180,9 +167,8 @@ async fn count_pages(
 pub async fn stage_document_file_from_s3(
     document_file: &DocumentFile,
     tempfile_prefix: &str,
-    state: Data<Arc<AppState>>
+    state: Data<Arc<AppState>>,
 ) -> JobResult<(PathBuf, String)> {
-
     // Download the file from object storage, into a temp file.
     let s3_key = format!("{}/{}", document_file.s3_prefix, document_file.filename);
     let object = state
@@ -192,17 +178,11 @@ pub async fn stage_document_file_from_s3(
         .key(&s3_key)
         .send()
         .await?;
-    let file_bytes = object
-        .body
-        .collect()
-        .await?
-        .into_bytes();
+    let file_bytes = object.body.collect().await?.into_bytes();
     let tmp_dir = std::env::temp_dir().join(format!("{}-{}", tempfile_prefix, Uuid::new_v4()));
-    tokio::fs::create_dir_all(&tmp_dir)
-        .await?;
+    tokio::fs::create_dir_all(&tmp_dir).await?;
     let tmp_file = tmp_dir.join("staged-file");
-    tokio::fs::write(&tmp_file, file_bytes)
-        .await?;
+    tokio::fs::write(&tmp_file, file_bytes).await?;
 
     Ok((tmp_dir, tmp_file.to_string_lossy().to_string()))
 }

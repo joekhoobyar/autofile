@@ -1,19 +1,18 @@
 use std::sync::Arc;
 
 use crate::AppState;
-use crate::schema::{document_types_metadata_types, metadata_types};
 use crate::domain::metadata_types::{DataType, MetadataType};
+use crate::schema::{document_types_metadata_types, metadata_types};
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{diesel_to_http, ApiError, ResourceList};
+use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
 
 use serde::Deserialize;
 
 use axum::{
-    Router,
-    routing::get,
-    Json,
+    Json, Router,
     extract::{Path, Query},
+    routing::get,
 };
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
@@ -121,7 +120,6 @@ async fn update(
     Path(id): Path<i64>,
     Json(input): Json<MetadataTypeChangeset>,
 ) -> Result<Json<MetadataType>, ApiError> {
-
     // Update + return the updated row in one round-trip.
     let updated: MetadataType =
         diesel::update(metadata_types::table.filter(metadata_types::id.eq(id)))
@@ -146,9 +144,12 @@ async fn delete(
     db.transaction::<_, diesel::result::Error, _>(move |conn| {
         Box::pin(async move {
             // Delete the join table records
-            diesel::delete(document_types_metadata_types::table.filter(document_types_metadata_types::metadata_type_id.eq(id)))
-                .execute(conn)
-                .await?;
+            diesel::delete(
+                document_types_metadata_types::table
+                    .filter(document_types_metadata_types::metadata_type_id.eq(id)),
+            )
+            .execute(conn)
+            .await?;
 
             // Delete the metadata type
             let affected = diesel::delete(metadata_types::table.filter(metadata_types::id.eq(id)))
@@ -191,7 +192,8 @@ pub async fn list(
         if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
             let pattern = format!("%{}%", q);
             query.filter(
-                metadata_types::slug.ilike(pattern.clone())
+                metadata_types::slug
+                    .ilike(pattern.clone())
                     .or(metadata_types::name.ilike(pattern.clone()))
                     .or(metadata_types::data_type.ilike(pattern.clone()))
                     .or(metadata_types::description.ilike(pattern)),
@@ -209,34 +211,44 @@ pub async fn list(
 
     let mut query: metadata_types::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
-        (Some(MetadataTypeSortField::Slug), Some(true)) =>
-            query.order((metadata_types::slug.desc(), metadata_types::id.asc())),
-        (Some(MetadataTypeSortField::Slug), _) =>
-            query.order((metadata_types::slug.asc(), metadata_types::id.asc())),
-        (Some(MetadataTypeSortField::Name), Some(true)) =>
-            query.order((metadata_types::name.desc(), metadata_types::id.asc())),
-        (Some(MetadataTypeSortField::Name), _) =>
-            query.order((metadata_types::name.asc(), metadata_types::id.asc())),
-        (Some(MetadataTypeSortField::DataType), Some(true)) =>
-            query.order((metadata_types::data_type.desc(), metadata_types::id.asc())),
-        (Some(MetadataTypeSortField::DataType), _) =>
-            query.order((metadata_types::data_type.asc(), metadata_types::id.asc())),
-        (Some(MetadataTypeSortField::Description), Some(true)) =>
-            query.order((metadata_types::description.desc(), metadata_types::id.asc())),
-        (Some(MetadataTypeSortField::Description), _) =>
-            query.order((metadata_types::description.asc(), metadata_types::id.asc())),
-        (Some(MetadataTypeSortField::CreatedAt), Some(true)) =>
-            query.order((metadata_types::created_at.desc(), metadata_types::id.asc())),
-        (Some(MetadataTypeSortField::CreatedAt), _) =>
-            query.order((metadata_types::created_at.asc(), metadata_types::id.asc())),
-        (Some(MetadataTypeSortField::UpdatedAt), Some(true)) =>
-            query.order((metadata_types::updated_at.desc(), metadata_types::id.asc())),
-        (Some(MetadataTypeSortField::UpdatedAt), _) =>
-            query.order((metadata_types::updated_at.asc(), metadata_types::id.asc())),
-        (Some(MetadataTypeSortField::Id), Some(true)) =>
-            query.order(metadata_types::id.desc()),
-        _ =>
-            query.order(metadata_types::id.asc()),
+        (Some(MetadataTypeSortField::Slug), Some(true)) => {
+            query.order((metadata_types::slug.desc(), metadata_types::id.asc()))
+        }
+        (Some(MetadataTypeSortField::Slug), _) => {
+            query.order((metadata_types::slug.asc(), metadata_types::id.asc()))
+        }
+        (Some(MetadataTypeSortField::Name), Some(true)) => {
+            query.order((metadata_types::name.desc(), metadata_types::id.asc()))
+        }
+        (Some(MetadataTypeSortField::Name), _) => {
+            query.order((metadata_types::name.asc(), metadata_types::id.asc()))
+        }
+        (Some(MetadataTypeSortField::DataType), Some(true)) => {
+            query.order((metadata_types::data_type.desc(), metadata_types::id.asc()))
+        }
+        (Some(MetadataTypeSortField::DataType), _) => {
+            query.order((metadata_types::data_type.asc(), metadata_types::id.asc()))
+        }
+        (Some(MetadataTypeSortField::Description), Some(true)) => {
+            query.order((metadata_types::description.desc(), metadata_types::id.asc()))
+        }
+        (Some(MetadataTypeSortField::Description), _) => {
+            query.order((metadata_types::description.asc(), metadata_types::id.asc()))
+        }
+        (Some(MetadataTypeSortField::CreatedAt), Some(true)) => {
+            query.order((metadata_types::created_at.desc(), metadata_types::id.asc()))
+        }
+        (Some(MetadataTypeSortField::CreatedAt), _) => {
+            query.order((metadata_types::created_at.asc(), metadata_types::id.asc()))
+        }
+        (Some(MetadataTypeSortField::UpdatedAt), Some(true)) => {
+            query.order((metadata_types::updated_at.desc(), metadata_types::id.asc()))
+        }
+        (Some(MetadataTypeSortField::UpdatedAt), _) => {
+            query.order((metadata_types::updated_at.asc(), metadata_types::id.asc()))
+        }
+        (Some(MetadataTypeSortField::Id), Some(true)) => query.order(metadata_types::id.desc()),
+        _ => query.order(metadata_types::id.asc()),
     };
 
     let items = query
@@ -247,7 +259,12 @@ pub async fn list(
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list metadata_types"))?;
 
-    Ok(Json(ResourceList { total, page, per_page, items }))
+    Ok(Json(ResourceList {
+        total,
+        page,
+        per_page,
+        items,
+    }))
 }
 
 pub fn routes() -> Router<Arc<AppState>> {

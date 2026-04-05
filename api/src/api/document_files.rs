@@ -5,14 +5,9 @@ use crate::domain::document_files::DocumentFileView;
 use crate::schema::document_files;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{diesel_to_http, ApiError};
+use crate::shared::util::{ApiError, diesel_to_http};
 
-use axum::{
-    Router,
-    routing::get,
-    Json,
-    extract::Path,
-};
+use axum::{Json, Router, extract::Path, routing::get};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
@@ -33,6 +28,5 @@ pub async fn list(
 }
 
 pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/{document_id}/files", get(list))
+    Router::new().route("/{document_id}/files", get(list))
 }

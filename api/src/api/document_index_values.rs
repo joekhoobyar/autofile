@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::AppState;
-use crate::schema::document_index_values;
 use crate::domain::document_indexes::DocumentIndexValue;
+use crate::schema::document_index_values;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
@@ -10,10 +10,9 @@ use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
 use serde::Deserialize;
 
 use axum::{
-    Router,
-    routing::get,
-    Json,
+    Json, Router,
     extract::{Path, Query},
+    routing::get,
 };
 use diesel::prelude::*;
 use diesel::sql_types::{BigInt, Bool, Nullable, Text};
@@ -105,22 +104,34 @@ pub async fn list(
 
     let mut query: document_index_values::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
-        (Some(DocumentIndexValueSortField::Value), Some(true)) =>
-            query.order((document_index_values::value.desc(), document_index_values::id.asc())),
-        (Some(DocumentIndexValueSortField::Value), _) =>
-            query.order((document_index_values::value.asc(), document_index_values::id.asc())),
-        (Some(DocumentIndexValueSortField::DocumentIndexTemplateId), Some(true)) =>
-            query.order((document_index_values::document_index_template_id.desc(), document_index_values::id.asc())),
-        (Some(DocumentIndexValueSortField::DocumentIndexTemplateId), _) =>
-            query.order((document_index_values::document_index_template_id.asc(), document_index_values::id.asc())),
-        (Some(DocumentIndexValueSortField::ParentId), Some(true)) =>
-            query.order((document_index_values::parent_id.desc(), document_index_values::id.asc())),
-        (Some(DocumentIndexValueSortField::ParentId), _) =>
-            query.order((document_index_values::parent_id.asc(), document_index_values::id.asc())),
-        (Some(DocumentIndexValueSortField::Id), Some(true)) =>
-            query.order(document_index_values::id.desc()),
-        _ =>
-            query.order(document_index_values::id.asc()),
+        (Some(DocumentIndexValueSortField::Value), Some(true)) => query.order((
+            document_index_values::value.desc(),
+            document_index_values::id.asc(),
+        )),
+        (Some(DocumentIndexValueSortField::Value), _) => query.order((
+            document_index_values::value.asc(),
+            document_index_values::id.asc(),
+        )),
+        (Some(DocumentIndexValueSortField::DocumentIndexTemplateId), Some(true)) => query.order((
+            document_index_values::document_index_template_id.desc(),
+            document_index_values::id.asc(),
+        )),
+        (Some(DocumentIndexValueSortField::DocumentIndexTemplateId), _) => query.order((
+            document_index_values::document_index_template_id.asc(),
+            document_index_values::id.asc(),
+        )),
+        (Some(DocumentIndexValueSortField::ParentId), Some(true)) => query.order((
+            document_index_values::parent_id.desc(),
+            document_index_values::id.asc(),
+        )),
+        (Some(DocumentIndexValueSortField::ParentId), _) => query.order((
+            document_index_values::parent_id.asc(),
+            document_index_values::id.asc(),
+        )),
+        (Some(DocumentIndexValueSortField::Id), Some(true)) => {
+            query.order(document_index_values::id.desc())
+        }
+        _ => query.order(document_index_values::id.asc()),
     };
 
     let items = query
@@ -131,7 +142,12 @@ pub async fn list(
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_index_values"))?;
 
-    Ok(Json(ResourceList { total, page, per_page, items }))
+    Ok(Json(ResourceList {
+        total,
+        page,
+        per_page,
+        items,
+    }))
 }
 
 pub async fn ancestors(
@@ -163,7 +179,12 @@ pub async fn ancestors(
     .bind::<BigInt, _>(document_index_id)
     .load::<DocumentIndexValueRow>(&mut db)
     .await
-    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document_index_value ancestors"))?;
+    .map_err(|e| {
+        ApiError::new(
+            diesel_to_http(e),
+            "Failed to fetch document_index_value ancestors",
+        )
+    })?;
 
     let items = rows
         .into_iter()

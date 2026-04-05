@@ -20,38 +20,30 @@ pub async fn upload_to_s3(
     body: ByteStream,
     content_type: Option<&str>,
 ) -> Result<(), S3Error> {
-    let mut request = client
-        .put_object()
-        .bucket(bucket)
-        .key(s3_key)
-        .body(body);
+    let mut request = client.put_object().bucket(bucket).key(s3_key).body(body);
 
     if let Some(ct) = content_type {
         request = request.content_type(ct);
     }
 
-    request
-        .send()
-        .await
-        .map_err(|e| {
-            // Log detailed error for debugging
-            eprintln!("S3 upload error details:");
-            eprintln!("  Bucket: {}", bucket);
-            eprintln!("  Key: {}", s3_key);
-            eprintln!("  Error: {:?}", e);
+    request.send().await.map_err(|e| {
+        // Log detailed error for debugging
+        eprintln!("S3 upload error details:");
+        eprintln!("  Bucket: {}", bucket);
+        eprintln!("  Key: {}", s3_key);
+        eprintln!("  Error: {:?}", e);
 
-            // Return detailed error message
-            S3Error(format!("Failed to upload to S3 bucket '{}' key '{}': {}", bucket, s3_key, e))
-        })?;
+        // Return detailed error message
+        S3Error(format!(
+            "Failed to upload to S3 bucket '{}' key '{}': {}",
+            bucket, s3_key, e
+        ))
+    })?;
 
     Ok(())
 }
 
-pub async fn delete_from_s3(
-    client: &S3Client,
-    bucket: &str,
-    key: &str,
-) -> Result<(), S3Error> {
+pub async fn delete_from_s3(client: &S3Client, bucket: &str, key: &str) -> Result<(), S3Error> {
     client
         .delete_object()
         .bucket(bucket)
@@ -59,7 +51,10 @@ pub async fn delete_from_s3(
         .send()
         .await
         .map_err(|e| {
-            eprintln!("Failed to delete S3 object '{}' from bucket '{}': {:?}", key, bucket, e);
+            eprintln!(
+                "Failed to delete S3 object '{}' from bucket '{}': {:?}",
+                key, bucket, e
+            );
             S3Error(format!("Failed to delete from S3: {:?}", e))
         })?;
 
@@ -90,9 +85,7 @@ pub async fn delete_prefix_from_s3(
             .collect::<Result<Vec<_>, _>>()?;
 
         if !objects.is_empty() {
-            let delete = Delete::builder()
-                .set_objects(Some(objects))
-                .build()?;
+            let delete = Delete::builder().set_objects(Some(objects)).build()?;
 
             client
                 .delete_objects()

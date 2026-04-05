@@ -1,12 +1,14 @@
-use std::collections::{HashMap};
+use std::collections::HashMap;
 
-use crate::schema::{cabinet_documents, document_files, document_metadatas, documents, metadata_types, tag_documents};
 use crate::domain::documents::{Document, DocumentView};
-use crate::shared::util::{diesel_to_http, ApiError};
+use crate::schema::{
+    cabinet_documents, document_files, document_metadatas, documents, metadata_types, tag_documents,
+};
+use crate::shared::util::{ApiError, diesel_to_http};
 
 use bb8::PooledConnection;
-use diesel::prelude::*;
 use diesel::dsl::sum;
+use diesel::prelude::*;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 

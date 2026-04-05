@@ -10,8 +10,8 @@ use tokio::process::Command;
 use crate::application::document_files::stage_document_file_from_s3;
 use crate::domain::document_files::DocumentFile;
 use crate::infrastructure::s3::upload_to_s3;
-use crate::schema::documents;
 use crate::schema::document_files;
+use crate::schema::documents;
 use crate::shared::app_state::AppState;
 use crate::shared::util::JobResult;
 
@@ -39,10 +39,7 @@ async fn generate_thumbnail_inner(
     tracing::info!(document_file_id, page, width, "generating thumbnail");
 
     // Load the document file from the database to get the S3 location.
-    let mut db = state
-        .db_pool
-        .get()
-        .await?;
+    let mut db = state.db_pool.get().await?;
     let document_file = document_files::table
         .find(document_file_id)
         .select(DocumentFile::as_select())
@@ -50,8 +47,8 @@ async fn generate_thumbnail_inner(
         .await?;
 
     // Download the file from S3 into a temp file.
-    let (temp_dir, temp_file) = stage_document_file_from_s3(&document_file, "autofile-pages", state.clone())
-        .await?;
+    let (temp_dir, temp_file) =
+        stage_document_file_from_s3(&document_file, "autofile-pages", state.clone()).await?;
 
     // generate thumbnail
     let output_prefix = temp_dir.join("_thumb");
@@ -81,8 +78,7 @@ async fn generate_thumbnail_inner(
     // upload thumbnail
     let thumb_path = temp_dir.join("_thumb.png");
     let thumb_key = format!("{}/_thumb.png", document_file.s3_prefix);
-    let body = ByteStream::from_path(&thumb_path)
-        .await?;
+    let body = ByteStream::from_path(&thumb_path).await?;
     upload_to_s3(
         &state.s3_client,
         state.s3_bucket.as_str(),
@@ -95,13 +91,14 @@ async fn generate_thumbnail_inner(
     // Store the thumbnail in the documents table
     let updated: usize =
         diesel::update(documents::table.filter(documents::id.eq(document_file.document_id)))
-            .set((
-                documents::s3_thumbnail.eq(thumb_key),
-            ))
+            .set((documents::s3_thumbnail.eq(thumb_key),))
             .execute(&mut db)
             .await?;
     if updated == 0 {
-        tracing::warn!("Document {} not found when updating thumbnail", document_file.document_id);
+        tracing::warn!(
+            "Document {} not found when updating thumbnail",
+            document_file.document_id
+        );
     }
 
     let _ = tokio::fs::remove_dir_all(&temp_dir).await;

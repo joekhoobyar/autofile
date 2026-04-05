@@ -1,23 +1,19 @@
 use std::sync::Arc;
 
-use crate::{AppState, is_production};
-use crate::schema::users;
 use crate::domain::users::User;
-use crate::shared::auth::{hash_password, sign_access, sign_refresh, verify_password, verify_refresh};
+use crate::schema::users;
+use crate::shared::auth::{
+    hash_password, sign_access, sign_refresh, verify_password, verify_refresh,
+};
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, diesel_to_http};
+use crate::{AppState, is_production};
 
-use axum::{
-    Router,
-    routing::post,
-    Json,
-    http::StatusCode,
-    extract::State,
-};
-use tower_cookies::{Cookie, Cookies};
+use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
+use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use chrono::Utc;
+use tower_cookies::{Cookie, Cookies};
 
 const ACCESS_TTL_SECONDS: i64 = 3600; // 1 hour
 const REFRESH_TTL_SECONDS: i64 = 3600 * 24 * 30; // 30 days
@@ -47,8 +43,7 @@ pub async fn register(
     DbConn(mut db): DbConn,
     Json(req): Json<RegisterRequest>,
 ) -> Result<Json<User>, ApiError> {
-    let pw_hash = hash_password(&req.password)
-        .map_err(|m| ApiError::bad_request(m))?;
+    let pw_hash = hash_password(&req.password).map_err(|m| ApiError::bad_request(m))?;
 
     let inserted: User = diesel::insert_into(users::table)
         .values((
@@ -72,7 +67,6 @@ pub async fn login(
     DbConn(mut db): DbConn,
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<AccessTokenResponse>, ApiError> {
-
     // 1) verify credentials
     let user = users::table
         .filter(users::username.eq(&req.username))
@@ -108,14 +102,11 @@ pub async fn login(
     Ok(Json(AccessTokenResponse {
         access_token,
         token_type: "Bearer",
-        expires_in: ACCESS_TTL_SECONDS
+        expires_in: ACCESS_TTL_SECONDS,
     }))
 }
 
-pub async fn logout(
-    cookies: Cookies,
-) -> Result<StatusCode, ApiError> {
-
+pub async fn logout(cookies: Cookies) -> Result<StatusCode, ApiError> {
     // Clear the refresh token cookie
     let mut cookie = Cookie::new("refresh_token", "");
     cookie.set_http_only(true);

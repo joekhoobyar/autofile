@@ -15,5 +15,5 @@ pub struct Tag {
     pub created_at: DateTime<Utc>,
     pub created_by: i64,
     pub updated_at: DateTime<Utc>,
-    pub updated_by: i64
+    pub updated_by: i64,
 }

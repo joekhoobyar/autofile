@@ -2,9 +2,9 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use serde::Serialize;
 
-use crate::schema::document_types_metadata_types;
 use crate::domain::document_types::DocumentType;
 use crate::domain::metadata_types::MetadataType;
+use crate::schema::document_types_metadata_types;
 
 #[derive(Debug, Serialize, Identifiable, Associations, Queryable, Selectable)]
 #[diesel(belongs_to(DocumentType))]

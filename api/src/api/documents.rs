@@ -3,17 +3,20 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::AppState;
+use crate::application::document_index_documents::delete_document_index_document;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::documents::get_document_view;
-use crate::schema::{cabinet_documents, document_files, document_index_documents, document_metadatas, documents, metadata_types, tag_documents};
-use crate::domain::documents::{Document, DocumentView};
-use crate::domain::document_files::DocumentFile;
-use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_to_s3};
-use crate::application::document_index_documents::delete_document_index_document;
 use crate::application::jobs::FastJob;
+use crate::domain::document_files::DocumentFile;
+use crate::domain::documents::{Document, DocumentView};
+use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_to_s3};
+use crate::schema::{
+    cabinet_documents, document_files, document_index_documents, document_metadatas, documents,
+    metadata_types, tag_documents,
+};
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{diesel_to_http, write_field_to_temp_file, ApiError, ResourceList};
+use crate::shared::util::{ApiError, ResourceList, diesel_to_http, write_field_to_temp_file};
 
 use aws_sdk_s3::primitives::ByteStream;
 use diesel::dsl::{exists, sum};
@@ -21,17 +24,16 @@ use serde::Deserialize;
 use tokio_util::io::ReaderStream;
 
 use axum::{
-    Router,
-    routing::get,
-    Json,
-    http::{StatusCode, header, HeaderMap},
-    response::Response,
+    Json, Router,
     body::Body,
-    extract::{Path, Query, Multipart, State},
+    extract::{Multipart, Path, Query, State},
+    http::{HeaderMap, StatusCode, header},
+    response::Response,
+    routing::get,
 };
+use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
-use chrono::Utc;
 use httpdate::{fmt_http_date, parse_http_date};
 use uuid::Uuid;
 
@@ -75,7 +77,6 @@ pub enum DocumentSortField {
     UpdatedAt,
 }
 
-
 #[derive(Debug, Deserialize)]
 pub struct ListDocumentsQuery {
     // 1-based page number
@@ -104,37 +105,45 @@ struct ParsedMultipart {
     file_temp: Option<(std::path::PathBuf, String, Option<String>, i64)>,
 }
 
-async fn parse_create_multipart(
-    multipart: &mut Multipart,
-) -> Result<ParsedMultipart, ApiError> {
+async fn parse_create_multipart(multipart: &mut Multipart) -> Result<ParsedMultipart, ApiError> {
     let mut title: Option<String> = None;
     let mut document_type_id: Option<i64> = None;
     let mut file_temp: Option<(std::path::PathBuf, String, Option<String>, i64)> = None;
 
-    while let Some(mut field) = multipart.next_field().await
-        .map_err(|e| ApiError::bad_request(&format!("Failed to read multipart field: {}", e)))? {
-
-        let field_name = field.name()
+    while let Some(mut field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::bad_request(&format!("Failed to read multipart field: {}", e)))?
+    {
+        let field_name = field
+            .name()
             .ok_or_else(|| ApiError::bad_request("Field missing name"))?
             .to_string();
 
         match field_name.as_str() {
             "title" => {
-                let value = field.text().await
+                let value = field
+                    .text()
+                    .await
                     .map_err(|e| ApiError::bad_request(&format!("Failed to read title: {}", e)))?;
                 title = Some(value);
             }
             "document_type_id" => {
-                let value = field.text().await
-                    .map_err(|e| ApiError::bad_request(&format!("Failed to read document_type_id: {}", e)))?;
-                document_type_id = Some(value.parse::<i64>()
-                    .map_err(|_| ApiError::bad_request("Invalid document_type_id"))?);
+                let value = field.text().await.map_err(|e| {
+                    ApiError::bad_request(&format!("Failed to read document_type_id: {}", e))
+                })?;
+                document_type_id = Some(
+                    value
+                        .parse::<i64>()
+                        .map_err(|_| ApiError::bad_request("Invalid document_type_id"))?,
+                );
             }
             "file" => {
                 if file_temp.is_some() {
                     return Err(ApiError::bad_request("Only one file upload is supported"));
                 }
-                let mut filename = field.file_name()
+                let mut filename = field
+                    .file_name()
                     .ok_or_else(|| ApiError::bad_request("File field missing filename"))?
                     .to_string();
                 let content_type = field.content_type().map(|ct| ct.to_string());
@@ -172,7 +181,10 @@ async fn upload_temp_file_to_s3(
         Ok(body) => body,
         Err(e) => {
             let _ = tokio::fs::remove_file(&temp_path).await;
-            return Err(ApiError::internal_server_error(&format!("Failed to read temp file: {}", e)));
+            return Err(ApiError::internal_server_error(&format!(
+                "Failed to read temp file: {}",
+                e
+            )));
         }
     };
     let upload_result = upload_to_s3(
@@ -205,46 +217,53 @@ pub async fn delete(
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
 ) -> Result<Json<()>, ApiError> {
-    let prefixes = db.transaction::<_, diesel::result::Error, _>(move |conn| {
-        Box::pin(async move {
-            // Remove document index associations before deleting the document row.
-            delete_document_index_document(conn, id).await?;
+    let prefixes = db
+        .transaction::<_, diesel::result::Error, _>(move |conn| {
+            Box::pin(async move {
+                // Remove document index associations before deleting the document row.
+                delete_document_index_document(conn, id).await?;
 
-            // Delete the cabinet document associations
-            diesel::delete(cabinet_documents::table.filter(cabinet_documents::document_id.eq(id)))
+                // Delete the cabinet document associations
+                diesel::delete(
+                    cabinet_documents::table.filter(cabinet_documents::document_id.eq(id)),
+                )
                 .execute(conn)
                 .await?;
 
-            // Delete the document metadata associations
-            diesel::delete(document_metadatas::table.filter(document_metadatas::document_id.eq(id)))
+                // Delete the document metadata associations
+                diesel::delete(
+                    document_metadatas::table.filter(document_metadatas::document_id.eq(id)),
+                )
                 .execute(conn)
                 .await?;
 
-            // Delete the document files, fetching the S3 keys for later deletion.
-            let prefixes: Vec<String> = diesel::delete(document_files::table.filter(document_files::document_id.eq(id)))
+                // Delete the document files, fetching the S3 keys for later deletion.
+                let prefixes: Vec<String> = diesel::delete(
+                    document_files::table.filter(document_files::document_id.eq(id)),
+                )
                 .returning(document_files::s3_prefix)
                 .get_results(conn)
                 .await?;
 
-            // Delete the document.
-            let affected = diesel::delete(documents::table.filter(documents::id.eq(id)))
-                .execute(conn)
-                .await?;
-            if affected == 0 {
-                return Err(diesel::result::Error::NotFound);
-            }
+                // Delete the document.
+                let affected = diesel::delete(documents::table.filter(documents::id.eq(id)))
+                    .execute(conn)
+                    .await?;
+                if affected == 0 {
+                    return Err(diesel::result::Error::NotFound);
+                }
 
-            Ok(prefixes)
+                Ok(prefixes)
+            })
         })
-    })
-    .await
-    .map_err(|e| {
-        if matches!(e, diesel::result::Error::NotFound) {
-            ApiError::not_found("Document not found")
-        } else {
-            ApiError::new(diesel_to_http(e), "Failed to delete document")
-        }
-    })?;
+        .await
+        .map_err(|e| {
+            if matches!(e, diesel::result::Error::NotFound) {
+                ApiError::not_found("Document not found")
+            } else {
+                ApiError::new(diesel_to_http(e), "Failed to delete document")
+            }
+        })?;
 
     if !prefixes.is_empty() {
         let unique_prefixes: HashSet<String> = prefixes.into_iter().collect();
@@ -283,8 +302,7 @@ pub async fn thumbnail_get(
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document thumbnail"))?;
 
-    let s3_key = s3_thumbnail
-        .ok_or_else(|| ApiError::not_found("Thumbnail not available"))?;
+    let s3_key = s3_thumbnail.ok_or_else(|| ApiError::not_found("Thumbnail not available"))?;
 
     // Support conditional GET with If-Modified-Since header to avoid unnecessary S3 requests and data transfer.
     if let Some(if_modified_since) = headers
@@ -369,19 +387,17 @@ async fn create(
             if let Some((temp_path, _, _, _)) = &file_temp {
                 let _ = tokio::fs::remove_file(temp_path).await;
             }
-            return Err(ApiError::bad_request("Missing required field: document_type_id"));
+            return Err(ApiError::bad_request(
+                "Missing required field: document_type_id",
+            ));
         }
     };
 
     // Upload the temp file to S3, then delete it.
     if let Some((temp_path, filename, content_type, file_size)) = file_temp.take() {
-        file_info = Some(upload_temp_file_to_s3(
-            &state,
-            temp_path,
-            filename,
-            content_type,
-            file_size,
-        ).await?);
+        file_info = Some(
+            upload_temp_file_to_s3(&state, temp_path, filename, content_type, file_size).await?,
+        );
     }
 
     // Clone file_info for potential cleanup in error path
@@ -395,7 +411,8 @@ async fn create(
     let pages_enqueue_failed_for_tx = Arc::clone(&pages_enqueue_failed);
 
     // Begin database transaction
-    let result = db.build_transaction()
+    let result = db
+        .build_transaction()
         .run::<_, diesel::result::Error, _>(|conn| {
             Box::pin(async move {
                 let mut fast_jobs = fast_jobs;
@@ -457,21 +474,16 @@ async fn create(
 
     match result {
         Ok(document) => {
-
             // Enqueue jobs to update document indexes for this document, as the tags may be used in index rules.
             enqueue_document_index_document_updates(document.id, state.clone()).await?;
 
             Ok(Json(document))
-        },
+        }
         Err(e) => {
             // On transaction failure, attempt S3 cleanup (best-effort)
             if let Some((s3_prefix, filename, _, _)) = file_info_for_cleanup {
                 let s3_key = format!("{}/{}", s3_prefix, filename);
-                let _ = delete_from_s3(
-                    &state.s3_client,
-                    &state.s3_bucket,
-                    &s3_key,
-                ).await;
+                let _ = delete_from_s3(&state.s3_client, &state.s3_bucket, &s3_key).await;
             }
             if matches!(e, diesel::result::Error::RollbackTransaction) {
                 let thumb_failed = thumb_enqueue_failed.as_ref().load(Ordering::Relaxed);
@@ -492,10 +504,16 @@ async fn create(
                         "Failed to enqueue file pages job",
                     ))
                 } else {
-                    Err(ApiError::new(diesel_to_http(e), "Failed to create document"))
+                    Err(ApiError::new(
+                        diesel_to_http(e),
+                        "Failed to create document",
+                    ))
                 }
             } else {
-                Err(ApiError::new(diesel_to_http(e), "Failed to create document"))
+                Err(ApiError::new(
+                    diesel_to_http(e),
+                    "Failed to create document",
+                ))
             }
         }
     }
@@ -509,17 +527,16 @@ async fn update(
     Json(input): Json<DocumentChangeset>,
 ) -> Result<Json<Document>, ApiError> {
     // Update + return the updated row in one round-trip.
-    let updated: Document =
-        diesel::update(documents::table.filter(documents::id.eq(id)))
-            .set((
-                &input,
-                documents::updated_by.eq(user.user_id),
-                documents::updated_at.eq(Utc::now()),
-            ))
-            .returning(Document::as_returning())
-            .get_result(&mut db)
-            .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update document"))?;
+    let updated: Document = diesel::update(documents::table.filter(documents::id.eq(id)))
+        .set((
+            &input,
+            documents::updated_by.eq(user.user_id),
+            documents::updated_at.eq(Utc::now()),
+        ))
+        .returning(Document::as_returning())
+        .get_result(&mut db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update document"))?;
 
     // Enqueue jobs to update document indexes for this document, as the tags may be used in index rules.
     enqueue_document_index_document_updates(id, state).await?;
@@ -543,9 +560,7 @@ pub async fn list(
         // Optional search: case-insensitive substring on title
         if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
             let pattern = format!("%{}%", q);
-            query = query.filter(
-                documents::title.ilike(pattern)
-            );
+            query = query.filter(documents::title.ilike(pattern));
         }
 
         // Filter by document type
@@ -593,23 +608,27 @@ pub async fn list(
     // Apply sorting based on query parameters, with tie-breaker on ID for consistent pagination.
     let mut query: documents::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
-        (Some(DocumentSortField::Title), Some(true)) =>
-            query.order((documents::title.desc(), documents::id.asc())), // tie-breaker
-        (Some(DocumentSortField::Title), _) =>
-            query.order((documents::title.asc(), documents::id.asc())), // tie-breaker
-        (Some(DocumentSortField::CreatedAt), Some(true)) =>
-            query.order((documents::created_at.desc(), documents::id.asc())), // tie-breaker
-        (Some(DocumentSortField::CreatedAt), _) =>
-            query.order((documents::created_at.asc(), documents::id.asc())), // tie-breaker
-        (Some(DocumentSortField::UpdatedAt), Some(true)) =>
-            query.order((documents::updated_at.desc(), documents::id.asc())), // tie-breaker
-        (Some(DocumentSortField::UpdatedAt), _) =>
-            query.order((documents::updated_at.asc(), documents::id.asc())), // tie-breaker
+        (Some(DocumentSortField::Title), Some(true)) => {
+            query.order((documents::title.desc(), documents::id.asc()))
+        } // tie-breaker
+        (Some(DocumentSortField::Title), _) => {
+            query.order((documents::title.asc(), documents::id.asc()))
+        } // tie-breaker
+        (Some(DocumentSortField::CreatedAt), Some(true)) => {
+            query.order((documents::created_at.desc(), documents::id.asc()))
+        } // tie-breaker
+        (Some(DocumentSortField::CreatedAt), _) => {
+            query.order((documents::created_at.asc(), documents::id.asc()))
+        } // tie-breaker
+        (Some(DocumentSortField::UpdatedAt), Some(true)) => {
+            query.order((documents::updated_at.desc(), documents::id.asc()))
+        } // tie-breaker
+        (Some(DocumentSortField::UpdatedAt), _) => {
+            query.order((documents::updated_at.asc(), documents::id.asc()))
+        } // tie-breaker
 
-        (Some(DocumentSortField::Id), Some(true)) =>
-            query.order(documents::id.desc()),
-        _ =>
-            query.order(documents::id.asc()),
+        (Some(DocumentSortField::Id), Some(true)) => query.order(documents::id.desc()),
+        _ => query.order(documents::id.asc()),
     };
 
     // Fetch the requested page of documents, then collect IDs for batch fetching of metadata and cabinets.
@@ -673,7 +692,9 @@ pub async fn list(
             ))
             .load::<(i64, i64)>(&mut db)
             .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list cabinets for documents"))?;
+            .map_err(|e| {
+                ApiError::new(diesel_to_http(e), "Failed to list cabinets for documents")
+            })?;
 
         for (document_id, cabinet_id) in cabinet_rows {
             cabinets_by_document
@@ -688,10 +709,7 @@ pub async fn list(
     if !document_ids.is_empty() {
         let tag_rows: Vec<(i64, i64)> = tag_documents::table
             .filter(tag_documents::document_id.eq_any(&document_ids))
-            .select((
-                tag_documents::document_id,
-                tag_documents::tag_id,
-            ))
+            .select((tag_documents::document_id, tag_documents::tag_id))
             .load::<(i64, i64)>(&mut db)
             .await
             .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list tags for documents"))?;
@@ -722,7 +740,12 @@ pub async fn list(
         })
         .collect();
 
-    Ok(Json(ResourceList { total, page, per_page, items }))
+    Ok(Json(ResourceList {
+        total,
+        page,
+        per_page,
+        items,
+    }))
 }
 
 pub fn routes() -> Router<Arc<AppState>> {

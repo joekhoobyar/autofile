@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use apalis_redis::RedisStorage;
-use diesel_async::{pooled_connection::bb8, AsyncPgConnection};
+use diesel_async::{AsyncPgConnection, pooled_connection::bb8};
 
 use crate::application::jobs::FastJob;
 

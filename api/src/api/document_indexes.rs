@@ -1,24 +1,20 @@
 use std::sync::Arc;
 
 use crate::AppState;
-use crate::schema::{
-    document_index_documents,
-    document_index_templates,
-    document_index_values,
-    document_indexes,
-};
 use crate::domain::document_indexes::DocumentIndex;
+use crate::schema::{
+    document_index_documents, document_index_templates, document_index_values, document_indexes,
+};
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{diesel_to_http, ApiError, ResourceList};
+use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
 
 use serde::Deserialize;
 
 use axum::{
-    Router,
-    routing::get,
-    Json,
+    Json, Router,
     extract::{Path, Query},
+    routing::get,
 };
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
@@ -122,7 +118,6 @@ async fn update(
     Path(id): Path<i64>,
     Json(input): Json<DocumentIndexChangeset>,
 ) -> Result<Json<DocumentIndex>, ApiError> {
-
     // Update + return the updated row in one round-trip.
     let updated: DocumentIndex =
         diesel::update(document_indexes::table.filter(document_indexes::id.eq(id)))
@@ -148,21 +143,18 @@ async fn delete(
 
     db.transaction::<_, diesel::result::Error, _>(move |conn| {
         Box::pin(async move {
-
             // Delete associated document index documents
             let value_ids = document_index_values::table
                 .inner_join(
-                    document_index_templates::table.on(
-                        document_index_values::document_index_template_id
-                            .eq(document_index_templates::id),
-                    ),
+                    document_index_templates::table
+                        .on(document_index_values::document_index_template_id
+                            .eq(document_index_templates::id)),
                 )
                 .filter(document_index_templates::document_index_id.eq(document_index_id))
                 .select(document_index_values::id);
             diesel::delete(
-                document_index_documents::table.filter(
-                    document_index_documents::document_index_value_id.eq_any(value_ids),
-                ),
+                document_index_documents::table
+                    .filter(document_index_documents::document_index_value_id.eq_any(value_ids)),
             )
             .execute(conn)
             .await?;
@@ -172,26 +164,26 @@ async fn delete(
                 .filter(document_index_templates::document_index_id.eq(document_index_id))
                 .select(document_index_templates::id);
             diesel::delete(
-                document_index_values::table.filter(
-                    document_index_values::document_index_template_id.eq_any(template_ids),
-                ),
+                document_index_values::table
+                    .filter(document_index_values::document_index_template_id.eq_any(template_ids)),
             )
             .execute(conn)
             .await?;
 
-            // Delete associated document templates 
+            // Delete associated document templates
             diesel::delete(
-                document_index_templates::table.filter(
-                    document_index_templates::document_index_id.eq(document_index_id),
-                ),
+                document_index_templates::table
+                    .filter(document_index_templates::document_index_id.eq(document_index_id)),
             )
             .execute(conn)
             .await?;
 
             // Delete the document index
-            let affected = diesel::delete(document_indexes::table.filter(document_indexes::id.eq(document_index_id)))
-                .execute(conn)
-                .await?;
+            let affected = diesel::delete(
+                document_indexes::table.filter(document_indexes::id.eq(document_index_id)),
+            )
+            .execute(conn)
+            .await?;
 
             if affected == 0 {
                 return Err(diesel::result::Error::NotFound);
@@ -229,7 +221,8 @@ pub async fn list(
         if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
             let pattern = format!("%{}%", q);
             query.filter(
-                document_indexes::slug.ilike(pattern.clone())
+                document_indexes::slug
+                    .ilike(pattern.clone())
                     .or(document_indexes::name.ilike(pattern.clone()))
                     .or(document_indexes::description.ilike(pattern)),
             )
@@ -246,35 +239,51 @@ pub async fn list(
 
     let mut query: document_indexes::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
-        (Some(DocumentIndexSortField::Slug), Some(true)) =>
-            query.order((document_indexes::slug.desc(), document_indexes::id.asc())), // tie-breaker
-        (Some(DocumentIndexSortField::Slug), _) =>
-            query.order((document_indexes::slug.asc(), document_indexes::id.asc())), // tie-breaker
-        (Some(DocumentIndexSortField::Name), Some(true)) =>
-            query.order((document_indexes::name.desc(), document_indexes::id.asc())), // tie-breaker
-        (Some(DocumentIndexSortField::Name), _) =>
-            query.order((document_indexes::name.asc(), document_indexes::id.asc())), // tie-breaker
-        (Some(DocumentIndexSortField::Enabled), Some(true)) =>
-            query.order((document_indexes::enabled.desc(), document_indexes::id.asc())), // tie-breaker
-        (Some(DocumentIndexSortField::Enabled), _) =>
-            query.order((document_indexes::enabled.asc(), document_indexes::id.asc())), // tie-breaker
-        (Some(DocumentIndexSortField::Description), Some(true)) =>
-            query.order((document_indexes::description.desc(), document_indexes::id.asc())), // tie-breaker
-        (Some(DocumentIndexSortField::Description), _) =>
-            query.order((document_indexes::description.asc(), document_indexes::id.asc())), // tie-breaker
-        (Some(DocumentIndexSortField::CreatedAt), Some(true)) =>
-            query.order((document_indexes::created_at.desc(), document_indexes::id.asc())), // tie-breaker
-        (Some(DocumentIndexSortField::CreatedAt), _) =>
-            query.order((document_indexes::created_at.asc(), document_indexes::id.asc())), // tie-breaker
-        (Some(DocumentIndexSortField::UpdatedAt), Some(true)) =>
-            query.order((document_indexes::updated_at.desc(), document_indexes::id.asc())), // tie-breaker
-        (Some(DocumentIndexSortField::UpdatedAt), _) =>
-            query.order((document_indexes::updated_at.asc(), document_indexes::id.asc())), // tie-breaker
+        (Some(DocumentIndexSortField::Slug), Some(true)) => {
+            query.order((document_indexes::slug.desc(), document_indexes::id.asc()))
+        } // tie-breaker
+        (Some(DocumentIndexSortField::Slug), _) => {
+            query.order((document_indexes::slug.asc(), document_indexes::id.asc()))
+        } // tie-breaker
+        (Some(DocumentIndexSortField::Name), Some(true)) => {
+            query.order((document_indexes::name.desc(), document_indexes::id.asc()))
+        } // tie-breaker
+        (Some(DocumentIndexSortField::Name), _) => {
+            query.order((document_indexes::name.asc(), document_indexes::id.asc()))
+        } // tie-breaker
+        (Some(DocumentIndexSortField::Enabled), Some(true)) => {
+            query.order((document_indexes::enabled.desc(), document_indexes::id.asc()))
+        } // tie-breaker
+        (Some(DocumentIndexSortField::Enabled), _) => {
+            query.order((document_indexes::enabled.asc(), document_indexes::id.asc()))
+        } // tie-breaker
+        (Some(DocumentIndexSortField::Description), Some(true)) => query.order((
+            document_indexes::description.desc(),
+            document_indexes::id.asc(),
+        )), // tie-breaker
+        (Some(DocumentIndexSortField::Description), _) => query.order((
+            document_indexes::description.asc(),
+            document_indexes::id.asc(),
+        )), // tie-breaker
+        (Some(DocumentIndexSortField::CreatedAt), Some(true)) => query.order((
+            document_indexes::created_at.desc(),
+            document_indexes::id.asc(),
+        )), // tie-breaker
+        (Some(DocumentIndexSortField::CreatedAt), _) => query.order((
+            document_indexes::created_at.asc(),
+            document_indexes::id.asc(),
+        )), // tie-breaker
+        (Some(DocumentIndexSortField::UpdatedAt), Some(true)) => query.order((
+            document_indexes::updated_at.desc(),
+            document_indexes::id.asc(),
+        )), // tie-breaker
+        (Some(DocumentIndexSortField::UpdatedAt), _) => query.order((
+            document_indexes::updated_at.asc(),
+            document_indexes::id.asc(),
+        )), // tie-breaker
 
-        (Some(DocumentIndexSortField::Id), Some(true)) =>
-            query.order(document_indexes::id.desc()),
-        _ =>
-            query.order(document_indexes::id.asc()),
+        (Some(DocumentIndexSortField::Id), Some(true)) => query.order(document_indexes::id.desc()),
+        _ => query.order(document_indexes::id.asc()),
     };
 
     let items = query
@@ -285,7 +294,12 @@ pub async fn list(
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_indexes"))?;
 
-    Ok(Json(ResourceList { total, page, per_page, items }))
+    Ok(Json(ResourceList {
+        total,
+        page,
+        per_page,
+        items,
+    }))
 }
 
 pub fn routes() -> Router<Arc<AppState>> {

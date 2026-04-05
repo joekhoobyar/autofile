@@ -27,7 +27,7 @@ pub enum FastJob {
 
 /**
  * Handles a fast job by matching on the job type and calling the appropriate function to process it.
- * 
+ *
  * The function takes a `FastJob` and an `Arc<AppState>` as parameters and returns a `Result<(), Error>`.
  */
 pub async fn handle_fast_job(job: FastJob, state: Data<Arc<AppState>>) -> Result<(), Error> {
@@ -41,8 +41,8 @@ pub async fn handle_fast_job(job: FastJob, state: Data<Arc<AppState>>) -> Result
             document_index_id,
             document_id,
         } => update_document_index_document(document_index_id, document_id, state).await,
-        FastJob::ProcessFilePages {
-            document_file_id
-        } => process_file_pages(document_file_id, state).await,
+        FastJob::ProcessFilePages { document_file_id } => {
+            process_file_pages(document_file_id, state).await
+        }
     }
 }

@@ -1,20 +1,19 @@
 use std::sync::Arc;
 
 use crate::AppState;
-use crate::schema::document_index_templates;
 use crate::domain::document_indexes::DocumentIndexTemplate;
+use crate::schema::document_index_templates;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ResourceList, diesel_to_http, de_present_option};
+use crate::shared::util::{ApiError, ResourceList, de_present_option, diesel_to_http};
 
 use serde::Deserialize;
 
 use axum::{
-    Router,
-    routing::get,
-    Json,
-    http::StatusCode,
+    Json, Router,
     extract::{Path, Query},
+    http::StatusCode,
+    routing::get,
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
@@ -92,12 +91,18 @@ async fn create(
     Json(input): Json<NewDocumentIndexTemplate>,
 ) -> Result<Json<DocumentIndexTemplate>, ApiError> {
     if document_index_id <= 0 {
-        return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "Invalid document index"));
+        return Err(ApiError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Invalid document index",
+        ));
     }
 
     if let Some(parent_id) = input.parent_id {
         if parent_id <= 0 {
-            return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "Invalid parent template"));
+            return Err(ApiError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Invalid parent template",
+            ));
         }
     }
 
@@ -111,7 +116,12 @@ async fn create(
         .returning(DocumentIndexTemplate::as_returning())
         .get_result(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to create document_index_template"))?;
+        .map_err(|e| {
+            ApiError::new(
+                diesel_to_http(e),
+                "Failed to create document_index_template",
+            )
+        })?;
 
     Ok(Json(inserted))
 }
@@ -125,9 +135,15 @@ async fn update(
     let patch = input;
 
     let common = (
-        patch.template.map(|v| document_index_templates::template.eq(v)),
-        patch.is_leaf.map(|v| document_index_templates::is_leaf.eq(v)),
-        patch.enabled.map(|v| document_index_templates::enabled.eq(v)),
+        patch
+            .template
+            .map(|v| document_index_templates::template.eq(v)),
+        patch
+            .is_leaf
+            .map(|v| document_index_templates::is_leaf.eq(v)),
+        patch
+            .enabled
+            .map(|v| document_index_templates::enabled.eq(v)),
         document_index_templates::updated_at.eq(diesel::dsl::now),
         document_index_templates::updated_by.eq(user.user_id),
     );
@@ -144,26 +160,36 @@ async fn update(
                 .returning(DocumentIndexTemplate::as_returning())
                 .get_result(&mut db)
                 .await
-        },
+        }
         Some(Some(parent_id)) => {
             if parent_id <= 0 || parent_id == id {
-                return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "Invalid parent template"));
+                return Err(ApiError::new(
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "Invalid parent template",
+                ));
             }
             base.set((common, document_index_templates::parent_id.eq(parent_id)))
                 .returning(DocumentIndexTemplate::as_returning())
                 .get_result(&mut db)
                 .await
-        },
+        }
         Some(None) => {
-            base.set((common, document_index_templates::parent_id.eq::<Option<i64>>(None)))
-                .returning(DocumentIndexTemplate::as_returning())
-                .get_result(&mut db)
-                .await
-        },
+            base.set((
+                common,
+                document_index_templates::parent_id.eq::<Option<i64>>(None),
+            ))
+            .returning(DocumentIndexTemplate::as_returning())
+            .get_result(&mut db)
+            .await
+        }
     };
 
-    let updated: DocumentIndexTemplate = base
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update document_index_template"))?;
+    let updated: DocumentIndexTemplate = base.map_err(|e| {
+        ApiError::new(
+            diesel_to_http(e),
+            "Failed to update document_index_template",
+        )
+    })?;
 
     Ok(Json(updated))
 }
@@ -174,13 +200,18 @@ async fn delete(
     Path((document_index_id, id)): Path<(i64, i64)>,
 ) -> Result<Json<()>, ApiError> {
     let affected = diesel::delete(
-            document_index_templates::table
-                .filter(document_index_templates::document_index_id.eq(document_index_id))
-                .filter(document_index_templates::id.eq(id))
+        document_index_templates::table
+            .filter(document_index_templates::document_index_id.eq(document_index_id))
+            .filter(document_index_templates::id.eq(id)),
+    )
+    .execute(&mut db)
+    .await
+    .map_err(|e| {
+        ApiError::new(
+            diesel_to_http(e),
+            "Failed to delete document_index_template",
         )
-        .execute(&mut db)
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete document_index_template"))?;
+    })?;
 
     if affected == 0 {
         return Err(ApiError::not_found("Document index template not found"));
@@ -224,38 +255,67 @@ pub async fn list(
         .count()
         .get_result::<i64>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count document_index_templates"))?;
+        .map_err(|e| {
+            ApiError::new(
+                diesel_to_http(e),
+                "Failed to count document_index_templates",
+            )
+        })?;
 
     let mut query: document_index_templates::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
-        (Some(DocumentIndexTemplateSortField::Template), Some(true)) =>
-            query.order((document_index_templates::template.desc(), document_index_templates::id.asc())),
-        (Some(DocumentIndexTemplateSortField::Template), _) =>
-            query.order((document_index_templates::template.asc(), document_index_templates::id.asc())),
-        (Some(DocumentIndexTemplateSortField::IsLeaf), Some(true)) =>
-            query.order((document_index_templates::is_leaf.desc(), document_index_templates::id.asc())),
-        (Some(DocumentIndexTemplateSortField::IsLeaf), _) =>
-            query.order((document_index_templates::is_leaf.asc(), document_index_templates::id.asc())),
-        (Some(DocumentIndexTemplateSortField::Enabled), Some(true)) =>
-            query.order((document_index_templates::enabled.desc(), document_index_templates::id.asc())),
-        (Some(DocumentIndexTemplateSortField::Enabled), _) =>
-            query.order((document_index_templates::enabled.asc(), document_index_templates::id.asc())),
-        (Some(DocumentIndexTemplateSortField::ParentId), Some(true)) =>
-            query.order((document_index_templates::parent_id.desc(), document_index_templates::id.asc())),
-        (Some(DocumentIndexTemplateSortField::ParentId), _) =>
-            query.order((document_index_templates::parent_id.asc(), document_index_templates::id.asc())),
-        (Some(DocumentIndexTemplateSortField::CreatedAt), Some(true)) =>
-            query.order((document_index_templates::created_at.desc(), document_index_templates::id.asc())),
-        (Some(DocumentIndexTemplateSortField::CreatedAt), _) =>
-            query.order((document_index_templates::created_at.asc(), document_index_templates::id.asc())),
-        (Some(DocumentIndexTemplateSortField::UpdatedAt), Some(true)) =>
-            query.order((document_index_templates::updated_at.desc(), document_index_templates::id.asc())),
-        (Some(DocumentIndexTemplateSortField::UpdatedAt), _) =>
-            query.order((document_index_templates::updated_at.asc(), document_index_templates::id.asc())),
-        (Some(DocumentIndexTemplateSortField::Id), Some(true)) =>
-            query.order(document_index_templates::id.desc()),
-        _ =>
-            query.order(document_index_templates::id.asc()),
+        (Some(DocumentIndexTemplateSortField::Template), Some(true)) => query.order((
+            document_index_templates::template.desc(),
+            document_index_templates::id.asc(),
+        )),
+        (Some(DocumentIndexTemplateSortField::Template), _) => query.order((
+            document_index_templates::template.asc(),
+            document_index_templates::id.asc(),
+        )),
+        (Some(DocumentIndexTemplateSortField::IsLeaf), Some(true)) => query.order((
+            document_index_templates::is_leaf.desc(),
+            document_index_templates::id.asc(),
+        )),
+        (Some(DocumentIndexTemplateSortField::IsLeaf), _) => query.order((
+            document_index_templates::is_leaf.asc(),
+            document_index_templates::id.asc(),
+        )),
+        (Some(DocumentIndexTemplateSortField::Enabled), Some(true)) => query.order((
+            document_index_templates::enabled.desc(),
+            document_index_templates::id.asc(),
+        )),
+        (Some(DocumentIndexTemplateSortField::Enabled), _) => query.order((
+            document_index_templates::enabled.asc(),
+            document_index_templates::id.asc(),
+        )),
+        (Some(DocumentIndexTemplateSortField::ParentId), Some(true)) => query.order((
+            document_index_templates::parent_id.desc(),
+            document_index_templates::id.asc(),
+        )),
+        (Some(DocumentIndexTemplateSortField::ParentId), _) => query.order((
+            document_index_templates::parent_id.asc(),
+            document_index_templates::id.asc(),
+        )),
+        (Some(DocumentIndexTemplateSortField::CreatedAt), Some(true)) => query.order((
+            document_index_templates::created_at.desc(),
+            document_index_templates::id.asc(),
+        )),
+        (Some(DocumentIndexTemplateSortField::CreatedAt), _) => query.order((
+            document_index_templates::created_at.asc(),
+            document_index_templates::id.asc(),
+        )),
+        (Some(DocumentIndexTemplateSortField::UpdatedAt), Some(true)) => query.order((
+            document_index_templates::updated_at.desc(),
+            document_index_templates::id.asc(),
+        )),
+        (Some(DocumentIndexTemplateSortField::UpdatedAt), _) => query.order((
+            document_index_templates::updated_at.asc(),
+            document_index_templates::id.asc(),
+        )),
+        (Some(DocumentIndexTemplateSortField::Id), Some(true)) => {
+            query.order(document_index_templates::id.desc())
+        }
+        _ => query.order(document_index_templates::id.asc()),
     };
 
     let items = query
@@ -266,11 +326,19 @@ pub async fn list(
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_index_templates"))?;
 
-    Ok(Json(ResourceList { total, page, per_page, items }))
+    Ok(Json(ResourceList {
+        total,
+        page,
+        per_page,
+        items,
+    }))
 }
 
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/{document_index_id}/templates", get(list).post(create))
-        .route("/{document_index_id}/templates/{id}", get(get_by_id).patch(update).delete(delete))
+        .route(
+            "/{document_index_id}/templates/{id}",
+            get(get_by_id).patch(update).delete(delete),
+        )
 }

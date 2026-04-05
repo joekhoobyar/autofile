@@ -1,20 +1,19 @@
 use std::sync::Arc;
 
 use crate::AppState;
-use crate::schema::cabinets;
 use crate::domain::cabinets::Cabinet;
+use crate::schema::cabinets;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ResourceList, diesel_to_http, de_present_option};
+use crate::shared::util::{ApiError, ResourceList, de_present_option, diesel_to_http};
 
 use serde::Deserialize;
 
 use axum::{
-    Router,
-    routing::get,
-    Json,
-    http::StatusCode,
+    Json, Router,
     extract::{Path, Query},
+    http::StatusCode,
+    routing::get,
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
@@ -105,7 +104,10 @@ async fn create(
 ) -> Result<Json<Cabinet>, ApiError> {
     if let Some(parent_id) = input.parent_id {
         if parent_id <= 0 {
-            return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "Invalid parent cabinet"));
+            return Err(ApiError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Invalid parent cabinet",
+            ));
         }
     }
 
@@ -147,27 +149,30 @@ async fn update(
                 .returning(Cabinet::as_returning())
                 .get_result(&mut db)
                 .await
-        },
+        }
         Some(Some(parent_id)) => {
             if parent_id <= 0 || parent_id == id {
-                return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "Invalid parent cabinet"));
+                return Err(ApiError::new(
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "Invalid parent cabinet",
+                ));
             }
             base.set((common, cabinets::parent_id.eq(parent_id)))
                 .returning(Cabinet::as_returning())
                 .get_result(&mut db)
                 .await
-        },
+        }
         Some(None) => {
             base.set((common, cabinets::parent_id.eq::<Option<i64>>(None)))
                 .returning(Cabinet::as_returning())
                 .get_result(&mut db)
                 .await
-        },
+        }
     };
 
     // Update + return the updated row in one round-trip.
-    let updated: Cabinet = base
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update cabinet"))?;
+    let updated: Cabinet =
+        base.map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update cabinet"))?;
 
     Ok(Json(updated))
 }
@@ -206,7 +211,8 @@ pub async fn list(
         if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
             let pattern = format!("%{}%", q);
             query = query.filter(
-                cabinets::slug.ilike(pattern.clone())
+                cabinets::slug
+                    .ilike(pattern.clone())
                     .or(cabinets::name.ilike(pattern.clone()))
                     .or(cabinets::description.ilike(pattern)),
             )
@@ -232,34 +238,44 @@ pub async fn list(
 
     let mut query: cabinets::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
-        (Some(CabinetSortField::Slug), Some(true)) =>
-            query.order((cabinets::slug.desc(), cabinets::id.asc())),
-        (Some(CabinetSortField::Slug), _) =>
-            query.order((cabinets::slug.asc(), cabinets::id.asc())),
-        (Some(CabinetSortField::Name), Some(true)) =>
-            query.order((cabinets::name.desc(), cabinets::id.asc())),
-        (Some(CabinetSortField::Name), _) =>
-            query.order((cabinets::name.asc(), cabinets::id.asc())),
-        (Some(CabinetSortField::Description), Some(true)) =>
-            query.order((cabinets::description.desc(), cabinets::id.asc())),
-        (Some(CabinetSortField::Description), _) =>
-            query.order((cabinets::description.asc(), cabinets::id.asc())),
-        (Some(CabinetSortField::ParentId), Some(true)) =>
-            query.order((cabinets::parent_id.desc(), cabinets::id.asc())),
-        (Some(CabinetSortField::ParentId), _) =>
-            query.order((cabinets::parent_id.asc(), cabinets::id.asc())),
-        (Some(CabinetSortField::CreatedAt), Some(true)) =>
-            query.order((cabinets::created_at.desc(), cabinets::id.asc())),
-        (Some(CabinetSortField::CreatedAt), _) =>
-            query.order((cabinets::created_at.asc(), cabinets::id.asc())),
-        (Some(CabinetSortField::UpdatedAt), Some(true)) =>
-            query.order((cabinets::updated_at.desc(), cabinets::id.asc())),
-        (Some(CabinetSortField::UpdatedAt), _) =>
-            query.order((cabinets::updated_at.asc(), cabinets::id.asc())),
-        (Some(CabinetSortField::Id), Some(true)) =>
-            query.order(cabinets::id.desc()),
-        _ =>
-            query.order(cabinets::id.asc()),
+        (Some(CabinetSortField::Slug), Some(true)) => {
+            query.order((cabinets::slug.desc(), cabinets::id.asc()))
+        }
+        (Some(CabinetSortField::Slug), _) => {
+            query.order((cabinets::slug.asc(), cabinets::id.asc()))
+        }
+        (Some(CabinetSortField::Name), Some(true)) => {
+            query.order((cabinets::name.desc(), cabinets::id.asc()))
+        }
+        (Some(CabinetSortField::Name), _) => {
+            query.order((cabinets::name.asc(), cabinets::id.asc()))
+        }
+        (Some(CabinetSortField::Description), Some(true)) => {
+            query.order((cabinets::description.desc(), cabinets::id.asc()))
+        }
+        (Some(CabinetSortField::Description), _) => {
+            query.order((cabinets::description.asc(), cabinets::id.asc()))
+        }
+        (Some(CabinetSortField::ParentId), Some(true)) => {
+            query.order((cabinets::parent_id.desc(), cabinets::id.asc()))
+        }
+        (Some(CabinetSortField::ParentId), _) => {
+            query.order((cabinets::parent_id.asc(), cabinets::id.asc()))
+        }
+        (Some(CabinetSortField::CreatedAt), Some(true)) => {
+            query.order((cabinets::created_at.desc(), cabinets::id.asc()))
+        }
+        (Some(CabinetSortField::CreatedAt), _) => {
+            query.order((cabinets::created_at.asc(), cabinets::id.asc()))
+        }
+        (Some(CabinetSortField::UpdatedAt), Some(true)) => {
+            query.order((cabinets::updated_at.desc(), cabinets::id.asc()))
+        }
+        (Some(CabinetSortField::UpdatedAt), _) => {
+            query.order((cabinets::updated_at.asc(), cabinets::id.asc()))
+        }
+        (Some(CabinetSortField::Id), Some(true)) => query.order(cabinets::id.desc()),
+        _ => query.order(cabinets::id.asc()),
     };
 
     let items = query
@@ -270,7 +286,12 @@ pub async fn list(
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list cabinets"))?;
 
-    Ok(Json(ResourceList { total, page, per_page, items }))
+    Ok(Json(ResourceList {
+        total,
+        page,
+        per_page,
+        items,
+    }))
 }
 
 pub fn routes() -> Router<Arc<AppState>> {

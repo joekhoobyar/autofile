@@ -1,19 +1,18 @@
 use std::sync::Arc;
 
 use crate::AppState;
-use crate::schema::{document_types_metadata_types, document_types, documents};
 use crate::domain::document_types::DocumentType;
+use crate::schema::{document_types, document_types_metadata_types, documents};
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{diesel_to_http, ApiError, ResourceList};
+use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
 
 use serde::Deserialize;
 
 use axum::{
-    Router,
-    routing::get,
-    Json,
+    Json, Router,
     extract::{Path, Query},
+    routing::get,
 };
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
@@ -115,7 +114,6 @@ async fn update(
     Path(id): Path<i64>,
     Json(input): Json<DocumentTypeChangeset>,
 ) -> Result<Json<DocumentType>, ApiError> {
-
     // Update + return the updated row in one round-trip.
     let updated: DocumentType =
         diesel::update(document_types::table.filter(document_types::id.eq(id)))
@@ -140,30 +138,37 @@ async fn delete(
     let document_type_id = id;
 
     if id == 1 {
-        return Err(ApiError::bad_request("Cannot delete default document type"))
+        return Err(ApiError::bad_request("Cannot delete default document type"));
     }
 
     db.transaction::<_, diesel::result::Error, _>(move |conn| {
         Box::pin(async move {
             // Delete the join table records
-            diesel::delete(document_types_metadata_types::table.filter(document_types_metadata_types::document_type_id.eq(document_type_id)))
-                .execute(conn)
-                .await?;
+            diesel::delete(
+                document_types_metadata_types::table
+                    .filter(document_types_metadata_types::document_type_id.eq(document_type_id)),
+            )
+            .execute(conn)
+            .await?;
 
             // Update the documents
-            diesel::update(documents::table.filter(documents::document_type_id.eq(document_type_id)))
-                .set((
-                    documents::document_type_id.eq(1),
-                    documents::updated_by.eq(user.user_id),
-                    documents::updated_at.eq(diesel::dsl::now),
-                ))
-                .execute(conn)
-                .await?;
+            diesel::update(
+                documents::table.filter(documents::document_type_id.eq(document_type_id)),
+            )
+            .set((
+                documents::document_type_id.eq(1),
+                documents::updated_by.eq(user.user_id),
+                documents::updated_at.eq(diesel::dsl::now),
+            ))
+            .execute(conn)
+            .await?;
 
             // Delete the document type
-            let affected = diesel::delete(document_types::table.filter(document_types::id.eq(document_type_id)))
-                .execute(conn)
-                .await?;
+            let affected = diesel::delete(
+                document_types::table.filter(document_types::id.eq(document_type_id)),
+            )
+            .execute(conn)
+            .await?;
 
             if affected == 0 {
                 return Err(diesel::result::Error::NotFound);
@@ -201,7 +206,8 @@ pub async fn list(
         if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
             let pattern = format!("%{}%", q);
             query.filter(
-                document_types::slug.ilike(pattern.clone())
+                document_types::slug
+                    .ilike(pattern.clone())
                     .or(document_types::name.ilike(pattern.clone()))
                     .or(document_types::description.ilike(pattern)),
             )
@@ -218,31 +224,39 @@ pub async fn list(
 
     let mut query: document_types::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
-        (Some(DocumentTypeSortField::Slug), Some(true)) =>
-            query.order((document_types::slug.desc(), document_types::id.asc())), // tie-breaker
-        (Some(DocumentTypeSortField::Slug), _) =>
-            query.order((document_types::slug.asc(), document_types::id.asc())), // tie-breaker
-        (Some(DocumentTypeSortField::Name), Some(true)) =>
-            query.order((document_types::name.desc(), document_types::id.asc())), // tie-breaker
-        (Some(DocumentTypeSortField::Name), _) =>
-            query.order((document_types::name.asc(), document_types::id.asc())), // tie-breaker
-        (Some(DocumentTypeSortField::Description), Some(true)) =>
-            query.order((document_types::description.desc(), document_types::id.asc())), // tie-breaker
-        (Some(DocumentTypeSortField::Description), _) =>
-            query.order((document_types::description.asc(), document_types::id.asc())), // tie-breaker
-        (Some(DocumentTypeSortField::CreatedAt), Some(true)) =>
-            query.order((document_types::created_at.desc(), document_types::id.asc())), // tie-breaker
-        (Some(DocumentTypeSortField::CreatedAt), _) =>
-            query.order((document_types::created_at.asc(), document_types::id.asc())), // tie-breaker
-        (Some(DocumentTypeSortField::UpdatedAt), Some(true)) =>
-            query.order((document_types::updated_at.desc(), document_types::id.asc())), // tie-breaker
-        (Some(DocumentTypeSortField::UpdatedAt), _) =>
-            query.order((document_types::updated_at.asc(), document_types::id.asc())), // tie-breaker
+        (Some(DocumentTypeSortField::Slug), Some(true)) => {
+            query.order((document_types::slug.desc(), document_types::id.asc()))
+        } // tie-breaker
+        (Some(DocumentTypeSortField::Slug), _) => {
+            query.order((document_types::slug.asc(), document_types::id.asc()))
+        } // tie-breaker
+        (Some(DocumentTypeSortField::Name), Some(true)) => {
+            query.order((document_types::name.desc(), document_types::id.asc()))
+        } // tie-breaker
+        (Some(DocumentTypeSortField::Name), _) => {
+            query.order((document_types::name.asc(), document_types::id.asc()))
+        } // tie-breaker
+        (Some(DocumentTypeSortField::Description), Some(true)) => {
+            query.order((document_types::description.desc(), document_types::id.asc()))
+        } // tie-breaker
+        (Some(DocumentTypeSortField::Description), _) => {
+            query.order((document_types::description.asc(), document_types::id.asc()))
+        } // tie-breaker
+        (Some(DocumentTypeSortField::CreatedAt), Some(true)) => {
+            query.order((document_types::created_at.desc(), document_types::id.asc()))
+        } // tie-breaker
+        (Some(DocumentTypeSortField::CreatedAt), _) => {
+            query.order((document_types::created_at.asc(), document_types::id.asc()))
+        } // tie-breaker
+        (Some(DocumentTypeSortField::UpdatedAt), Some(true)) => {
+            query.order((document_types::updated_at.desc(), document_types::id.asc()))
+        } // tie-breaker
+        (Some(DocumentTypeSortField::UpdatedAt), _) => {
+            query.order((document_types::updated_at.asc(), document_types::id.asc()))
+        } // tie-breaker
 
-        (Some(DocumentTypeSortField::Id), Some(true)) =>
-            query.order(document_types::id.desc()),
-        _ =>
-            query.order(document_types::id.asc()),
+        (Some(DocumentTypeSortField::Id), Some(true)) => query.order(document_types::id.desc()),
+        _ => query.order(document_types::id.asc()),
     };
 
     let items = query
@@ -253,7 +267,12 @@ pub async fn list(
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_types"))?;
 
-    Ok(Json(ResourceList { total, page, per_page, items }))
+    Ok(Json(ResourceList {
+        total,
+        page,
+        per_page,
+        items,
+    }))
 }
 
 pub fn routes() -> Router<Arc<AppState>> {

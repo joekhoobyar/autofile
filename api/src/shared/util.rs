@@ -1,12 +1,12 @@
 use std::fmt;
 use std::sync::Arc;
 
-use apalis::prelude::*;
 use anyhow::Error as AnyhowError;
+use apalis::prelude::*;
 use axum::{
-    response::{IntoResponse, Response},
-    http::StatusCode,
     Json,
+    http::StatusCode,
+    response::{IntoResponse, Response},
 };
 use diesel::result::{DatabaseErrorKind, Error as DieselError};
 use tokio::io::AsyncWriteExt;
@@ -72,9 +72,15 @@ pub fn diesel_to_http(e: DieselError) -> StatusCode {
     match e {
         DieselError::NotFound => StatusCode::NOT_FOUND,
         DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => StatusCode::CONFLICT,
-        DieselError::DatabaseError(DatabaseErrorKind::NotNullViolation, _) => StatusCode::UNPROCESSABLE_ENTITY,
-        DieselError::DatabaseError(DatabaseErrorKind::ForeignKeyViolation, _) => StatusCode::UNPROCESSABLE_ENTITY,
-        DieselError::DatabaseError(DatabaseErrorKind::CheckViolation, _) => StatusCode::UNPROCESSABLE_ENTITY,
+        DieselError::DatabaseError(DatabaseErrorKind::NotNullViolation, _) => {
+            StatusCode::UNPROCESSABLE_ENTITY
+        }
+        DieselError::DatabaseError(DatabaseErrorKind::ForeignKeyViolation, _) => {
+            StatusCode::UNPROCESSABLE_ENTITY
+        }
+        DieselError::DatabaseError(DatabaseErrorKind::CheckViolation, _) => {
+            StatusCode::UNPROCESSABLE_ENTITY
+        }
         _ => StatusCode::BAD_REQUEST,
     }
 }
@@ -130,9 +136,9 @@ pub async fn write_field_to_temp_file(
 ) -> Result<TempUpload, ApiError> {
     let mut temp_path = std::env::temp_dir();
     temp_path.push(format!("autofile-upload-{}", Uuid::new_v4()));
-    let mut temp_file = tokio::fs::File::create(&temp_path)
-        .await
-        .map_err(|e| ApiError::internal_server_error(&format!("Failed to create temp file: {}", e)))?;
+    let mut temp_file = tokio::fs::File::create(&temp_path).await.map_err(|e| {
+        ApiError::internal_server_error(&format!("Failed to create temp file: {}", e))
+    })?;
 
     let mut size: i64 = 0;
     loop {
@@ -146,16 +152,14 @@ pub async fn write_field_to_temp_file(
         };
 
         size += chunk.len() as i64;
-        temp_file
-            .write_all(&chunk)
-            .await
-            .map_err(|e| ApiError::internal_server_error(&format!("Failed to buffer upload: {}", e)))?;
+        temp_file.write_all(&chunk).await.map_err(|e| {
+            ApiError::internal_server_error(&format!("Failed to buffer upload: {}", e))
+        })?;
     }
 
-    temp_file
-        .flush()
-        .await
-        .map_err(|e| ApiError::internal_server_error(&format!("Failed to finalize temp file: {}", e)))?;
+    temp_file.flush().await.map_err(|e| {
+        ApiError::internal_server_error(&format!("Failed to finalize temp file: {}", e))
+    })?;
 
     Ok(TempUpload {
         path: temp_path,
