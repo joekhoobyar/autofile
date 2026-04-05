@@ -1,5 +1,5 @@
 import { useMemo, useRef, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { Button } from 'primereact/button';
 import { Menu } from 'primereact/menu';
@@ -12,23 +12,33 @@ type DocumentViewLayoutProps = {
 
 export function DocumentViewLayout({ documentId, children }: DocumentViewLayoutProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const menuRef = useRef<Menu>(null);
   const menuId = `document-view-menu-${documentId}`;
 
   const menuItems = useMemo<MenuItem[]>(
-    () => [
-      {
-        label: 'Metadata',
-        icon: 'pi pi-database',
-        command: () => navigate(`/documents/${documentId}/metadata`),
-      },
-      {
-        label: 'Document Text',
-        icon: 'pi pi-align-left',
-        command: () => navigate(`/documents/${documentId}/text-content`),
-      },
-    ],
-    [documentId, navigate]
+    () => {
+      const items = [
+        {
+          label: 'Metadata',
+          icon: 'pi pi-database',
+          path: `/documents/${documentId}/metadata`,
+        },
+        {
+          label: 'Document Text',
+          icon: 'pi pi-align-left',
+          path: `/documents/${documentId}/text-content`,
+        },
+      ];
+
+      return items.map((item) => ({
+        label: item.label,
+        icon: item.icon,
+        command: () => navigate(item.path),
+        className: location.pathname === item.path ? 'aut-document-view-menu-active' : undefined,
+      }));
+    },
+    [documentId, location.pathname, navigate]
   );
 
   return (

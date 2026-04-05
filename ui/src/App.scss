@@ -41,6 +41,11 @@ body {
   font-size: 0.95rem;
 }
 
+.aut-document-view-menu-list .aut-document-view-menu-active > .p-menuitem-content {
+  background: var(--highlight-bg);
+  font-weight: 600;
+}
+
 .aut-document-text-content {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   white-space: pre-wrap;
