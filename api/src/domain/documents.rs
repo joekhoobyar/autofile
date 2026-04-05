@@ -25,6 +25,7 @@ pub struct DocumentView {
     pub id: i64,
     pub title: String,
     pub document_type_id: i64,
+    pub pages: i32,
     pub metadata: HashMap<String, String>,
     pub cabinet_ids: Vec<i64>,
     pub tag_ids: Vec<i64>,

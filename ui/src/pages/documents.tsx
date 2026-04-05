@@ -146,6 +146,7 @@ function DocumentListItem({ doc, index, onImageClick, selected, onSelectionChang
             <aside className="flex flex-column align-items-center sm:align-items-start">
               <ul className="aut-document-metadata">
                 <li><span>Type</span>: {ddt?.[doc.document_type_id]?.name}</li>
+                <li><span>Pages</span>: {doc.pages ?? 0}</li>
                 <li><span>Created</span>: {format(new Date(doc.created_at), "MM/dd/yyyy HH:mm")}</li>
                 {Object.entries(doc.metadata)
                   .sort(([keyA], [keyB]) => {
@@ -242,6 +243,7 @@ function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange, cabi
               />
               <ul className="aut-document-metadata">
                 <li><span>Type</span>: {ddt?.[doc.document_type_id]?.name}</li>
+                <li><span>Pages</span>: {doc.pages ?? 0}</li>
                 <li><span>Created</span>: {format(new Date(doc.created_at), "MM/dd/yyyy HH:mm")}</li>
                 {Object.entries(doc.metadata)
                   .sort(([keyA], [keyB]) => {

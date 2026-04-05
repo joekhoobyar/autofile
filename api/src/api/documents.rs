@@ -16,7 +16,7 @@ use crate::shared::extractors::DbConn;
 use crate::shared::util::{diesel_to_http, write_field_to_temp_file, ApiError, ResourceList};
 
 use aws_sdk_s3::primitives::ByteStream;
-use diesel::dsl::exists;
+use diesel::dsl::{exists, sum};
 use serde::Deserialize;
 use tokio_util::io::ReaderStream;
 
@@ -622,6 +622,23 @@ pub async fn list(
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list documents"))?;
     let document_ids: Vec<i64> = documents.iter().map(|doc| doc.id).collect();
 
+    // Fetch pages per document for all documents in the page in a single query.
+    let mut pages_by_document: HashMap<i64, i32> = HashMap::new();
+    if !document_ids.is_empty() {
+        let pages_rows: Vec<(i64, Option<i64>)> = document_files::table
+            .filter(document_files::document_id.eq_any(&document_ids))
+            .group_by(document_files::document_id)
+            .select((document_files::document_id, sum(document_files::pages)))
+            .load::<(i64, Option<i64>)>(&mut db)
+            .await
+            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document pages"))?;
+
+        for (document_id, pages_sum) in pages_rows {
+            let pages = pages_sum.unwrap_or(0) as i32;
+            pages_by_document.insert(document_id, pages);
+        }
+    }
+
     // Fetch metadata for all documents in the page in a single query, and organize it by document ID.
     let mut metadata_by_document: HashMap<i64, HashMap<String, String>> = HashMap::new();
     if !document_ids.is_empty() {
@@ -694,6 +711,7 @@ pub async fn list(
             id: doc.id,
             title: doc.title,
             document_type_id: doc.document_type_id,
+            pages: pages_by_document.remove(&doc.id).unwrap_or(0),
             metadata: metadata_by_document.remove(&doc.id).unwrap_or_default(),
             cabinet_ids: cabinets_by_document.remove(&doc.id).unwrap_or_default(),
             tag_ids: tags_by_document.remove(&doc.id).unwrap_or_default(),
