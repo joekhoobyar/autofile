@@ -134,7 +134,7 @@ function DocumentListItem({ doc, index, onImageClick, selected, onSelectionChang
           />
           <section className="flex flex-column sm:flex-row justify-content-between align-items-center xl:align-items-start flex-1 gap-4 aut-document">
             <div className="flex flex-column align-items-center sm:align-items-start gap-3 aut-document-header">
-              <header className="flex align-items-center gap-2">
+              <header className="flex align-items-center gap-2 aut-document-header-row">
                 <Checkbox
                   inputId={`document-select-${doc.id}`}
                   onChange={(event) => onSelectionChange(doc.id, !!event.checked)}
@@ -218,7 +218,7 @@ function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange, cabi
       <div className="col-12 sm:col-6 lg:col-4 xl:col-2 p-2 aut-document-grid" key={doc.id}>
         <div className="border-1 surface-border surface-card border-round">
           <section className="flex flex-column aut-document w-full">
-            <header className="flex align-items-center gap-2 aut-document-header">
+            <header className="flex align-items-center gap-2 aut-document-header aut-document-header-row">
               <Checkbox
                 inputId={`document-select-${doc.id}`}
                 onChange={(event) => onSelectionChange(doc.id, !!event.checked)}

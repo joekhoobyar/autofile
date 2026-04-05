@@ -284,6 +284,9 @@ section.aut-document {
       color: var(--text-color);
     }
   }
+  .aut-document-header-row {
+    align-items: flex-start !important;
+  }
   .aut-document-thumbnail-wrapper {
     background-color: var(--surface-100) !important;
 
