@@ -68,6 +68,7 @@ mod shared {
     pub mod app_state;
     pub mod auth;
     pub mod extractors;
+    pub mod s3;
     pub mod util;
 }
 

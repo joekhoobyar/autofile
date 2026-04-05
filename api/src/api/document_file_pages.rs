@@ -5,21 +5,18 @@ use crate::domain::document_files::{DocumentFileOcrPage, DocumentFilePage};
 use crate::schema::{document_file_ocr_pages, document_file_pages, document_files};
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
+use crate::shared::s3::serve_s3_image;
 use crate::shared::util::{ApiError, diesel_to_http};
 
-use aws_sdk_s3::error::SdkError;
 use axum::{
     Json, Router,
-    body::Body,
     extract::{Path, State},
-    http::header,
+    http::HeaderMap,
     response::Response,
     routing::get,
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use httpdate::fmt_http_date;
-use tokio_util::io::ReaderStream;
 
 pub async fn list(
     _user: AuthUser,
@@ -70,6 +67,7 @@ pub async fn page_image_get(
     State(state): State<Arc<AppState>>,
     DbConn(mut db): DbConn,
     Path((document_id, document_file_id, page_number)): Path<(i64, i64, i32)>,
+    headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     let s3_prefix = document_files::table
         .filter(document_files::document_id.eq(document_id))
@@ -86,50 +84,14 @@ pub async fn page_image_get(
         })?;
 
     let s3_key = format!("{}/pages/{}.png", s3_prefix, page_number);
-    let object = state
-        .s3_client
-        .get_object()
-        .bucket(state.s3_bucket.as_str())
-        .key(&s3_key)
-        .send()
-        .await
-        .map_err(|e| match e {
-            SdkError::ServiceError(service_error) if service_error.err().is_no_such_key() => {
-                ApiError::not_found("Page not available")
-            }
-            _ => ApiError::internal_server_error(&format!("S3 download failed: {e}")),
-        })?;
-
-    let last_modified = object.last_modified().copied();
-    let content_length = object.content_length();
-    let body = Body::from_stream(ReaderStream::new(object.body.into_async_read()));
-    let mut response = Response::new(body);
-    let headers = response.headers_mut();
-    headers.insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("image/png"),
-    );
-    headers.insert(
-        header::CACHE_CONTROL,
-        header::HeaderValue::from_static("public, must-revalidate"),
-    );
-    if let Some(last_modified) = last_modified {
-        if let Ok(system_time) = std::time::SystemTime::try_from(last_modified) {
-            let last_modified = fmt_http_date(system_time);
-            if let Ok(value) = header::HeaderValue::from_str(&last_modified) {
-                headers.insert(header::LAST_MODIFIED, value);
-            }
-        }
-    }
-    if let Some(content_length) = content_length {
-        if content_length > 0 {
-            if let Ok(value) = header::HeaderValue::from_str(&content_length.to_string()) {
-                headers.insert(header::CONTENT_LENGTH, value);
-            }
-        }
-    }
-
-    Ok(response)
+    serve_s3_image(
+        state.as_ref(),
+        &headers,
+        &s3_key,
+        None,
+        "Page not available",
+    )
+    .await
 }
 
 pub fn routes() -> Router<Arc<AppState>> {
