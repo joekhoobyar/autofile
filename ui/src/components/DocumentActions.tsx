@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useId, useRef, useState, type CSSProperties } from 'react';
 
 import { Button } from 'primereact/button';
 import { Dialog } from 'primereact/dialog';
@@ -28,9 +28,9 @@ export function DocumentActions({
   buttonClassName,
   buttonStyle,
   containerClassName,
-}: DocumentActionsProps) {
+}: Readonly<DocumentActionsProps>) {
   const actionMenu = useRef<Menu>(null);
-  const menuIdRef = useRef(`document-actions-${Math.random().toString(36).slice(2)}`);
+  const menuId = useId();
   const hasSelection = documentIds.length > 0;
   const deleteDocument = useDeleteDocument();
   const saveCabinetDocument = useSaveCabinetDocument();
@@ -138,30 +138,26 @@ export function DocumentActions({
     });
   };
 
-  const actionMenuItems = useMemo<MenuItem[]>(
-    () => {
-      const items: MenuItem[] = [];
-      if (includeNewDocument) {
-        items.push({ icon: 'pi pi-upload', label: 'New Document', url: '/documents/new' });
-        items.push({ separator: true });
-      }
-      items.push(
-        { icon: 'pi pi-plus-circle', label: 'Add to Cabinet', command: () => { openAddToCabinetDialog(); }, disabled: !hasSelection },
-        { icon: 'pi pi-minus-circle', label: 'Remove Cabinet', command: () => { openRemoveFromCabinetDialog(); }, disabled: !hasSelection },
-        { separator: true },
-        { icon: 'pi pi-plus-circle', label: 'Add Tag', command: () => { openAddTagDialog(); }, disabled: !hasSelection },
-        { icon: 'pi pi-minus-circle', label: 'Remove Tag', command: () => { openRemoveTagDialog(); }, disabled: !hasSelection },
-        { separator: true },
-        { icon: 'pi pi-trash', label: 'Delete Document', command: () => { confirmDeleteSelectedDocuments(); }, disabled: !hasSelection },
-      );
-      return items;
-    },
-    [hasSelection, includeNewDocument]
+  const actionMenuItems: MenuItem[] = [];
+  if (includeNewDocument) {
+    actionMenuItems.push(
+      { icon: 'pi pi-upload', label: 'New Document', url: '/documents/new' },
+      { separator: true },
+    );
+  }
+  actionMenuItems.push(
+    { icon: 'pi pi-plus-circle', label: 'Add to Cabinet', command: () => { openAddToCabinetDialog(); }, disabled: !hasSelection },
+    { icon: 'pi pi-minus-circle', label: 'Remove Cabinet', command: () => { openRemoveFromCabinetDialog(); }, disabled: !hasSelection },
+    { separator: true },
+    { icon: 'pi pi-plus-circle', label: 'Add Tag', command: () => { openAddTagDialog(); }, disabled: !hasSelection },
+    { icon: 'pi pi-minus-circle', label: 'Remove Tag', command: () => { openRemoveTagDialog(); }, disabled: !hasSelection },
+    { separator: true },
+    { icon: 'pi pi-trash', label: 'Delete Document', command: () => { confirmDeleteSelectedDocuments(); }, disabled: !hasSelection },
   );
 
   return (
     <div className={containerClassName}>
-      <Menu model={actionMenuItems} popup ref={actionMenu} popupAlignment="right" id={menuIdRef.current} />
+      <Menu model={actionMenuItems} popup ref={actionMenu} popupAlignment="right" id={menuId} />
       <Button
         label="Actions"
         className={buttonClassName}
@@ -169,7 +165,7 @@ export function DocumentActions({
         size="small"
         raised
         onClick={(event) => actionMenu.current?.toggle(event)}
-        aria-controls={menuIdRef.current}
+        aria-controls={menuId}
         aria-haspopup
       />
 
