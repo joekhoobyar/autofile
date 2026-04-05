@@ -254,6 +254,12 @@ a:visited { color: inherit; }
     border-color: var(--surface-border) !important;
   }
 
+  &.is-selected {
+    > .surface-card {
+      box-shadow: 0px 0px 3px var(--surface-500), 10px 10px 20px #000000
+    }
+  }
+
   section.aut-document {
     display: flex;
     flex-direction: column;

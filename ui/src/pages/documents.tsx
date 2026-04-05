@@ -123,7 +123,7 @@ function DocumentListItem({ doc, index, onImageClick, selected, onSelectionChang
       .filter((tag): tag is TagModel => !!tag);
 
     return (
-      <div className="col-12 aut-document-list" key={doc.id}>
+      <div className={classNames('col-12 aut-document-list', { 'is-selected': selected })} key={doc.id}>
         <div className={classNames('flex flex-column xl:flex-row xl:align-items-start p-4 gap-4', { 'border-top-1 surface-border': index !== 0 })}>
           <DocumentThumbnail
             src={data}
@@ -214,9 +214,15 @@ function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange, cabi
       .map((id) => tagLookup[id])
       .filter((tag): tag is TagModel => !!tag);
 
+    const handleGridClick = (event: React.MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.closest('a, button, .p-checkbox')) return;
+      onSelectionChange(doc.id, !selected);
+    };
+
     return (
-      <div className="col-12 sm:col-6 lg:col-4 xl:col-2 p-2 aut-document-grid" key={doc.id}>
-        <div className="border-1 surface-border surface-card border-round">
+      <div className={classNames('col-12 sm:col-6 lg:col-4 xl:col-2 p-2 aut-document-grid', { 'is-selected': selected })} key={doc.id}>
+        <div className="border-1 surface-border surface-card border-round" onClick={handleGridClick}>
           <section className="flex flex-column aut-document w-full">
             <header className="flex align-items-center gap-2 aut-document-header aut-document-header-row">
               <Checkbox
