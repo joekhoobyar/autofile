@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::domain::document_files::DocumentFile;
 use crate::infrastructure::s3::upload_to_s3;
-use crate::schema::{document_file_pages, document_files};
+use crate::schema::{document_file_ocr_pages, document_file_pages, document_files};
 use crate::shared::app_state::AppState;
 use crate::shared::util::JobResult;
 
@@ -83,7 +83,7 @@ async fn process_file_pages_inner(
                 .await?;
 
             tracing::info!(document_file_id, page, "extracting image for page");
-            extract_page_image(
+            let image_path = extract_page_image(
                 temp_file.clone(),
                 page,
                 &temp_dir,
@@ -91,6 +91,27 @@ async fn process_file_pages_inner(
                 state.clone(),
             )
             .await?;
+
+            tracing::info!(document_file_id, page, "extracting OCR text for page");
+            let ocr_text = extract_page_ocr(image_path, state.clone()).await?;
+            diesel::insert_into(document_file_ocr_pages::table)
+                .values(&NewDocumentFileOcrPage {
+                    document_file_id,
+                    page_number: page as i32,
+                    ocr_content: Some(ocr_text),
+                })
+                .on_conflict((
+                    document_file_ocr_pages::document_file_id,
+                    document_file_ocr_pages::page_number,
+                ))
+                .do_update()
+                .set(
+                    document_file_ocr_pages::ocr_content.eq(diesel::upsert::excluded(
+                        document_file_ocr_pages::ocr_content,
+                    )),
+                )
+                .execute(&mut db)
+                .await?;
         }
 
         Ok(())
@@ -111,6 +132,15 @@ struct NewDocumentFilePage {
     document_file_id: i64,
     page_number: i32,
     text_content: Option<String>,
+}
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = document_file_ocr_pages)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+struct NewDocumentFileOcrPage {
+    document_file_id: i64,
+    page_number: i32,
+    ocr_content: Option<String>,
 }
 
 /**
@@ -158,7 +188,7 @@ async fn extract_page_image(
     temp_dir: &PathBuf,
     s3_prefix: &str,
     state: Data<Arc<AppState>>,
-) -> JobResult<()> {
+) -> JobResult<PathBuf> {
     let output_prefix = temp_dir.join(format!("page-{}", page));
     let status = Command::new("pdftocairo")
         .arg("-png")
@@ -195,7 +225,34 @@ async fn extract_page_image(
     )
     .await?;
 
-    Ok(())
+    Ok(output_path)
+}
+
+/**
+ * Internal function to extract OCR text from a page image
+ * by running `tesseract` on the file and capturing the output.
+ */
+async fn extract_page_ocr(image_path: PathBuf, _state: Data<Arc<AppState>>) -> JobResult<String> {
+    let output = Command::new("tesseract")
+        .arg(&image_path)
+        .arg("stdout")
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let error = std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!(
+                "tesseract failed with status {}: {}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        );
+        return Err(error.into());
+    }
+
+    let text = String::from_utf8(output.stdout)?;
+    Ok(text)
 }
 
 /**
