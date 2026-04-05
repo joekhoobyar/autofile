@@ -16,12 +16,16 @@ pub enum FastJob {
         page: u32,
         width: u32,
     },
-    ProcessFilePages {
-        document_file_id: i64,
-    },
     UpdateDocumentIndexDocument {
         document_index_id: i64,
         document_id: i64,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum MediumJob {
+    ProcessFilePages {
+        document_file_id: i64,
     },
 }
 
@@ -41,7 +45,17 @@ pub async fn handle_fast_job(job: FastJob, state: Data<Arc<AppState>>) -> Result
             document_index_id,
             document_id,
         } => update_document_index_document(document_index_id, document_id, state).await,
-        FastJob::ProcessFilePages { document_file_id } => {
+    }
+}
+
+/**
+ * Handles a medium job by matching on the job type and calling the appropriate function to process it.
+ *
+ * The function takes a `MediumJob` and an `Arc<AppState>` as parameters and returns a `Result<(), Error>`.
+ */
+pub async fn handle_medium_job(job: MediumJob, state: Data<Arc<AppState>>) -> Result<(), Error> {
+    match job {
+        MediumJob::ProcessFilePages { document_file_id } => {
             process_file_pages(document_file_id, state).await
         }
     }

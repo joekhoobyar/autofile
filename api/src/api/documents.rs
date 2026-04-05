@@ -6,7 +6,7 @@ use crate::AppState;
 use crate::application::document_index_documents::delete_document_index_document;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::documents::get_document_view;
-use crate::application::jobs::FastJob;
+use crate::application::jobs::{FastJob, MediumJob};
 use crate::domain::document_files::DocumentFile;
 use crate::domain::documents::{Document, DocumentView};
 use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_to_s3};
@@ -405,6 +405,7 @@ async fn create(
 
     // Clone the fast job queue handle for use inside the transaction closure
     let fast_jobs = state.fast_jobs.as_ref().clone();
+    let medium_jobs = state.medium_jobs.as_ref().clone();
     let thumb_enqueue_failed = Arc::new(AtomicBool::new(false));
     let thumb_enqueue_failed_for_tx = Arc::clone(&thumb_enqueue_failed);
     let pages_enqueue_failed = Arc::new(AtomicBool::new(false));
@@ -416,6 +417,7 @@ async fn create(
         .run::<_, diesel::result::Error, _>(|conn| {
             Box::pin(async move {
                 let mut fast_jobs = fast_jobs;
+                let mut medium_jobs = medium_jobs;
                 // Insert document record
                 let inserted_document: Document = diesel::insert_into(documents::table)
                     .values((
@@ -456,8 +458,8 @@ async fn create(
                         return Err(diesel::result::Error::RollbackTransaction);
                     }
 
-                    if let Err(_) = fast_jobs
-                        .push(FastJob::ProcessFilePages {
+                    if let Err(_) = medium_jobs
+                        .push(MediumJob::ProcessFilePages {
                             document_file_id: inserted_file.id,
                         })
                         .await

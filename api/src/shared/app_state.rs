@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use apalis_redis::RedisStorage;
-use diesel_async::{AsyncPgConnection, pooled_connection::bb8};
+use diesel_async::{pooled_connection::bb8, AsyncPgConnection};
 
-use crate::application::jobs::FastJob;
+use crate::application::jobs::{FastJob, MediumJob};
 
 // Shared application state
 #[derive(Clone)]
@@ -13,4 +13,5 @@ pub struct AppState {
     pub s3_bucket: Arc<String>,
     pub jwt_secret: Arc<Vec<u8>>,
     pub fast_jobs: Arc<RedisStorage<FastJob>>,
+    pub medium_jobs: Arc<RedisStorage<MediumJob>>,
 }

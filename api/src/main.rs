@@ -73,7 +73,7 @@ mod shared {
 
 use shared::extractors::DbConn;
 
-use crate::application::jobs::{FastJob, handle_fast_job};
+use crate::application::jobs::{FastJob, MediumJob, handle_fast_job, handle_medium_job};
 use crate::shared::app_state::AppState;
 use crate::shared::util::ApiError;
 
@@ -86,14 +86,18 @@ async fn main() {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    // Redis storage (queue) for thumbnail generation.
+    // Redis storage (queue) for background jobs.
     let redis_url = std::env::var("REDIS_URL")
         .unwrap_or_else(|_| "redis://127.0.0.1:6379/?connect_timeout=2&timeout=2".to_string());
     check_redis(&redis_url).await.expect("Redis not reachable");
-    let redis_conn = apalis_redis::connect(redis_url)
+    let redis_conn = apalis_redis::connect(redis_url.clone())
         .await
         .expect("Could not connect to Redis");
     let fast_storage: RedisStorage<FastJob> = RedisStorage::new(redis_conn);
+    let medium_conn = apalis_redis::connect(redis_url)
+        .await
+        .expect("Could not connect to Redis");
+    let medium_storage: RedisStorage<MediumJob> = RedisStorage::new(medium_conn);
 
     // Get database URL from environment
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -140,17 +144,26 @@ async fn main() {
         s3_bucket: Arc::new(s3_bucket),
         jwt_secret: Arc::new(jwt_secret),
         fast_jobs: Arc::new(fast_storage),
+        medium_jobs: Arc::new(medium_storage),
     });
 
     // Spawn apalis workers (in-process).
-    let monitor = Monitor::new().register({
-        // One or more workers pulling from Redis
-        WorkerBuilder::new("fast-job-worker")
-            .concurrency(4) // Adjust concurrency as needed
-            .data(app_state.clone())
-            .backend(app_state.fast_jobs.as_ref().clone())
-            .build_fn(handle_fast_job)
-    });
+    let monitor = Monitor::new()
+        .register({
+            // One or more workers pulling from Redis
+            WorkerBuilder::new("fast-job-worker")
+                .concurrency(4) // Adjust concurrency as needed
+                .data(app_state.clone())
+                .backend(app_state.fast_jobs.as_ref().clone())
+                .build_fn(handle_fast_job)
+        })
+        .register({
+            WorkerBuilder::new("medium-job-worker")
+                .concurrency(2)
+                .data(app_state.clone())
+                .backend(app_state.medium_jobs.as_ref().clone())
+                .build_fn(handle_medium_job)
+        });
     tokio::spawn(async move {
         monitor.run().await.expect("Background worker failed");
     });
