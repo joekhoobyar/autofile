@@ -11,12 +11,13 @@ use tokio_util::io::ReaderStream;
 use crate::AppState;
 use crate::shared::util::ApiError;
 
-pub async fn serve_s3_image(
+pub async fn serve_s3_file(
     state: &AppState,
     headers: &HeaderMap,
     s3_key: &str,
     fallback_last_modified: Option<DateTime<Utc>>,
     missing_message: &str,
+    fallback_content_type: Option<&str>,
 ) -> Result<Response, ApiError> {
     let object = state
         .s3_client
@@ -65,13 +66,18 @@ pub async fn serve_s3_image(
     }
 
     let content_length = object.content_length();
+    let content_type = object
+        .content_type()
+        .map(str::to_owned)
+        .or_else(|| fallback_content_type.map(str::to_owned));
     let body = Body::from_stream(ReaderStream::new(object.body.into_async_read()));
     let mut response = Response::new(body);
     let headers = response.headers_mut();
-    headers.insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("image/png"),
-    );
+    if let Some(content_type) = content_type {
+        if let Ok(value) = header::HeaderValue::from_str(&content_type) {
+            headers.insert(header::CONTENT_TYPE, value);
+        }
+    }
     headers.insert(
         header::CACHE_CONTROL,
         header::HeaderValue::from_static("public, must-revalidate"),

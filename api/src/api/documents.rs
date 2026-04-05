@@ -17,7 +17,7 @@ use crate::schema::{
 };
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::s3::serve_s3_image;
+use crate::shared::s3::serve_s3_file;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http, write_field_to_temp_file};
 
 use aws_sdk_s3::primitives::ByteStream;
@@ -335,12 +335,13 @@ pub async fn thumbnail_get(
 
     let s3_key = s3_thumbnail.ok_or_else(|| ApiError::not_found("Thumbnail not available"))?;
 
-    serve_s3_image(
+    serve_s3_file(
         state.as_ref(),
         &headers,
         &s3_key,
         Some(updated_at),
         "Thumbnail not available",
+        Some("image/png"),
     )
     .await
 }

@@ -5,7 +5,7 @@ use crate::domain::document_files::{DocumentFileOcrPage, DocumentFilePage};
 use crate::schema::{document_file_ocr_pages, document_file_pages, document_files};
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::s3::serve_s3_image;
+use crate::shared::s3::serve_s3_file;
 use crate::shared::util::{ApiError, diesel_to_http};
 
 use axum::{
@@ -84,12 +84,13 @@ pub async fn page_image_get(
         })?;
 
     let s3_key = format!("{}/pages/{}.png", s3_prefix, page_number);
-    serve_s3_image(
+    serve_s3_file(
         state.as_ref(),
         &headers,
         &s3_key,
         None,
         "Page not available",
+        Some("image/png"),
     )
     .await
 }
