@@ -11,7 +11,7 @@ type DocumentViewLayoutProps = {
   children: ReactNode;
 };
 
-export function DocumentViewLayout({ documentId, children }: DocumentViewLayoutProps) {
+export function DocumentViewLayout({ documentId, children }: Readonly<DocumentViewLayoutProps>) {
   const navigate = useNavigate();
   const location = useLocation();
   const menuRef = useRef<Menu>(null);
@@ -20,6 +20,11 @@ export function DocumentViewLayout({ documentId, children }: DocumentViewLayoutP
   const menuItems = useMemo<MenuItem[]>(
     () => {
       const items = [
+        {
+          label: 'Preview',
+          icon: 'pi pi-eye',
+          path: `/documents/${documentId}/preview`,
+        },
         {
           label: 'Metadata',
           icon: 'pi pi-database',
