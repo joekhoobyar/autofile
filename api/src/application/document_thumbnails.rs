@@ -6,8 +6,8 @@ use apalis::prelude::*;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use tokio::process::Command;
-use uuid::Uuid;
 
+use crate::application::document_files::stage_document_file_from_s3;
 use crate::domain::document_files::DocumentFile;
 use crate::infrastructure::s3::upload_to_s3;
 use crate::schema::documents;
@@ -40,35 +40,12 @@ pub async fn generate_thumbnail(
         .await
         .map_err(to_job_error)?;
 
-    // 1) download doc from object storage via job.object_key
-    let s3_key = format!("{}/{}", document_file.s3_prefix, document_file.filename);
-    let object = state
-        .s3_client
-        .get_object()
-        .bucket(state.s3_bucket.as_str())
-        .key(&s3_key)
-        .send()
-        .await
-        .map_err(to_job_error)?;
-    let file_bytes = object
-        .body
-        .collect()
-        .await
-        .map_err(to_job_error)?
-        .into_bytes();
-    let tmp_dir = std::env::temp_dir().join(format!("autofile-thumb-{}", Uuid::new_v4()));
-    tokio::fs::create_dir_all(&tmp_dir)
-        .await
-        .map_err(to_job_error)?;
-    let input_path = tmp_dir.join("input.pdf");
-    tokio::fs::write(&input_path, file_bytes)
-        .await
-        .map_err(to_job_error)?;
+    // Download the file from S3 into a temp file.
+    let (temp_dir, temp_file) = stage_document_file_from_s3(&document_file, "autofile-pages", state.clone())
+        .await?;
 
-    // 2) generate thumbnail
-    //    pdftocairo -png -singlefile -f 1 -l 1 -scale-to-x 300 -scale-to-y -1 input.pdf _thumb
-    //
-    let output_prefix = tmp_dir.join("_thumb");
+    // generate thumbnail
+    let output_prefix = temp_dir.join("_thumb");
     let status = Command::new("pdftocairo")
         .arg("-png")
         .arg("-singlefile")
@@ -80,7 +57,7 @@ pub async fn generate_thumbnail(
         .arg(width.to_string())
         .arg("-scale-to-y")
         .arg("-1")
-        .arg(&input_path)
+        .arg(&temp_file)
         .arg(&output_prefix)
         .status()
         .await
@@ -93,10 +70,8 @@ pub async fn generate_thumbnail(
         return Err(to_job_error(error));
     }
 
-    // 3) upload thumbnail + update DB
-    //    upload_to_s3(..., ..., ByteStream::from_path("_thumb.png"), ...)
-    //
-    let thumb_path = tmp_dir.join("_thumb.png");
+    // upload thumbnail
+    let thumb_path = temp_dir.join("_thumb.png");
     let thumb_key = format!("{}/_thumb.png", document_file.s3_prefix);
     let body = ByteStream::from_path(&thumb_path)
         .await
@@ -124,7 +99,7 @@ pub async fn generate_thumbnail(
         tracing::warn!("Document {} not found when updating thumbnail", document_file.document_id);
     }
 
-    let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
+    let _ = tokio::fs::remove_dir_all(&temp_dir).await;
 
     Ok(())
 }

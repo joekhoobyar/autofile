@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use apalis::prelude::*;
@@ -33,8 +34,8 @@ pub async fn process_file_pages(
         .await
         .map_err(to_job_error)?;
 
-    // Call download_document_file_from_s3 to download the file from S3 into a temp file.
-    let temp_file = download_document_file_from_s3(document_file, "autofile-pages", state.clone())
+    // Download the file from S3 into a temp file.
+    let (temp_dir, temp_file) = stage_document_file_from_s3(&document_file, "autofile-pages", state.clone())
         .await?;
 
     let result = async {
@@ -172,11 +173,11 @@ async fn count_pages(
     )))
 }
 
-pub async fn download_document_file_from_s3(
-    document_file: DocumentFile,
+pub async fn stage_document_file_from_s3(
+    document_file: &DocumentFile,
     tempfile_prefix: &str,
     state: Data<Arc<AppState>>
-) -> Result<String, Error> {
+) -> Result<(PathBuf, String), Error> {
 
     // Download the file from object storage, into a temp file.
     let s3_key = format!("{}/{}", document_file.s3_prefix, document_file.filename);
@@ -194,11 +195,14 @@ pub async fn download_document_file_from_s3(
         .await
         .map_err(to_job_error)?
         .into_bytes();
-    let tmp_dir = std::env::temp_dir();
-    let tmp_file = tmp_dir.join(format!("{}-{}", tempfile_prefix, Uuid::new_v4()));
+    let tmp_dir = std::env::temp_dir().join(format!("{}-{}", tempfile_prefix, Uuid::new_v4()));
+    tokio::fs::create_dir_all(&tmp_dir)
+        .await
+        .map_err(to_job_error)?;
+    let tmp_file = tmp_dir.join("staged-file");
     tokio::fs::write(&tmp_file, file_bytes)
         .await
         .map_err(to_job_error)?;
 
-    Ok(tmp_file.to_string_lossy().to_string())
+    Ok((tmp_dir, tmp_file.to_string_lossy().to_string()))
 }
