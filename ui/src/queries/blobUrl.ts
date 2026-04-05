@@ -5,7 +5,7 @@ const blobUrlReverseCache = new Map<string, Blob>();
 const blobUrlRefCount = new Map<string, number>();
 const blobUrlRevokeTimers = new Map<string, number>();
 
-export function useBlobObjectUrl(blob: Blob | undefined): string | undefined {
+export function useBlobObjectUrl(blob: Blob | null | undefined): string | undefined {
   const objectUrl = useMemo(() => {
     if (!blob) return undefined;
     const cached = blobUrlCache.get(blob);

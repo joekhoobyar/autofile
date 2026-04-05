@@ -28,7 +28,7 @@ export function useDocumentFilePageImage(
   pageNumber: number,
   options = {}
 ): UseQueryResult<string | undefined, HttpError> {
-  const query = useQuery<Blob | undefined, HttpError>({
+  const query = useQuery<Blob | null, HttpError>({
     queryKey: ['documentFilePageImage', 'get', documentId, documentFileId, pageNumber],
     enabled: !!documentId && !!documentFileId && !!pageNumber,
     ...options,
@@ -37,7 +37,7 @@ export function useDocumentFilePageImage(
         `api/v1/documents/${documentId}/files/${documentFileId}/pages/${pageNumber}/image`
       );
       if (res.status === 404) {
-        return undefined;
+        return null;
       }
       if (!res.ok) {
         throw await parseApiError(res);

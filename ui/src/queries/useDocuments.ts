@@ -42,14 +42,14 @@ export function useDocument(id: string | number, options = {}): UseQueryResult<D
 }
 
 export function useDocumentThumbnail(id: string | number, options = {}): UseQueryResult<string | undefined, HttpError> {
-  const query = useQuery<Blob | undefined, HttpError>({
+  const query = useQuery<Blob | null, HttpError>({
     queryKey: ['document', 'get', {id}, 'thumbnail'],
     enabled: !!id,
     ...options,
     queryFn: async () => {
       const res = await apiFetchRaw(`api/v1/documents/${id}/thumbnail`);
       if (res.status === 404) {
-        return undefined;
+        return null;
       }
       if (!res.ok) {
         throw await parseApiError(res);
