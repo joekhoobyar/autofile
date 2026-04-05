@@ -387,3 +387,27 @@ section.aut-document {
   text-shadow: 0px 0px 2px #ffffff;
   box-shadow: 2px 2px 0px #101010;
 }
+
+.aut-document-file-card {
+  cursor: pointer;
+}
+
+.aut-document-file-name {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.aut-document-file-thumbnail-wrapper {
+  min-width: 10rem;
+}
+
+.aut-document-file-thumbnail-placeholder {
+  background-color: var(--surface-100);
+  border: 1px solid black;
+  width: 100%;
+  min-width: 10rem;
+}
+
+.aut-document-file-metadata li {
+  text-align: left !important;
+}

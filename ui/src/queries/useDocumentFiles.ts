@@ -11,6 +11,35 @@ export function useDocumentFiles(documentId: string | number): UseQueryResult<Do
   });
 }
 
+export function useDocumentFileThumbnail(
+  documentId: string | number,
+  documentFileId: string | number,
+  options = {}
+): UseQueryResult<string | undefined, HttpError> {
+  const query = useQuery<Blob | null, HttpError>({
+    queryKey: ['documentFile', 'get', documentId, documentFileId, 'thumbnail'],
+    enabled: !!documentId && !!documentFileId,
+    ...options,
+    queryFn: async () => {
+      const res = await apiFetchRaw(`api/v1/documents/${documentId}/files/${documentFileId}/thumbnail`);
+      if (res.status === 404) {
+        return null;
+      }
+      if (!res.ok) {
+        throw await parseApiError(res);
+      }
+      return await res.blob();
+    },
+  });
+
+  const objectUrl = useBlobObjectUrl(query.data);
+
+  return {
+    ...query,
+    data: objectUrl,
+  } as unknown as UseQueryResult<string | undefined, HttpError>;
+}
+
 export function useDocumentFilePages(
   documentId: string | number,
   documentFileId: string | number
