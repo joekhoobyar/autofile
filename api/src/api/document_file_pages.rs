@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::AppState;
-use crate::domain::document_files::DocumentFilePage;
-use crate::schema::{document_file_pages, document_files};
+use crate::domain::document_files::{DocumentFileOcrPage, DocumentFilePage};
+use crate::schema::{document_file_ocr_pages, document_file_pages, document_files};
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, diesel_to_http};
@@ -37,6 +37,27 @@ pub async fn list(
         .load::<DocumentFilePage>(&mut db)
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_file_pages"))?;
+
+    Ok(Json(rows))
+}
+
+pub async fn list_ocr(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path((document_id, document_file_id)): Path<(i64, i64)>,
+) -> Result<Json<Vec<DocumentFileOcrPage>>, ApiError> {
+    let rows = document_file_ocr_pages::table
+        .inner_join(
+            document_files::table
+                .on(document_files::id.eq(document_file_ocr_pages::document_file_id)),
+        )
+        .filter(document_files::document_id.eq(document_id))
+        .filter(document_file_ocr_pages::document_file_id.eq(document_file_id))
+        .select(DocumentFileOcrPage::as_select())
+        .order(document_file_ocr_pages::page_number.asc())
+        .load::<DocumentFileOcrPage>(&mut db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_file_ocr_pages"))?;
 
     Ok(Json(rows))
 }
@@ -114,6 +135,10 @@ pub async fn page_image_get(
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/{document_id}/files/{document_file_id}/pages", get(list))
+        .route(
+            "/{document_id}/files/{document_file_id}/ocr-pages",
+            get(list_ocr),
+        )
         .route(
             "/{document_id}/files/{document_file_id}/pages/{page_number}/image",
             get(page_image_get),
