@@ -35,6 +35,11 @@ export function DocumentViewLayout({ documentId, children }: Readonly<DocumentVi
           icon: 'pi pi-align-left',
           path: `/documents/${documentId}/text-content`,
         },
+        {
+          label: 'Document OCR',
+          icon: 'pi pi-search',
+          path: `/documents/${documentId}/ocr-content`,
+        },
       ];
 
       return items.map((item) => ({

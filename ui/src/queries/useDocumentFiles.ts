@@ -1,6 +1,6 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { apiFetch, apiFetchRaw, HttpError, parseApiError } from '../api';
-import { type DocumentFile, type DocumentFilePage } from '../models/documentFile';
+import { type DocumentFile, type DocumentFileOcrPage, type DocumentFilePage } from '../models/documentFile';
 import { useBlobObjectUrl } from './blobUrl';
 
 export function useDocumentFiles(documentId: string | number): UseQueryResult<DocumentFile[], HttpError> {
@@ -19,6 +19,17 @@ export function useDocumentFilePages(
     queryKey: ['documentFilePage', 'list', documentId, documentFileId],
     enabled: !!documentId && !!documentFileId,
     queryFn: () => apiFetch<DocumentFilePage[]>(`api/v1/documents/${documentId}/files/${documentFileId}/pages`),
+  });
+}
+
+export function useDocumentFileOcrPages(
+  documentId: string | number,
+  documentFileId: string | number
+): UseQueryResult<DocumentFileOcrPage[], HttpError> {
+  return useQuery({
+    queryKey: ['documentFileOcrPage', 'list', documentId, documentFileId],
+    enabled: !!documentId && !!documentFileId,
+    queryFn: () => apiFetch<DocumentFileOcrPage[]>(`api/v1/documents/${documentId}/files/${documentFileId}/ocr-pages`),
   });
 }
 

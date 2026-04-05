@@ -20,7 +20,7 @@ import { Button } from 'primereact/button';
 import Login, { Logout, RequireAuth } from './pages/auth.tsx';
 import { AuthProvider } from './AuthProvider.tsx';
 import { EditDocumentMetadata } from './pages/documentMetadata.tsx';
-import { DocumentFilePagePreview, ListDocumentFilePageTextContent } from './pages/documentFiles.tsx';
+import { DocumentFilePagePreview, ListDocumentFilePageOcrContent, ListDocumentFilePageTextContent } from './pages/documentFiles.tsx';
 import { EditDocumentIndex, ListDocumentIndexes, NewDocumentIndex } from './pages/documentIndexes.tsx';
 import { EditDocumentIndexTemplate, ListDocumentIndexTemplates, NewDocumentIndexTemplate } from './pages/documentIndexTemplates.tsx';
 import { ListDocumentIndexValues } from './pages/documentIndexValues.tsx';
@@ -109,6 +109,7 @@ const router = createBrowserRouter([
           { path: 'new', element: <UploadDocument/> },
           { path: ':id/metadata', element: <EditDocumentMetadata/> },
           { path: ':id/text-content', element: <ListDocumentFilePageTextContent/> },
+          { path: ':id/ocr-content', element: <ListDocumentFilePageOcrContent/> },
           { path: ':id/preview', element: <DocumentFilePagePreview/> },
         ]
       },

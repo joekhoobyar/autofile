@@ -16,3 +16,9 @@ export interface DocumentFilePage {
   page_number: number;
   text_content?: string;
 }
+
+export interface DocumentFileOcrPage {
+  document_file_id: number;
+  page_number: number;
+  ocr_content?: string;
+}
