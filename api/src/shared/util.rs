@@ -2,6 +2,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use apalis::prelude::*;
+use anyhow::Error as AnyhowError;
 use axum::{
     response::{IntoResponse, Response},
     http::StatusCode,
@@ -96,6 +97,32 @@ where
 pub struct TempUpload {
     pub path: std::path::PathBuf,
     pub size: i64,
+}
+
+#[derive(Debug)]
+pub struct JobError(pub AnyhowError);
+
+pub type JobResult<T> = Result<T, JobError>;
+
+impl fmt::Display for JobError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl<E> From<E> for JobError
+where
+    E: std::error::Error + Send + Sync + 'static,
+{
+    fn from(err: E) -> Self {
+        Self(AnyhowError::new(err))
+    }
+}
+
+impl From<JobError> for Error {
+    fn from(err: JobError) -> Self {
+        to_job_error(err.0)
+    }
 }
 
 pub async fn write_field_to_temp_file(

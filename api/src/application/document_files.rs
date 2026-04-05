@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::domain::document_files::DocumentFile;
 use crate::schema::{document_file_pages, document_files};
 use crate::shared::app_state::AppState;
-use crate::shared::util::to_job_error;
+use crate::shared::util::JobResult;
 
 /**
  * This job counts the pages in a document, and then extracts the text content for each page.
@@ -19,20 +19,27 @@ pub async fn process_file_pages(
     document_file_id: i64,
     state: Data<Arc<AppState>>,
 ) -> Result<(), Error> {
+    process_file_pages_inner(document_file_id, state)
+        .await
+        .map_err(Into::into)
+}
+
+async fn process_file_pages_inner(
+    document_file_id: i64,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
     tracing::info!(document_file_id, "processing file pages");
 
     // Load the document file from the database.
     let mut db = state
         .db_pool
         .get()
-        .await
-        .map_err(to_job_error)?;
+        .await?;
     let document_file = document_files::table
         .find(document_file_id)
         .select(DocumentFile::as_select())
         .first::<DocumentFile>(&mut db)
-        .await
-        .map_err(to_job_error)?;
+        .await?;
 
     // Download the file from S3 into a temp file.
     let (temp_dir, temp_file) = stage_document_file_from_s3(&document_file, "autofile-pages", state.clone())
@@ -47,8 +54,7 @@ pub async fn process_file_pages(
         diesel::update(document_files::table.find(document_file_id))
             .set(document_files::pages.eq(pages as i32))
             .execute(&mut db)
-            .await
-            .map_err(to_job_error)?;
+            .await?;
 
         // Extract the text for each page, and save it to the database.
         // call extract_page_text for each page, and save the text to the database
@@ -73,8 +79,7 @@ pub async fn process_file_pages(
                         .eq(diesel::upsert::excluded(document_file_pages::text_content)),
                 )
                 .execute(&mut db)
-                .await
-                .map_err(to_job_error)?;
+                .await?;
         }
 
         Ok(())
@@ -101,7 +106,7 @@ async fn extract_page_text(
     file: String,
     page: u32,
     _state: Data<Arc<AppState>>,
-) -> Result<String, Error> {
+) -> JobResult<String> {
 
     // 2) run `pdftotext -f {page} -l {page} input.pdf -` to extract text for the page
     let output = Command::new("pdftotext")
@@ -112,8 +117,7 @@ async fn extract_page_text(
         .arg(file)
         .arg("-")
         .output()
-        .await
-        .map_err(to_job_error)?;
+        .await?;
 
     if !output.status.success() {
         let error = std::io::Error::new(
@@ -124,24 +128,23 @@ async fn extract_page_text(
                 String::from_utf8_lossy(&output.stderr)
             ),
         );
-        return Err(to_job_error(error));
+        return Err(error.into());
     }
 
-    let text = String::from_utf8(output.stdout).map_err(to_job_error)?;
+    let text = String::from_utf8(output.stdout)?;
     Ok(text)
 }
 
 async fn count_pages(
     file: String,
     _state: Data<Arc<AppState>>,
-) -> Result<u32, Error> {
+) -> JobResult<u32> {
 
     // 2) run `pdfinfo input.pdf` and parse the output to get the page count
     let output = Command::new("pdfinfo")
         .arg(file)
         .output()
-        .await
-        .map_err(to_job_error)?;
+        .await?;
 
     if !output.status.success() {
         let error = std::io::Error::new(
@@ -152,10 +155,10 @@ async fn count_pages(
                 String::from_utf8_lossy(&output.stderr)
             ),
         );
-        return Err(to_job_error(error));
+        return Err(error.into());
     }
 
-    let output_str = String::from_utf8(output.stdout).map_err(to_job_error)?;
+    let output_str = String::from_utf8(output.stdout)?;
     for line in output_str.lines() {
         if line.starts_with("Pages:") {
             let parts: Vec<&str> = line.split_whitespace().collect();
@@ -167,17 +170,18 @@ async fn count_pages(
         }
     }
 
-    Err(to_job_error(std::io::Error::new(
+    Err(std::io::Error::new(
         std::io::ErrorKind::Other,
         "Failed to parse page count from pdfinfo output",
-    )))
+    )
+    .into())
 }
 
 pub async fn stage_document_file_from_s3(
     document_file: &DocumentFile,
     tempfile_prefix: &str,
     state: Data<Arc<AppState>>
-) -> Result<(PathBuf, String), Error> {
+) -> JobResult<(PathBuf, String)> {
 
     // Download the file from object storage, into a temp file.
     let s3_key = format!("{}/{}", document_file.s3_prefix, document_file.filename);
@@ -187,22 +191,18 @@ pub async fn stage_document_file_from_s3(
         .bucket(state.s3_bucket.as_str())
         .key(&s3_key)
         .send()
-        .await
-        .map_err(to_job_error)?;
+        .await?;
     let file_bytes = object
         .body
         .collect()
-        .await
-        .map_err(to_job_error)?
+        .await?
         .into_bytes();
     let tmp_dir = std::env::temp_dir().join(format!("{}-{}", tempfile_prefix, Uuid::new_v4()));
     tokio::fs::create_dir_all(&tmp_dir)
-        .await
-        .map_err(to_job_error)?;
+        .await?;
     let tmp_file = tmp_dir.join("staged-file");
     tokio::fs::write(&tmp_file, file_bytes)
-        .await
-        .map_err(to_job_error)?;
+        .await?;
 
     Ok((tmp_dir, tmp_file.to_string_lossy().to_string()))
 }

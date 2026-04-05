@@ -23,7 +23,7 @@ use crate::schema::{
     tags,
 };
 use crate::shared::app_state::AppState;
-use crate::shared::util::{to_job_error, ApiError};
+use crate::shared::util::{ApiError, JobResult};
 
 /**
  * This function is responsible for enqueueing jobs to update all document indexes for a given document.
@@ -76,7 +76,7 @@ pub async fn update_document_index_document(
         Ok(()) => Ok(()),
         Err(err) => {
             tracing::error!(error = %err, "document_index {:?} update job failed for document {:?}", document_index_id, document_id);
-            Err(err)
+            Err(err.into())
         }
     }
 }
@@ -90,20 +90,18 @@ async fn do_update_document_index_document(
     document_index_id: i64,
     document_id: i64,
     state: Data<Arc<AppState>>,
-) -> Result<(), Error> {
+) -> JobResult<()> {
     tracing::info!(document_index_id, document_id, "Updating document_index for document");
 
     let mut db = state
         .db_pool
         .get()
-        .await
-        .map_err(to_job_error)?;
+        .await?;
 
     // Build a TemplateDocumentView for this document, which includes loading the document type slug,
     // tag slugs and cabinet slugs, as these may be needed to evaluate the document index templates.
     let document_view = get_document_view(&mut db, document_id)
-        .await
-        .map_err(to_job_error)?;
+        .await?;
     let template_document_view = build_template_document_view(&mut db, document_view).await?;
 
     // Check if the document index still exists - if not, we can skip this operation entirely.
@@ -141,8 +139,7 @@ async fn do_update_document_index_document(
         .filter(document_index_templates::document_index_id.eq(document_index_id))
         .select(document_index_values::id)
         .load::<i64>(&mut db)
-        .await
-        .map_err(to_job_error)?;
+        .await?;
     let mut existing_value_ids: HashSet<i64> = existing_value_ids.into_iter().collect();
 
     // Next, start at the root(s) of the document index (the template with no parent) and traverse down the tree, matching the document's metadata to the template's criteria, and updating the document_index_documents records as needed.
@@ -151,8 +148,7 @@ async fn do_update_document_index_document(
         .filter(document_index_templates::document_index_id.eq(document_index_id))
         .select(DocumentIndexTemplate::as_select())
         .load::<DocumentIndexTemplate>(&mut db)
-        .await
-        .map_err(to_job_error)?;
+        .await?;
 
     // Build a parent -> children index for templates so we can traverse the tree without recursion.
     // The key is parent_id (None for roots), and the value is a list of indices into `templates`.
@@ -244,10 +240,10 @@ async fn do_update_document_index_document(
                     if should_skip {
                         continue;
                     }
-                    return Err(to_job_error(diesel::result::Error::RollbackTransaction));
+                    return Err(diesel::result::Error::RollbackTransaction.into());
                 }
                 Err(err) => {
-                    return Err(to_job_error(err));
+                    return Err(err.into());
                 }
             }
         }
@@ -290,7 +286,7 @@ async fn do_update_document_index_document(
         })
         .await;
 
-    cleanup_result.map_err(to_job_error)?;
+    cleanup_result?;
 
     Ok(())
 }
@@ -321,13 +317,12 @@ pub async fn delete_document_index_document(
 async fn build_template_document_view(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
     document_view: DocumentView,
-) -> Result<TemplateDocumentView, Error> {
+) -> JobResult<TemplateDocumentView> {
     let document_type_slug = document_types::table
         .find(document_view.document_type_id)
         .select(document_types::slug)
         .first::<String>(db)
-        .await
-        .map_err(to_job_error)?;
+        .await?;
 
     let tags: HashSet<String> = if document_view.tag_ids.is_empty() {
         HashSet::new()
@@ -336,8 +331,7 @@ async fn build_template_document_view(
             .filter(tags::id.eq_any(&document_view.tag_ids))
             .select(tags::slug)
             .load::<String>(db)
-            .await
-            .map_err(to_job_error)?
+            .await?
             .into_iter()
             .collect()
     };
@@ -349,8 +343,7 @@ async fn build_template_document_view(
             .filter(cabinets::id.eq_any(&document_view.cabinet_ids))
             .select(cabinets::slug)
             .load::<String>(db)
-            .await
-            .map_err(to_job_error)?
+            .await?
             .into_iter()
             .collect()
     };
