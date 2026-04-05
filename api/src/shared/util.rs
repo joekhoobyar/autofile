@@ -127,9 +127,21 @@ where
 
 impl From<JobError> for Error {
     fn from(err: JobError) -> Self {
-        to_job_error(err.0)
+        let boxed: BoxDynError = Box::new(AnyhowJobError(err.0));
+        Error::Failed(Arc::new(boxed))
     }
 }
+
+#[derive(Debug)]
+struct AnyhowJobError(AnyhowError);
+
+impl fmt::Display for AnyhowJobError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for AnyhowJobError {}
 
 pub async fn write_field_to_temp_file(
     field: &mut axum::extract::multipart::Field<'_>,
@@ -170,10 +182,10 @@ pub async fn write_field_to_temp_file(
 /*
  * Convert any error into a job error that can be returned from an Apalis job.
  */
-pub fn to_job_error<E>(err: E) -> Error
-where
-    E: std::error::Error + Send + Sync + 'static,
-{
-    let boxed: BoxDynError = Box::new(err);
-    Error::Failed(Arc::new(boxed))
-}
+// pub fn to_job_error<E>(err: E) -> Error
+// where
+//     E: std::error::Error + Send + Sync + 'static,
+// {
+//     let boxed: BoxDynError = Box::new(err);
+//     Error::Failed(Arc::new(boxed))
+// }

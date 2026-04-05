@@ -24,6 +24,10 @@ pub async fn process_file_pages(
         .map_err(Into::into)
 }
 
+/**
+ * Internal function to process the pages of a document file by counting the pages
+ * and extracting the text content for each page.
+ */
 async fn process_file_pages_inner(
     document_file_id: i64,
     state: Data<Arc<AppState>>,
@@ -97,12 +101,15 @@ struct NewDocumentFilePage {
     text_content: Option<String>,
 }
 
+/**
+ * Internal function to extract the text content of a specific page in a PDF document
+ * by running `pdftotext` on the file and capturing the output.
+ */
 async fn extract_page_text(
     file: String,
     page: u32,
     _state: Data<Arc<AppState>>,
 ) -> JobResult<String> {
-    // 2) run `pdftotext -f {page} -l {page} input.pdf -` to extract text for the page
     let output = Command::new("pdftotext")
         .arg("-f")
         .arg(page.to_string())
@@ -129,6 +136,10 @@ async fn extract_page_text(
     Ok(text)
 }
 
+/**
+ * Internal function to count the number of pages in a PDF document
+ * by running `pdfinfo` on the file and parsing the output.
+ */
 async fn count_pages(file: String, _state: Data<Arc<AppState>>) -> JobResult<u32> {
     // 2) run `pdfinfo input.pdf` and parse the output to get the page count
     let output = Command::new("pdfinfo").arg(file).output().await?;
@@ -164,6 +175,11 @@ async fn count_pages(file: String, _state: Data<Arc<AppState>>) -> JobResult<u32
     .into())
 }
 
+
+/**
+ * Downloads a document file from S3 into a temporary file.
+ * Returns the path to the temp directory as a PathBuf, and the path to the temp file as a String.
+ */
 pub async fn stage_document_file_from_s3(
     document_file: &DocumentFile,
     tempfile_prefix: &str,
