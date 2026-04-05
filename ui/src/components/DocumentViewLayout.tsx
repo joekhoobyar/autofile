@@ -31,6 +31,11 @@ export function DocumentViewLayout({ documentId, children }: Readonly<DocumentVi
           path: `/documents/${documentId}/metadata`,
         },
         {
+          label: 'Indexes',
+          icon: 'pi pi-list',
+          path: `/documents/${documentId}/indexes`,
+        },
+        {
           label: 'Document Text',
           icon: 'pi pi-align-left',
           path: `/documents/${documentId}/text-content`,

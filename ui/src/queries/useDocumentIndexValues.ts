@@ -17,3 +17,11 @@ export function useDocumentIndexValueAncestors(documentIndexId: string | number,
     queryFn: () => apiFetch<DocumentIndexValue[]>(`api/v1/document-indexes/${documentIndexId}/values/${id}/ancestors`),
   });
 }
+
+export function useDocumentIndexMemberships(documentId: string | number): UseQueryResult<DocumentIndexValue[], HttpError> {
+  return useQuery({
+    queryKey: ['documentIndexValue', 'documentMemberships', documentId],
+    enabled: !!documentId,
+    queryFn: () => apiFetch<DocumentIndexValue[]>(`api/v1/documents/${documentId}/index-values`),
+  });
+}
