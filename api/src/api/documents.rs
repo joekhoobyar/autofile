@@ -535,7 +535,8 @@ async fn update(
 
                 let allowed_metadata_link = document_types_metadata_types::table
                     .filter(
-                        document_types_metadata_types::document_type_id.eq(updated.document_type_id),
+                        document_types_metadata_types::document_type_id
+                            .eq(updated.document_type_id),
                     )
                     .filter(
                         document_types_metadata_types::metadata_type_id

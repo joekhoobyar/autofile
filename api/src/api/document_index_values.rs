@@ -130,14 +130,12 @@ pub async fn list(
         )),
         (Some(DocumentIndexValueSortField::Id), Some(true)) => {
             query.order(document_index_values::id.desc())
-        },
-        (Some(DocumentIndexValueSortField::Id), _) => {
-            query.order(document_index_values::id.asc())
         }
+        (Some(DocumentIndexValueSortField::Id), _) => query.order(document_index_values::id.asc()),
         _ => query.order((
             document_index_values::value.asc(),
             document_index_values::id.asc(),
-        ))
+        )),
     };
 
     let items = query

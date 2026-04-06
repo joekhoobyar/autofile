@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use apalis::prelude::*;
@@ -48,73 +48,31 @@ async fn process_file_pages_inner(
     let (temp_dir, temp_file) =
         stage_document_file_from_s3(&document_file, "autofile-pages", state.clone()).await?;
 
+    drop(db);
+
     let result = async {
-        tracing::info!(document_file_id, "counting pages");
-        // Count the pages in the document, then update the database
-        let pages = count_pages(temp_file.clone(), state.clone()).await?;
-
-        diesel::update(document_files::table.find(document_file_id))
-            .set(document_files::pages.eq(pages as i32))
-            .execute(&mut db)
-            .await?;
-
-        // Extract the text for each page, and save it to the database.
-        // call extract_page_text for each page, and save the text to the database
-        // in a DocumentFilePage record.
-        for page in 1..=pages {
-            tracing::info!(document_file_id, page, "extracting text for page");
-            let text = extract_page_text(temp_file.clone(), page, state.clone()).await?;
-            diesel::insert_into(document_file_pages::table)
-                .values(&NewDocumentFilePage {
+        match parse_document_file_content_type(document_file.content_type.as_deref())? {
+            DocumentFileContentType::Pdf => {
+                process_file_pages_pdf(
                     document_file_id,
-                    page_number: page as i32,
-                    text_content: Some(text),
-                })
-                .on_conflict((
-                    document_file_pages::document_file_id,
-                    document_file_pages::page_number,
-                ))
-                .do_update()
-                .set(
-                    document_file_pages::text_content
-                        .eq(diesel::upsert::excluded(document_file_pages::text_content)),
+                    &document_file,
+                    &temp_dir,
+                    &temp_file,
+                    state.clone(),
                 )
-                .execute(&mut db)
-                .await?;
-
-            tracing::info!(document_file_id, page, "extracting image for page");
-            let image_path = extract_page_image(
-                temp_file.clone(),
-                page,
-                &temp_dir,
-                &document_file.s3_prefix,
-                state.clone(),
-            )
-            .await?;
-
-            tracing::info!(document_file_id, page, "extracting OCR text for page");
-            let ocr_text = extract_page_ocr(image_path, state.clone()).await?;
-            diesel::insert_into(document_file_ocr_pages::table)
-                .values(&NewDocumentFileOcrPage {
+                .await
+            }
+            DocumentFileContentType::Image => {
+                process_file_pages_image(
                     document_file_id,
-                    page_number: page as i32,
-                    ocr_content: Some(ocr_text),
-                })
-                .on_conflict((
-                    document_file_ocr_pages::document_file_id,
-                    document_file_ocr_pages::page_number,
-                ))
-                .do_update()
-                .set(
-                    document_file_ocr_pages::ocr_content.eq(diesel::upsert::excluded(
-                        document_file_ocr_pages::ocr_content,
-                    )),
+                    &document_file,
+                    &temp_dir,
+                    &temp_file,
+                    state,
                 )
-                .execute(&mut db)
-                .await?;
+                .await
+            }
         }
-
-        Ok(())
     }
     .await;
 
@@ -123,6 +81,37 @@ async fn process_file_pages_inner(
     }
 
     result
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum DocumentFileContentType {
+    Pdf,
+    Image,
+}
+
+pub(crate) fn parse_document_file_content_type(
+    content_type: Option<&str>,
+) -> JobResult<DocumentFileContentType> {
+    let content_type = content_type.ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Document file is missing content_type",
+        )
+    })?;
+
+    if content_type == "application/pdf" {
+        return Ok(DocumentFileContentType::Pdf);
+    }
+
+    if content_type.starts_with("image/") {
+        return Ok(DocumentFileContentType::Image);
+    }
+
+    Err(std::io::Error::new(
+        std::io::ErrorKind::InvalidInput,
+        format!("Unsupported content_type for page processing: {content_type}"),
+    )
+    .into())
 }
 
 #[derive(Debug, Insertable)]
@@ -147,7 +136,143 @@ struct NewDocumentFileOcrPage {
  * Internal function to extract the text content of a specific page in a PDF document
  * by running `pdftotext` on the file and capturing the output.
  */
-async fn extract_page_text(
+async fn process_file_pages_pdf(
+    document_file_id: i64,
+    document_file: &DocumentFile,
+    temp_dir: &Path,
+    temp_file: &str,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
+    let mut db = state.db_pool.get().await?;
+
+    tracing::info!(document_file_id, "counting pages");
+    let pages = count_pages(temp_file.to_owned(), state.clone()).await?;
+
+    diesel::update(document_files::table.find(document_file_id))
+        .set(document_files::pages.eq(pages as i32))
+        .execute(&mut db)
+        .await?;
+
+    for page in 1..=pages {
+        tracing::info!(document_file_id, page, "extracting text for page");
+        let text = extract_pdf_page_text(temp_file.to_owned(), page, state.clone()).await?;
+        upsert_document_file_page(&mut db, document_file_id, page as i32, Some(text)).await?;
+
+        tracing::info!(document_file_id, page, "extracting image for page");
+        let image_path = extract_pdf_page_image(
+            temp_file.to_owned(),
+            page,
+            temp_dir,
+            &document_file.s3_prefix,
+            state.clone(),
+        )
+        .await?;
+
+        tracing::info!(document_file_id, page, "extracting OCR text for page");
+        let ocr_text = extract_page_ocr(image_path, state.clone()).await?;
+        upsert_document_file_ocr_page(&mut db, document_file_id, page as i32, Some(ocr_text))
+            .await?;
+    }
+
+    Ok(())
+}
+
+async fn process_file_pages_image(
+    document_file_id: i64,
+    document_file: &DocumentFile,
+    temp_dir: &Path,
+    temp_file: &str,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
+    let mut db = state.db_pool.get().await?;
+
+    diesel::update(document_files::table.find(document_file_id))
+        .set(document_files::pages.eq(1))
+        .execute(&mut db)
+        .await?;
+
+    upsert_document_file_page(&mut db, document_file_id, 1, None).await?;
+
+    let image_path = temp_dir.join("page-1.png");
+    convert_image_to_png(temp_file.to_owned(), &image_path, state.clone()).await?;
+    upload_png_to_s3(
+        &image_path,
+        &format!("{}/pages/1.png", document_file.s3_prefix),
+        state.clone(),
+    )
+    .await?;
+
+    tracing::info!(
+        document_file_id,
+        page = 1,
+        "extracting OCR text for image page"
+    );
+    let ocr_text = extract_page_ocr(image_path, state.clone()).await?;
+    upsert_document_file_ocr_page(&mut db, document_file_id, 1, Some(ocr_text)).await?;
+
+    Ok(())
+}
+
+async fn upsert_document_file_page(
+    db: &mut diesel_async::AsyncPgConnection,
+    document_file_id: i64,
+    page_number: i32,
+    text_content: Option<String>,
+) -> JobResult<()> {
+    diesel::insert_into(document_file_pages::table)
+        .values(&NewDocumentFilePage {
+            document_file_id,
+            page_number,
+            text_content,
+        })
+        .on_conflict((
+            document_file_pages::document_file_id,
+            document_file_pages::page_number,
+        ))
+        .do_update()
+        .set(
+            document_file_pages::text_content
+                .eq(diesel::upsert::excluded(document_file_pages::text_content)),
+        )
+        .execute(db)
+        .await?;
+
+    Ok(())
+}
+
+async fn upsert_document_file_ocr_page(
+    db: &mut diesel_async::AsyncPgConnection,
+    document_file_id: i64,
+    page_number: i32,
+    ocr_content: Option<String>,
+) -> JobResult<()> {
+    diesel::insert_into(document_file_ocr_pages::table)
+        .values(&NewDocumentFileOcrPage {
+            document_file_id,
+            page_number,
+            ocr_content,
+        })
+        .on_conflict((
+            document_file_ocr_pages::document_file_id,
+            document_file_ocr_pages::page_number,
+        ))
+        .do_update()
+        .set(
+            document_file_ocr_pages::ocr_content.eq(diesel::upsert::excluded(
+                document_file_ocr_pages::ocr_content,
+            )),
+        )
+        .execute(db)
+        .await?;
+
+    Ok(())
+}
+
+/**
+ * Internal function to extract the text content of a specific page in a PDF document
+ * by running `pdftotext` on the file and capturing the output.
+ */
+async fn extract_pdf_page_text(
     file: String,
     page: u32,
     _state: Data<Arc<AppState>>,
@@ -182,10 +307,10 @@ async fn extract_page_text(
  * Internal function to extract the image content of a specific page in a PDF document
  * by running `pdftocairo` on the file and capturing the output.
  */
-async fn extract_page_image(
+async fn extract_pdf_page_image(
     file: String,
     page: u32,
-    temp_dir: &PathBuf,
+    temp_dir: &Path,
     s3_prefix: &str,
     state: Data<Arc<AppState>>,
 ) -> JobResult<PathBuf> {
@@ -215,17 +340,56 @@ async fn extract_page_image(
 
     let output_path = temp_dir.join(format!("page-{}.png", page));
     let s3_key = format!("{}/pages/{}.png", s3_prefix, page);
-    let body = ByteStream::from_path(&output_path).await?;
+    upload_png_to_s3(&output_path, &s3_key, state).await?;
+
+    Ok(output_path)
+}
+
+pub(crate) async fn convert_image_to_png(
+    file: String,
+    output_path: &Path,
+    _state: Data<Arc<AppState>>,
+) -> JobResult<()> {
+    let input_path = format!("{}[0]", file);
+    let output = Command::new("magick")
+        .arg(&input_path)
+        .arg("-auto-orient")
+        .arg("-strip")
+        .arg(output_path)
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let error = std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!(
+                "magick failed with status {}: {}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        );
+        return Err(error.into());
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn upload_png_to_s3(
+    output_path: &Path,
+    s3_key: &str,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
+    let body = ByteStream::from_path(output_path).await?;
     upload_to_s3(
         &state.s3_client,
         state.s3_bucket.as_str(),
-        &s3_key,
+        s3_key,
         body,
         Some("image/png"),
     )
     .await?;
 
-    Ok(output_path)
+    Ok(())
 }
 
 /**

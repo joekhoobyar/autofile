@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
-use aws_sdk_s3::primitives::ByteStream;
-
 use apalis::prelude::*;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use tokio::process::Command;
 
-use crate::application::document_files::stage_document_file_from_s3;
+use crate::application::document_files::{
+    DocumentFileContentType, convert_image_to_png, parse_document_file_content_type,
+    stage_document_file_from_s3, upload_png_to_s3,
+};
 use crate::domain::document_files::DocumentFile;
-use crate::infrastructure::s3::upload_to_s3;
 use crate::schema::document_files;
 use crate::schema::documents;
 use crate::shared::app_state::AppState;
@@ -50,7 +50,49 @@ async fn generate_thumbnail_inner(
     let (temp_dir, temp_file) =
         stage_document_file_from_s3(&document_file, "autofile-pages", state.clone()).await?;
 
-    // generate thumbnail
+    let result = async {
+        let thumb_path = temp_dir.join("_thumb.png");
+        match parse_document_file_content_type(document_file.content_type.as_deref())? {
+            DocumentFileContentType::Pdf => {
+                generate_pdf_thumbnail(&temp_file, page, width, &temp_dir).await?
+            }
+            DocumentFileContentType::Image => {
+                generate_image_thumbnail(&temp_file, width, &thumb_path, state.clone()).await?
+            }
+        }
+
+        let thumb_key = format!("{}/_thumb.png", document_file.s3_prefix);
+        upload_png_to_s3(&thumb_path, &thumb_key, state.clone()).await?;
+
+        let updated: usize =
+            diesel::update(documents::table.filter(documents::id.eq(document_file.document_id)))
+                .set((documents::s3_thumbnail.eq(thumb_key),))
+                .execute(&mut db)
+                .await?;
+        if updated == 0 {
+            tracing::warn!(
+                "Document {} not found when updating thumbnail",
+                document_file.document_id
+            );
+        }
+
+        Ok(())
+    }
+    .await;
+
+    if let Err(err) = tokio::fs::remove_dir_all(&temp_dir).await {
+        tracing::warn!(error = %err, path = %temp_file, "failed to remove temp dir");
+    }
+
+    result
+}
+
+async fn generate_pdf_thumbnail(
+    temp_file: &str,
+    page: u32,
+    width: u32,
+    temp_dir: &std::path::Path,
+) -> JobResult<()> {
     let output_prefix = temp_dir.join("_thumb");
     let status = Command::new("pdftocairo")
         .arg("-png")
@@ -63,7 +105,7 @@ async fn generate_thumbnail_inner(
         .arg(width.to_string())
         .arg("-scale-to-y")
         .arg("-1")
-        .arg(&temp_file)
+        .arg(temp_file)
         .arg(&output_prefix)
         .status()
         .await?;
@@ -75,33 +117,37 @@ async fn generate_thumbnail_inner(
         return Err(error.into());
     }
 
-    // upload thumbnail
-    let thumb_path = temp_dir.join("_thumb.png");
-    let thumb_key = format!("{}/_thumb.png", document_file.s3_prefix);
-    let body = ByteStream::from_path(&thumb_path).await?;
-    upload_to_s3(
-        &state.s3_client,
-        state.s3_bucket.as_str(),
-        &thumb_key,
-        body,
-        Some("image/png"),
-    )
-    .await?;
+    Ok(())
+}
 
-    // Store the thumbnail in the documents table
-    let updated: usize =
-        diesel::update(documents::table.filter(documents::id.eq(document_file.document_id)))
-            .set((documents::s3_thumbnail.eq(thumb_key),))
-            .execute(&mut db)
-            .await?;
-    if updated == 0 {
-        tracing::warn!(
-            "Document {} not found when updating thumbnail",
-            document_file.document_id
-        );
+async fn generate_image_thumbnail(
+    temp_file: &str,
+    width: u32,
+    output_path: &std::path::Path,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
+    let normalized_path = output_path.with_file_name("_thumb-source.png");
+    convert_image_to_png(temp_file.to_owned(), &normalized_path, state).await?;
+
+    let output = Command::new("magick")
+        .arg(&normalized_path)
+        .arg("-thumbnail")
+        .arg(format!("{}x", width))
+        .arg(output_path)
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!(
+                "magick thumbnail generation failed with status {}: {}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        )
+        .into());
     }
-
-    let _ = tokio::fs::remove_dir_all(&temp_dir).await;
 
     Ok(())
 }
