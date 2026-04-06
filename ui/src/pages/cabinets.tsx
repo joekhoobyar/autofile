@@ -26,13 +26,13 @@ export function ListCabinets() {
 
   const slugTemplate = (c: TreeNode) => {
     return (
-      <Link className="title" to={`${c.data.id}/edit`}>{c.data.slug}</Link>
+      <Link className="title" to={`${c.data.id}/documents`}>{c.data.slug}</Link>
     );
   }
 
   const nameTemplate = (c: TreeNode) => {
     return (
-      <Link className="title" to={`${c.data.id}/edit`}>{c.data.name}</Link>
+      <Link className="title" to={`${c.data.id}/documents`}>{c.data.name}</Link>
     );
   }
 

@@ -28,13 +28,13 @@ export function ListTags() {
 
   const slugTemplate = (c: Tag) => {
     return (
-      <Link className="title" to={`${c.id}/edit`}>{c.slug}</Link>
+      <Link className="title" to={`${c.id}/documents`}>{c.slug}</Link>
     );
   }
 
   const nameTemplate = (c: Tag) => {
     return (
-      <Link className="title" to={`${c.id}/edit`}>{c.name}</Link>
+      <Link className="title" to={`${c.id}/documents`}>{c.name}</Link>
     );
   }
 
