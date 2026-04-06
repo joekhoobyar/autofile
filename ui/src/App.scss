@@ -293,17 +293,30 @@ ul.aut-document-cabinets {
     display: flex;
     flex-direction: column;
     height: 100%;
+    width: 100%;
 
-    header {
+    header.aut-document-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
       background-color: var(--surface-0) !important;
       padding: 0.5rem;
       font-weight: normal;
       text-align: left;
-      min-height: 3rem;
+      min-height: 4.6rem;
+
       a {
+        flex: 1 1 auto;
+        min-width: 0;
         text-decoration: none;
         &:hover { text-decoration: underline; }
       }
+    }
+
+    aside {
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 auto;
     }
 
     aside ul.aut-document-metadata {
