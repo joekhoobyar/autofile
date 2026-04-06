@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useDocument, useSaveDocumentMetadata } from '../queries/useDocuments';
@@ -15,6 +15,20 @@ import { useId } from '../util';
 import { useDocumentTypeMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 
+type MetadataRow = {
+  metadataTypeId: number;
+  slug: string;
+  name: string;
+  value: string;
+  dataType: string;
+  options: { choices?: string[] } | null | undefined;
+  required: boolean;
+};
+
+function isMetadataValueSet(value: string | null | undefined) {
+  return String(value ?? '').trim().length > 0;
+}
+
 export function EditDocumentMetadata() {
   const navigate = useNavigate();
   const id = useId('id');
@@ -23,7 +37,7 @@ export function EditDocumentMetadata() {
   const { data: dtmdts } = useDocumentTypeMetadataTypes(doc?.document_type_id);
   const { data: mdt } = useMetadataTypesMap('id');
 
-  const rows = useMemo(() => {
+  const initialRows = useMemo<MetadataRow[]>(() => {
     if (!mdt || !dtmdts) return [];
     return dtmdts.map(dtmdt => {
       const mdType = mdt?.[dtmdt.metadata_type_id];
@@ -38,6 +52,24 @@ export function EditDocumentMetadata() {
       };
     }).sort((a, b) => a.name.localeCompare(b.name));
   }, [doc?.metadata, dtmdts, mdt]);
+  const [rows, setRows] = useState<MetadataRow[]>([]);
+
+  useEffect(() => {
+    setRows(initialRows);
+  }, [initialRows]);
+
+  const missingRequiredRows = useMemo(
+    () => rows.filter((row) => row.required && !isMetadataValueSet(row.value)),
+    [rows]
+  );
+  const hasMissingRequired = missingRequiredRows.length > 0;
+  const missingRequiredMessage = useMemo(() => {
+    if (!hasMissingRequired) {
+      return '';
+    }
+
+    return `Required fields are missing: ${missingRequiredRows.map((row) => row.name).join(', ')}`;
+  }, [hasMissingRequired, missingRequiredRows]);
 
   const requiredTemplate = useCallback((rowData: {required: boolean}) => {
     return rowData.required ?
@@ -133,6 +165,11 @@ export function EditDocumentMetadata() {
   const onCellEditComplete = useCallback((e: ColumnEvent) => {
     const { rowData, newValue, field  } = e;
     rowData[field] = newValue;
+    setRows((currentRows) => currentRows.map((row) => (
+      row.metadataTypeId === rowData.metadataTypeId
+        ? { ...row, [field]: newValue }
+        : row
+    )));
   }, []);
 
   const cellEditor = useCallback((options: ColumnEditorOptions) => {
@@ -156,6 +193,10 @@ export function EditDocumentMetadata() {
   ]), [cellEditor, onCellEditComplete, requiredTemplate]);
 
   const onSave = async () => {
+    if (hasMissingRequired) {
+      return;
+    }
+
     const original = doc?.metadata ?? {};
     const updates = rows
       .filter((row) => (original[row.slug] ?? '') !== row.value)
@@ -183,12 +224,17 @@ export function EditDocumentMetadata() {
           {columns}
         </DataTable>
 
-        <div className="text-end">
+        <div className="mb-3">
           {saveDocumentMetadata.isError && (
-            <Message className="float-start" severity="error" text={saveDocumentMetadata.error.message} />
+            <Message severity="error" text={saveDocumentMetadata.error.message} />
           )}
+          {hasMissingRequired && (
+            <Message severity="warn" text={missingRequiredMessage} />
+          )}
+        </div>
 
-          <Button label="Save" type="submit" icon="pi pi-check" onClick={onSave} raised disabled={saveDocumentMetadata.isPending} />
+        <div className="text-end">
+          <Button label="Save" type="submit" icon="pi pi-check" onClick={onSave} raised disabled={saveDocumentMetadata.isPending || hasMissingRequired} />
           <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" raised onClick={() => navigate('/documents')} />
         </div>
       </Card>
