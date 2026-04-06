@@ -12,8 +12,9 @@ use crate::domain::document_indexes::DocumentIndexValue;
 use crate::domain::documents::{Document, DocumentView};
 use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_to_s3};
 use crate::schema::{
-    cabinet_documents, document_files, document_index_documents, document_index_values,
-    document_metadatas, document_types_metadata_types, documents, metadata_types, tag_documents,
+    cabinet_documents, document_file_ocr_pages, document_file_pages, document_files,
+    document_index_documents, document_index_values, document_metadatas,
+    document_types_metadata_types, documents, metadata_types, tag_documents,
 };
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
@@ -232,6 +233,28 @@ pub async fn delete(
                 // Delete the document metadata associations
                 diesel::delete(
                     document_metadatas::table.filter(document_metadatas::document_id.eq(id)),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
+                    document_file_ocr_pages::table.filter(exists(
+                        document_files::table
+                            .filter(document_files::document_id.eq(id))
+                            .filter(
+                                document_files::id.eq(document_file_ocr_pages::document_file_id),
+                            ),
+                    )),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
+                    document_file_pages::table.filter(exists(
+                        document_files::table
+                            .filter(document_files::document_id.eq(id))
+                            .filter(document_files::id.eq(document_file_pages::document_file_id)),
+                    )),
                 )
                 .execute(conn)
                 .await?;
