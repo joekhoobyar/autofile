@@ -145,6 +145,22 @@ export function DocumentActions({
     });
   };
 
+  const confirmReprocessSelectedDocuments = () => {
+    if (!hasSelection) return;
+    const count = documentIds.length;
+    const message = count === 1
+      ? 'Are you sure you want to reprocess pages for this document?'
+      : 'Are you sure you want to reprocess pages for these documents?';
+
+    confirmDialog({
+      message,
+      header: 'Reprocess Pages',
+      icon: 'pi pi-refresh',
+      defaultFocus: 'reject',
+      accept: () => void reprocessSelectedDocuments(),
+    });
+  };
+
   const actionMenuItems: MenuItem[] = [];
   if (includeNewDocument) {
     actionMenuItems.push(
@@ -159,7 +175,7 @@ export function DocumentActions({
     { icon: 'pi pi-plus-circle', label: 'Add Tag', command: () => { openAddTagDialog(); }, disabled: !hasSelection },
     { icon: 'pi pi-minus-circle', label: 'Remove Tag', command: () => { openRemoveTagDialog(); }, disabled: !hasSelection },
     { separator: true },
-    { icon: 'pi pi-refresh', label: 'Reprocess Pages', command: () => { void reprocessSelectedDocuments(); }, disabled: !hasSelection || processDocumentFilePages.isPending },
+    { icon: 'pi pi-refresh', label: 'Reprocess Pages', command: () => { confirmReprocessSelectedDocuments(); }, disabled: !hasSelection || processDocumentFilePages.isPending },
     { separator: true },
     { icon: 'pi pi-trash', label: 'Delete Document', command: () => { confirmDeleteSelectedDocuments(); }, disabled: !hasSelection },
   );
