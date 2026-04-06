@@ -31,6 +31,16 @@ export const NAV: NavItem[] = [
 
 type LabelState = { label?: string; loading?: boolean };
 
+const DOCUMENT_VIEW_ROUTE_LABELS: Record<string, string> = {
+  properties: 'Properties',
+  preview: 'Preview',
+  metadata: 'Metadata',
+  indexes: 'Indexes',
+  files: 'Files',
+  'text-content': 'Document Text',
+  'ocr-content': 'Document OCR',
+};
+
 export function useRouteResourceLabel(): LabelState {
   const { id, documentIndexId } = useParams<{ id: string; documentIndexId: string }>();
   const { pathname } = useLocation();
@@ -53,7 +63,7 @@ export function useRouteResourceLabel(): LabelState {
   });
   const docTypeQ = useDocumentType(id!, { enabled: !!id && inDocTypes });
   const metaTypeQ = useMetadataType(id!, { enabled: !!id && inMetaTypes });
-  const tagQ = useTag(id!, { enabled: !!id && inMetaTypes });
+  const tagQ = useTag(id!, { enabled: !!id && inTags });
 
   if (!id) return {};
 
@@ -72,12 +82,23 @@ export function useRouteResourceLabel(): LabelState {
 export function useBreadcrumbs(): { home: MenuItem; model: MenuItem[] } {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { id, documentIndexId } = useParams<{ id: string; documentIndexId: string }>();
+  const { id, documentIndexId, tagId, cabinetId } = useParams<{ id: string; documentIndexId: string; tagId: string; cabinetId: string }>();
   const documentIndexIdNum = documentIndexId ? Number(documentIndexId) : NaN;
   const resource = useRouteResourceLabel();
   const inIndexTemplates = pathname.includes("/indexes/") && pathname.includes("/templates");
+  const documentDetailMatch = pathname.match(/^\/documents\/([^/]+)\/([^/]+)$/);
+  const documentDetailId = documentDetailMatch?.[1];
+  const documentDetailSection = documentDetailMatch?.[2];
+  const cabinetDocumentsMatch = pathname.match(/^\/cabinets\/([^/]+)\/documents$/);
+  const tagDocumentsMatch = pathname.match(/^\/tags\/([^/]+)\/documents$/);
   const indexQ = useDocumentIndex(documentIndexIdNum, {
     enabled: !!documentIndexId && !Number.isNaN(documentIndexIdNum) && inIndexTemplates,
+  });
+  const cabinetQ = useCabinet(cabinetId ?? '', {
+    enabled: !!cabinetId && !!cabinetDocumentsMatch,
+  });
+  const tagQ = useTag(tagId ?? '', {
+    enabled: !!tagId && !!tagDocumentsMatch,
   });
 
   const home: MenuItem = useMemo(
@@ -111,6 +132,27 @@ export function useBreadcrumbs(): { home: MenuItem; model: MenuItem[] } {
       return items;
     }
 
+    if (cabinetDocumentsMatch && cabinetId) {
+      const cabinetLabel = cabinetQ.isLoading ? 'Loading…' : (cabinetQ.data?.name ?? cabinetId);
+      items.push({ label: cabinetLabel, command: () => navigate(`/cabinets/${cabinetId}/edit`) });
+      items.push({ label: 'Documents' });
+      return items;
+    }
+
+    if (tagDocumentsMatch && tagId) {
+      const tagLabel = tagQ.isLoading ? 'Loading…' : (tagQ.data?.name ?? tagId);
+      items.push({ label: tagLabel, command: () => navigate(`/tags/${tagId}/edit`) });
+      items.push({ label: 'Documents' });
+      return items;
+    }
+
+    if (documentDetailId && documentDetailSection && documentDetailSection in DOCUMENT_VIEW_ROUTE_LABELS) {
+      const label = resource.loading ? 'Loading…' : (resource.label ?? documentDetailId);
+      items.push({ label, command: () => navigate(`/documents/${documentDetailId}/preview`) });
+      items.push({ label: DOCUMENT_VIEW_ROUTE_LABELS[documentDetailSection] });
+      return items;
+    }
+
     return items;
   }, [
     pathname,
@@ -123,6 +165,16 @@ export function useBreadcrumbs(): { home: MenuItem; model: MenuItem[] } {
     documentIndexIdNum,
     indexQ.isLoading,
     indexQ.data?.name,
+    cabinetId,
+    cabinetDocumentsMatch,
+    cabinetQ.isLoading,
+    cabinetQ.data?.name,
+    tagId,
+    tagDocumentsMatch,
+    tagQ.isLoading,
+    tagQ.data?.name,
+    documentDetailId,
+    documentDetailSection,
   ]);
 
   return { home, model };
