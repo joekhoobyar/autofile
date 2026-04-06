@@ -75,6 +75,7 @@ export function DocumentViewLayout({ documentId, children }: Readonly<DocumentVi
       <aside className="aut-document-view-side">
         <DocumentActions
           documentIds={[documentId]}
+          onAfterDelete={() => navigate('/documents')}
           containerClassName="aut-document-view-actions"
         />
         <div className="aut-document-view-menu-mobile">

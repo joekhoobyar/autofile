@@ -111,9 +111,29 @@ export function useDeleteDocument(): UseMutationResult<void, HttpError, number> 
       });
     },
 
-    onSuccess: () => {
-      // invalidate by prefix (works with table params in the queryKey)
-      qc.invalidateQueries({ queryKey: ["document"] });
+    onSuccess: (_data, deletedId) => {
+      qc.removeQueries({ queryKey: ['document', 'get', { id: deletedId }], exact: true });
+      qc.removeQueries({ queryKey: ['document', 'get', { id: deletedId }, 'thumbnail'], exact: true });
+      qc.setQueriesData<ResourceList<Document>>(
+        { queryKey: ['document', 'list'] },
+        (existing) => {
+          if (!existing) {
+            return existing;
+          }
+
+          const items = existing.items.filter((item) => item.id !== deletedId);
+          if (items.length === existing.items.length) {
+            return existing;
+          }
+
+          return {
+            ...existing,
+            total: Math.max(0, existing.total - 1),
+            items,
+          };
+        }
+      );
+      qc.invalidateQueries({ queryKey: ['document', 'list'] });
     },
   });
 }

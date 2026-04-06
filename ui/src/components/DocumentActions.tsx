@@ -15,6 +15,7 @@ import { MAX_CABINETS } from '../models/cabinet';
 type DocumentActionsProps = {
   documentIds: number[];
   onAfterAction?: () => void;
+  onAfterDelete?: () => void;
   includeNewDocument?: boolean;
   buttonClassName?: string;
   buttonStyle?: CSSProperties;
@@ -24,6 +25,7 @@ type DocumentActionsProps = {
 export function DocumentActions({
   documentIds,
   onAfterAction,
+  onAfterDelete,
   includeNewDocument = false,
   buttonClassName,
   buttonStyle,
@@ -123,6 +125,7 @@ export function DocumentActions({
     if (!hasSelection) return;
     await Promise.all(documentIds.map((id) => deleteDocument.mutateAsync(id)));
     onAfterAction?.();
+    onAfterDelete?.();
   };
 
   const reprocessSelectedDocuments = async () => {
