@@ -559,6 +559,28 @@ export function EditDocumentProperties() {
   const saveDocument = useSaveDocument();
   const { isLoading, isError, data: doc, error } = useDocument(id);
   const { data: documentTypes, isPending: isDocumentTypesPending, isFetching: isDocumentTypesFetching } = useDocumentTypes({ page: 1, per_page: 200 });
+  const { data: cabinetOptions } = useCabinets({ page: 1, per_page: MAX_CABINETS });
+  const { data: tagOptions } = useTags({ page: 1, per_page: 200 });
+  const cabinetLookup = useMemo(() => {
+    const lookup: Record<number, Cabinet> = {};
+    for (const cabinet of cabinetOptions?.items ?? []) {
+      lookup[cabinet.id] = cabinet;
+    }
+    return lookup;
+  }, [cabinetOptions?.items]);
+  const tagLookup = useMemo(() => {
+    const lookup: Record<number, TagModel> = {};
+    for (const tag of tagOptions?.items ?? []) {
+      lookup[tag.id] = tag;
+    }
+    return lookup;
+  }, [tagOptions?.items]);
+  const cabinetItems = (doc?.cabinet_ids ?? [])
+    .map((cabinetId) => cabinetLookup[cabinetId])
+    .filter((cabinet): cabinet is Cabinet => !!cabinet);
+  const tagItems = (doc?.tag_ids ?? [])
+    .map((tagId) => tagLookup[tagId])
+    .filter((tag): tag is TagModel => !!tag);
   const {
     control,
     handleSubmit,
@@ -632,6 +654,40 @@ export function EditDocumentProperties() {
                 )}
               />
               {errors.document_type_id?.message && <small className="p-error">{String(errors.document_type_id.message)}</small>}
+            </div>
+
+            <div className="col-12">
+              <label className="font-medium mb-2 block">Tags</label>
+              {tagItems.length > 0 ? (
+                <ul className="aut-document-tags">
+                  {tagItems.map((tag) => (
+                    <li key={tag.id}>
+                      <Link to={`/tags/${tag.id}/documents`}>
+                        <Badge value={tag.name} className="aut-document-tag" style={{ backgroundColor: `#${tag.color}` }} />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <span>No tags</span>
+              )}
+            </div>
+
+            <div className="col-12">
+              <label className="font-medium mb-2 block">Cabinets</label>
+              {cabinetItems.length > 0 ? (
+                <ul className="aut-document-cabinets">
+                  {cabinetItems.map((cabinet) => (
+                    <li key={cabinet.id}>
+                      <Link to={`/cabinets/${cabinet.id}/documents`}>
+                        <Badge value={`🗄️ ${cabinet.displayName ?? cabinet.name ?? cabinet.slug}`} severity="secondary" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <span>No cabinets</span>
+              )}
             </div>
           </div>
 

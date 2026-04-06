@@ -198,6 +198,35 @@ body {
 a { color: inherit; }
 a:visited { color: inherit; }
 
+ul.aut-document-tags {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding-inline-start: 0;
+  font-size: 14px;
+
+  li {
+    display: inline-block;
+    margin-right: 0.3rem;
+    span.aut-document-tag {
+      font-size: 14px;
+    }
+    a:hover { text-decoration: none; }
+  }
+}
+
+ul.aut-document-cabinets {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding-inline-start: 0;
+  font-size: 14px;
+
+  li {
+    display: inline-block;
+    margin-right: 0.3rem;
+    a:hover { text-decoration: none; }
+  }
+}
+
 /*
  *
  * Document list / grid view
@@ -338,28 +367,17 @@ section.aut-document {
     }
 
     ul.aut-document-tags {
-      list-style: none;
-      margin: 0 0 0.5rem;
-      padding-inline-start: 0;
-      font-size: 14px;
-
       li {
+        display: block;
         text-align: center;
         overflow-wrap: break-word;
-        span.aut-document-tag {
-          font-size: 14px;
-        }
         a:hover { text-decoration: none; }
       }
     }
 
     ul.aut-document-cabinets {
-      list-style: none;
-      margin: 0 0 0.5rem;
-      padding-inline-start: 0;
-      font-size: 14px;
-
       li {
+        display: block;
         text-align: center;
         overflow-wrap: break-word;
         a:hover { text-decoration: none; }
