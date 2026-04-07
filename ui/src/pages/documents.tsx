@@ -513,6 +513,7 @@ export function ListDocuments() {
       <DataView className="aut-documents-data-view" value={data?.items ?? []}
           loading={isPending || isFetching}
           lazy
+          emptyMessage="No documents match."
           onPage={onPage}
           paginator={true}
           first={Math.max(((data?.page ?? listParams.page ?? 1) - 1) * (data?.per_page ?? listParams.per_page ?? 0), 0)}
