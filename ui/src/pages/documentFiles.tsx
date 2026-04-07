@@ -7,6 +7,7 @@ import { DataView, DataViewLayoutOptions } from 'primereact/dataview';
 import { Divider } from 'primereact/divider';
 import { Dropdown } from 'primereact/dropdown';
 import { Message } from 'primereact/message';
+import { Skeleton } from 'primereact/skeleton';
 import { classNames } from 'primereact/utils';
 import { format } from 'date-fns';
 
@@ -468,21 +469,58 @@ function PageImageItem({ documentId, documentFileId, pageNumber }: Readonly<Page
     documentFileId,
     pageNumber
   );
+  const [loadedImageUrl, setLoadedImageUrl] = useState<string | undefined>(undefined);
+  const isImageReady = !!imageUrl && loadedImageUrl === imageUrl;
 
   return (
     <div>
       <Divider align="center">Page {pageNumber}</Divider>
       {isError && <Message severity="error" text={error.message} />}
-      {isLoading && <div>Loading page {pageNumber}</div>}
       {!isLoading && !isError && !imageUrl && (
         <Message severity="info" text="Page image not available yet." />
       )}
-      {!isLoading && !isError && imageUrl && (
-        <img
-          src={imageUrl}
-          alt={`Page ${pageNumber}`}
-          style={{ width: '100%', height: 'auto', display: 'block' }}
-        />
+      {!isError && (isLoading || imageUrl) && (
+        <div
+          style={{
+            position: 'relative',
+            width: '100%',
+            minHeight: '20rem',
+            overflow: 'hidden',
+          }}
+        >
+          {!isImageReady && (
+            <div className="p-4">
+                <div className="flex mb-3">
+                    <Skeleton shape="circle" size="4rem" className="mr-2"></Skeleton>
+                    <div>
+                        <Skeleton width="10rem" className="mb-2"></Skeleton>
+                        <Skeleton width="5rem" className="mb-2"></Skeleton>
+                        <Skeleton height=".5rem"></Skeleton>
+                    </div>
+                </div>
+                <Skeleton width="100%" height="30rem"></Skeleton>
+                <div className="flex justify-content-between mt-3 mb-3">
+                    <Skeleton width="4rem" height="2rem"></Skeleton>
+                    <Skeleton width="4rem" height="2rem"></Skeleton>
+                </div>
+                <Skeleton width="100%" height="30rem"></Skeleton>
+            </div>
+          )}
+          {imageUrl && (
+            <img
+              src={imageUrl}
+              alt={`Page ${pageNumber}`}
+              onLoad={() => setLoadedImageUrl(imageUrl)}
+              style={{
+                width: '100%',
+                height: 'auto',
+                display: 'block',
+                opacity: isImageReady ? 1 : 0,
+                transition: 'opacity 180ms ease',
+              }}
+            />
+          )}
+        </div>
       )}
     </div>
   );
