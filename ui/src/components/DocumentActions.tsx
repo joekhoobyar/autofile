@@ -40,8 +40,8 @@ export function DocumentActions({
   const removeCabinetDocument = useRemoveCabinetDocument();
   const saveTagDocument = useSaveTagDocument();
   const removeTagDocument = useRemoveTagDocument();
-  const { data: cabinetOptions, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinets({ page: 1, per_page: MAX_CABINETS });
-  const { data: tagOptions, isPending: isTagsPending, isFetching: isTagsFetching } = useTags({ page: 1, per_page: 200 });
+  const { data: cabinetOptions, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinets({ page: 1, per_page: MAX_CABINETS, sf: 'name' });
+  const { data: tagOptions, isPending: isTagsPending, isFetching: isTagsFetching } = useTags({ page: 1, per_page: 200, sf: 'name' });
   const [addToCabinetVisible, setAddToCabinetVisible] = useState(false);
   const [selectedCabinetId, setSelectedCabinetId] = useState<number | null>(null);
   const [removeFromCabinetVisible, setRemoveFromCabinetVisible] = useState(false);
