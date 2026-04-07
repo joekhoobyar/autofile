@@ -298,6 +298,7 @@ export function ListDocuments() {
   const navigate = useNavigate();
   const params = useParams();
   const initialListParams: DocumentListParams = {
+    per_page: 12,
     page: 1,
     sf: 'created_at',
     sd: true,
@@ -364,12 +365,12 @@ export function ListDocuments() {
   const sortValue = listParams.sf ? `${listParams.sf}:${sortDir}` : undefined;
 
   const onPage = (event: DataViewPageEvent) => {
-    setListParams({ ...listParams, page: event.page, per_page: event.rows });
+    setListParams({ ...listParams, page: event.page + 1, per_page: event.rows });
   };
 
   const onSortChange = (value: string | undefined) => {
     if (!value) {
-      setListParams({ ...listParams, sf: undefined, sd: undefined, page: 0 });
+      setListParams({ ...listParams, sf: undefined, sd: undefined, page: 1 });
       return;
     }
 
@@ -378,7 +379,7 @@ export function ListDocuments() {
       ...listParams,
       sf: field,
       sd: direction === 'desc',
-      page: 0,
+      page: 1,
     });
   };
 
@@ -509,10 +510,15 @@ export function ListDocuments() {
     <Card title="Documents">
       <DataView value={data?.items ?? []}
           loading={isPending || isFetching}
-          onPage={onPage} paginator={true} first={0} rows={data?.per_page} totalRecords={data?.total}
+          lazy
+          onPage={onPage}
+          paginator={true}
+          first={Math.max(((data?.page ?? listParams.page ?? 1) - 1) * (data?.per_page ?? listParams.per_page ?? 0), 0)}
+          rows={data?.per_page ?? listParams.per_page}
+          totalRecords={data?.total}
           paginatorTemplate={paginatorTemplate}
           paginatorPosition="both"
-          rowsPerPageOptions={[10, 20, 50, 100]}
+          rowsPerPageOptions={[6, 12, 24, 48, 96]}
           listTemplate={listTemplate} layout={layout} header={header()}
         />
     </Card>

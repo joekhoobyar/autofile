@@ -30,11 +30,11 @@ export function ListDocumentIndexValues() {
   const { data: indexAncestors } = useDocumentIndexValueAncestors(documentIndexId, documentIndexValueId ?? 0);
 
   const onSort = (event: DataTableStateEvent) => {
-    setListParams((prev) => ({ ...prev, sf: event.sortField, sd: event.sortOrder === -1 }));
+    setListParams((prev) => ({ ...prev, sf: event.sortField, sd: event.sortOrder === -1, page: 1 }));
   };
 
   const onPage = (event: DataTableStateEvent) => {
-    setListParams((prev) => ({ ...prev, page: event.page, per_page: event.rows }));
+    setListParams((prev) => ({ ...prev, page: (event.page ?? 0) + 1, per_page: event.rows }));
   };
 
   const valueTemplate = (row: DocumentIndexValue) => {
@@ -83,7 +83,11 @@ export function ListDocumentIndexValues() {
       <Menu model={parentMenuItems} style={{ minWidth: '14rem' }} />
       <Card title="Document Index Values" className="flex-1">
         <DataTable lazy value={data?.items}
-            onPage={onPage} paginator={true} first={0} rows={data?.per_page} totalRecords={data?.total}
+            onPage={onPage}
+            paginator={true}
+            first={Math.max(((data?.page ?? listParams.page ?? 1) - 1) * (data?.per_page ?? listParams.per_page ?? 0), 0)}
+            rows={data?.per_page ?? listParams.per_page}
+            totalRecords={data?.total}
             loading={isPending || isFetching}
             onSort={onSort} sortField={listParams.sf} sortOrder={listParams.sd === true ? -1 : 1}
           >
