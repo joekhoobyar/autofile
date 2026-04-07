@@ -145,7 +145,7 @@ function CabinetForm({ data }: Readonly<{ data?: Partial<Cabinet> }>) {
     data: parents, 
     isLoading: isParentsLoading, 
     isError: isParentsError, 
-  } = useCabinets({page:1, per_page: MAX_CABINETS});
+  } = useCabinets({page:1, per_page: MAX_CABINETS, sf: 'name'});
   let parent_id_options: Cabinet[] = [];
   if (! isParentsLoading && ! isParentsError && parents?.items?.length) {
     parent_id_options = parents.items.filter(c => c.id !== data?.id);

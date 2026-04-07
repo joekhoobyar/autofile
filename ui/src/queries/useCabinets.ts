@@ -46,7 +46,16 @@ export function useCabinetTree(): UseQueryResult<TreeNode[], HttpError> {
   return useQuery({
     queryKey: ['cabinet', 'tree'],
     queryFn: async () => {
-      const response = await apiFetchList<Cabinet>('api/v1/cabinets', {page:1, per_page: MAX_CABINETS});
+      const response = await apiFetchList<Cabinet>('api/v1/cabinets', {page:1, per_page: MAX_CABINETS, sf: 'name'});
+      const sortNodesByName = (nodes: TreeNode[]): TreeNode[] => {
+        nodes.sort((left, right) => left.data.name.localeCompare(right.data.name));
+        nodes.forEach((node) => {
+          if (node.children?.length) {
+            sortNodesByName(node.children);
+          }
+        });
+        return nodes;
+      };
 
       // Convert Cabinet to CabinetNode
       const nodeMap = new Map<number, TreeNode>();
@@ -80,7 +89,7 @@ export function useCabinetTree(): UseQueryResult<TreeNode[], HttpError> {
         }
       });
 
-      return rootNodes;
+      return sortNodesByName(rootNodes);
     },
   });
 }
