@@ -24,7 +24,7 @@ import { type DocumentTypeNewMetadataType } from '../models/documentTypeMetadata
 export function ListDocumentTypes() {
   const toast = useRef(null);
   const deleteDocumentType = useDeleteDocumentType();
-  const [listParams, setListParams] = useState<ListParams>({});
+  const [listParams, setListParams] = useState<ListParams>({sf: 'name'});
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useDocumentTypes(listParams);
 

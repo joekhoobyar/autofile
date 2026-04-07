@@ -21,7 +21,7 @@ import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 export function ListDocumentIndexes() {
   const toast = useRef(null);
   const deleteDocumentIndex = useDeleteDocumentIndex();
-  const [listParams, setListParams] = useState<ListParams>({});
+  const [listParams, setListParams] = useState<ListParams>({sf: 'name'});
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useDocumentIndexes(listParams);
 

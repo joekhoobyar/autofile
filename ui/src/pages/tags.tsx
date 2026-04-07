@@ -22,7 +22,9 @@ import { ColorPicker } from 'primereact/colorpicker';
 export function ListTags() {
   const toast = useRef(null);
   const deleteTag = useDeleteTag();
-  const [listParams, setListParams] = useState<ListParams>({});
+  const [listParams, setListParams] = useState<ListParams>({
+    sf: 'name'
+  });
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useTags(listParams);
 

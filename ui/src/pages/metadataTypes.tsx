@@ -22,7 +22,7 @@ import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 export function ListMetadataTypes() {
   const toast = useRef(null);
   const deleteMetadataType = useDeleteMetadataType();
-  const [listParams, setListParams] = useState<ListParams>({});
+  const [listParams, setListParams] = useState<ListParams>({sf: 'name'});
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useMetadataTypes(listParams);
 
