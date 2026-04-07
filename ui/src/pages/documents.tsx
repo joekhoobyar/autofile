@@ -558,7 +558,7 @@ export function EditDocumentProperties() {
   const id = useId('id');
   const saveDocument = useSaveDocument();
   const { isLoading, isError, data: doc, error } = useDocument(id);
-  const { data: documentTypes, isPending: isDocumentTypesPending, isFetching: isDocumentTypesFetching } = useDocumentTypes({ page: 1, per_page: 200 });
+  const { data: documentTypes, isPending: isDocumentTypesPending, isFetching: isDocumentTypesFetching } = useDocumentTypes({ page: 1, per_page: 200, sf: 'name' });
   const { data: cabinetOptions } = useCabinets({ page: 1, per_page: MAX_CABINETS });
   const { data: tagOptions } = useTags({ page: 1, per_page: 200 });
   const cabinetLookup = useMemo(() => {
@@ -711,7 +711,7 @@ export default function UploadDocument() {
     const fileUploadRef = useRef<FileUpload>(null);
     const [title, setTitle] = useState('');
     const [documentTypeId, setDocumentTypeId] = useState<number | null>(null);
-    const { data: documentTypes, isPending: isDocumentTypesPending, isFetching: isDocumentTypesFetching } = useDocumentTypes({ page: 1, per_page: 200 });
+    const { data: documentTypes, isPending: isDocumentTypesPending, isFetching: isDocumentTypesFetching } = useDocumentTypes({ page: 1, per_page: 200, sf: 'name' });
     const defaultDocumentTypeId = documentTypes?.items?.find((item) => item.name === 'Unspecified' || item.slug === 'unspecified')?.id ?? null;
     const effectiveDocumentTypeId = documentTypeId ?? defaultDocumentTypeId;
     
