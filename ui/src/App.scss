@@ -181,6 +181,31 @@ body {
   border-width: 0;
 }
 
+.aut-documents-data-view .p-paginator {
+  display: flex;
+  align-items: center;
+}
+
+.aut-documents-data-view .p-paginator .p-paginator-rpp-options {
+  margin-right: auto;
+}
+
+.aut-documents-data-view .p-paginator .p-paginator-current {
+  margin-left: auto;
+}
+
+.aut-documents-paginator-report {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.aut-documents-paginator-count {
+  display: inline-block;
+  min-width: 20ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 // Prevent jumping vertically when entering edit mode in the datatable.
 .p-editable-column {
   padding: 0 1rem;

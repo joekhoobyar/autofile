@@ -452,7 +452,7 @@ export function ListDocuments() {
   const paginatorTemplate = {
     layout: 'RowsPerPageDropdown PrevPageLink PageLinks NextPageLink CurrentPageReport',
     CurrentPageReport: (options: { first: number; last: number; totalRecords: number }) => (
-      <div className="flex align-items-center gap-3">
+      <div className="flex align-items-center gap-3 aut-documents-paginator-report">
         <Dropdown
           value={sortValue}
           options={sortOptions}
@@ -472,7 +472,9 @@ export function ListDocuments() {
             }}
           />
         ))}
-        <span>{options.first} - {options.last} of {options.totalRecords}</span>
+        <span className="aut-documents-paginator-count">
+          {options.first} - {options.last} of {options.totalRecords}
+        </span>
       </div>
     ),
   };
@@ -508,7 +510,7 @@ export function ListDocuments() {
       />
 
     <Card title="Documents">
-      <DataView value={data?.items ?? []}
+      <DataView className="aut-documents-data-view" value={data?.items ?? []}
           loading={isPending || isFetching}
           lazy
           onPage={onPage}
