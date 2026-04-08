@@ -47,6 +47,10 @@ impl ApiError {
         Self::new(StatusCode::NOT_FOUND, message)
     }
 
+    pub fn conflict(message: &str) -> Self {
+        Self::new(StatusCode::CONFLICT, message)
+    }
+
     pub fn unauthorized(message: &str) -> Self {
         Self::new(StatusCode::UNAUTHORIZED, message)
     }

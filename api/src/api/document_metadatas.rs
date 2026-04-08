@@ -1,9 +1,10 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::AppState;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::domain::document_metadatas::DocumentMetadata;
-use crate::schema::document_metadatas;
+use crate::schema::{document_metadatas, document_types_metadata_types, documents};
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, diesel_to_http};
@@ -57,6 +58,38 @@ async fn upsert(
     Path(document_id): Path<i64>,
     Json(input): Json<Vec<NewDocumentMetadata>>,
 ) -> Result<Json<Vec<DocumentMetadata>>, ApiError> {
+    let required_metadata_type_ids: HashSet<i64> =
+        documents::table
+            .filter(documents::id.eq(document_id))
+            .inner_join(document_types_metadata_types::table.on(
+                document_types_metadata_types::document_type_id.eq(documents::document_type_id),
+            ))
+            .filter(document_types_metadata_types::required.eq(true))
+            .select(document_types_metadata_types::metadata_type_id)
+            .load::<i64>(&mut db)
+            .await
+            .map_err(|e| {
+                ApiError::new(
+                    diesel_to_http(e),
+                    "Failed to validate required document metadata",
+                )
+            })?
+            .into_iter()
+            .collect();
+
+    if let Some(metadata_type_id) = input
+        .iter()
+        .find(|m| {
+            required_metadata_type_ids.contains(&m.metadata_type_id) && m.value.trim().is_empty()
+        })
+        .map(|m| m.metadata_type_id)
+    {
+        return Err(ApiError::conflict(&format!(
+            "Metadata field {} is required for this document type and cannot be empty",
+            metadata_type_id
+        )));
+    }
+
     // Prepare the rows to upsert, setting created_by and updated_by to the current user.
     // It is worth allocating memory so that we can bulk upsert with Diesel, rather than doing individual queries in a loop.
     let rows: Vec<InsertableDocumentMetadata> = input
@@ -128,6 +161,33 @@ async fn delete_junction(
     DbConn(mut db): DbConn,
     Path((document_id, metadata_type_id)): Path<(i64, i64)>,
 ) -> Result<Json<()>, ApiError> {
+    match documents::table
+        .filter(documents::id.eq(document_id))
+        .inner_join(
+            document_types_metadata_types::table.on(
+                document_types_metadata_types::document_type_id.eq(documents::document_type_id),
+            ),
+        )
+        .filter(document_types_metadata_types::metadata_type_id.eq(metadata_type_id))
+        .filter(document_types_metadata_types::required.eq(true))
+        .select(documents::id)
+        .first::<i64>(&mut db)
+        .await
+    {
+        Ok(_) => {
+            return Err(ApiError::conflict(
+                "Metadata field is required for this document type and cannot be deleted",
+            ));
+        }
+        Err(diesel::result::Error::NotFound) => {}
+        Err(e) => {
+            return Err(ApiError::new(
+                diesel_to_http(e),
+                "Failed to validate document_metadata deletion",
+            ));
+        }
+    }
+
     let affected = diesel::delete(
         document_metadatas::table
             .filter(document_metadatas::document_id.eq(document_id))
