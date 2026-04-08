@@ -51,6 +51,10 @@ impl ApiError {
         Self::new(StatusCode::CONFLICT, message)
     }
 
+    pub fn unprocessable_entity(message: &str) -> Self {
+        Self::new(StatusCode::UNPROCESSABLE_ENTITY, message)
+    }
+
     pub fn unauthorized(message: &str) -> Self {
         Self::new(StatusCode::UNAUTHORIZED, message)
     }
