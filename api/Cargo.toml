@@ -32,7 +32,7 @@ aws-config = "1.1"
 aws-sdk-s3 = "1.15"
 uuid = { version = "1.7", features = ["v4"] }
 
-apalis = { version = "0.7", features = ["limit"] }
+apalis = { version = "0.7", features = ["limit", "retry"] }
 apalis-redis = "0.7"
 redis = { version = "0.32", features = ["tokio-comp"] }
 

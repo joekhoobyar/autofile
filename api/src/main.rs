@@ -17,7 +17,11 @@ use diesel_async::{
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use redis::AsyncCommands;
 use tokio::time::{Duration, timeout};
+use tokio::signal;
+use tokio::sync::watch;
 
+use apalis::layers::retry::RetryPolicy;
+use apalis::layers::WorkerBuilderExt;
 use apalis::prelude::*;
 use apalis_redis::RedisStorage;
 
@@ -153,6 +157,8 @@ async fn main() {
         .register({
             // One or more workers pulling from Redis
             WorkerBuilder::new("fast-job-worker")
+                .retry(RetryPolicy::retries(7))
+                .enable_tracing()
                 .concurrency(4) // Adjust concurrency as needed
                 .data(app_state.clone())
                 .backend(app_state.fast_jobs.as_ref().clone())
@@ -160,13 +166,38 @@ async fn main() {
         })
         .register({
             WorkerBuilder::new("medium-job-worker")
+                .retry(RetryPolicy::retries(7))
+                .enable_tracing()
                 .concurrency(2)
                 .data(app_state.clone())
                 .backend(app_state.medium_jobs.as_ref().clone())
                 .build_fn(handle_medium_job)
-        });
+        })
+        .on_event(|e| tracing::info!("{e}"))
+        // Wait 5 seconds after shutdown is triggered to allow any incomplete jobs to complete
+        // .shutdown_timeout(Duration::from_secs(5))
+        ;
+
+    let (shutdown_tx, shutdown_rx) = watch::channel(false);
+
     tokio::spawn(async move {
-        monitor.run().await.expect("Background worker failed");
+        shutdown_signal().await;
+        let _ = shutdown_tx.send(true);
+    });
+
+    let worker_shutdown_rx = shutdown_rx.clone();
+    let worker_handle = tokio::spawn(async move {
+        let mut shutdown_rx = worker_shutdown_rx;
+
+        monitor
+            .run_with_signal(async move {
+                let _ = shutdown_rx.changed().await;
+                Ok(())
+            })
+            .await
+            .expect("Background worker failed");
+
+        tracing::info!("Workers have been shut down");
     });
 
     // Configure CORS
@@ -232,7 +263,18 @@ async fn main() {
         .await
         .expect("Failed to bind address");
 
-    axum::serve(listener, app).await.expect("Server failed");
+    let mut shutdown_rx = shutdown_rx.clone();
+
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async move {
+            let _ = shutdown_rx.changed().await;
+        })
+        .await
+        .expect("Server failed");
+
+    tracing::info!("Server has been shut down");
+
+    worker_handle.await.expect("Worker task panicked");
 }
 
 async fn check_redis(redis_url: &str) -> anyhow::Result<()> {
@@ -296,4 +338,32 @@ pub fn is_production() -> bool {
             .map(|v| v.eq_ignore_ascii_case("production"))
             .unwrap_or(false)
     })
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            tracing::info!("Ctrl+C received, shutting down");
+        },
+        _ = terminate => {
+            tracing::info!("Terminate signal received, shutting down");
+        },
+    }
 }
