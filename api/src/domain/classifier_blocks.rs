@@ -48,7 +48,7 @@ pub enum ClassifierModifier {
     #[serde(rename = "metadata")]
     Metadata { to: u32, slug: String },
     #[serde(rename = "month_number")]
-    MonthNumber { from: u32, to: u32 },
+    MonthNumber { from: String, to: u32 },
     #[serde(rename = "month_end")]
     MonthEnd { from: String, to: u32 },
     #[serde(rename = "month_start")]
@@ -64,9 +64,9 @@ pub enum ClassifierModifier {
     #[serde(rename = "tax_year")]
     TaxYear { from: String, to: u32 },
     #[serde(rename = "currency")]
-    Currency { from: u32, to: u32 },
+    Currency { from: String, to: u32 },
     #[serde(rename = "sprintf")]
-    Sprintf { from: u32, to: u32, format: String },
+    Sprintf { from: String, to: u32, format: String },
     #[serde(rename = "replace")]
     Replace { from: String, to: u32 },
     #[serde(rename = "alnum_sanitize")]
