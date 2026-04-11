@@ -46,6 +46,7 @@ mod api {
     pub mod users;
 }
 mod application {
+    pub mod classifier_blocks;
     pub mod document_files;
     pub mod document_index_documents;
     pub mod document_thumbnails;
