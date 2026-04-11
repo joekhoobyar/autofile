@@ -9,6 +9,7 @@ import { useMetadataType } from "./queries/useMetadataTypes";
 import { useTag } from "./queries/useTags";
 import { useDocumentIndex } from "./queries/useDocumentIndexes";
 import { useDocumentIndexTemplate } from "./queries/useDocumentIndexTemplates";
+import { useClassifierBlock } from "./queries/useClassifierBlocks";
 
 export type NavItem = {
   key: string;
@@ -21,6 +22,7 @@ export type NavItem = {
 export const NAV: NavItem[] = [
   { key: "documents", label: "Documents", icon: "pi pi-file", to: "/documents", matchPrefix: true },
   { key: "cabinets", label: "Cabinets", icon: "pi pi-inbox", to: "/cabinets", matchPrefix: true },
+  { key: "classifier-blocks", label: "Classifier Blocks", icon: "pi pi-sitemap", to: "/classifier-blocks", matchPrefix: true },
   { key: "indexes", label: "Indexes", icon: "pi pi-list", to: "/indexes", matchPrefix: true },
   { key: "document-types", label: "Document Types", icon: "pi pi-file", to: "/document-types", matchPrefix: true },
   { key: "metadata-types", label: "Metadata Types", icon: "pi pi-database", to: "/metadata-types", matchPrefix: true },
@@ -48,6 +50,7 @@ export function useRouteResourceLabel(): LabelState {
 
   const inDocuments = pathname.startsWith("/documents/");
   const inCabinets = pathname.startsWith("/cabinets/");
+  const inClassifierBlocks = pathname.startsWith("/classifier-blocks/");
   const inIndexTemplates = pathname.includes("/indexes/") && pathname.includes("/templates") 
   const inIndexes = pathname.startsWith("/indexes/") && !inIndexTemplates;
   const inDocTypes = pathname.startsWith("/document-types/");
@@ -57,6 +60,7 @@ export function useRouteResourceLabel(): LabelState {
   // Call *one* query hook based on route; keep others disabled
   const docQ = useDocument(id!, { enabled: !!id && inDocuments });
   const cabinetQ = useCabinet(id!, { enabled: !!id && inCabinets });
+  const classifierBlockQ = useClassifierBlock(id!, { enabled: !!id && inClassifierBlocks });
   const indexQ = useDocumentIndex(id!, { enabled: !!id && inIndexes });
   const indexTemplateQ = useDocumentIndexTemplate(documentIndexIdNum, id!, {
     enabled: !!id && !!documentIndexId && !Number.isNaN(documentIndexIdNum) && inIndexTemplates,
@@ -69,6 +73,7 @@ export function useRouteResourceLabel(): LabelState {
 
   if (inDocuments) return { label: docQ.data?.title, loading: docQ.isLoading };
   if (inCabinets) return { label: cabinetQ.data?.name, loading: cabinetQ.isLoading };
+  if (inClassifierBlocks) return { label: classifierBlockQ.data?.name, loading: classifierBlockQ.isLoading };
   if (inIndexTemplates) return { label: indexTemplateQ.data?.template, loading: indexTemplateQ.isLoading };
   if (inIndexes) return { label: indexQ.data?.name, loading: indexQ.isLoading };
   if (inDocTypes) return { label: docTypeQ.data?.name, loading: docTypeQ.isLoading };

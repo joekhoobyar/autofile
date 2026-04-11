@@ -25,6 +25,7 @@ import { ListDocumentIndexMembership } from './pages/documentIndexMembership.tsx
 import { EditDocumentIndex, ListDocumentIndexes, NewDocumentIndex } from './pages/documentIndexes.tsx';
 import { EditDocumentIndexTemplate, ListDocumentIndexTemplates, NewDocumentIndexTemplate } from './pages/documentIndexTemplates.tsx';
 import { ListDocumentIndexValues } from './pages/documentIndexValues.tsx';
+import { EditClassifierBlock, ListClassifierBlocks, NewClassifierBlock } from './pages/classifierBlocks.tsx';
 
 export function SideNav() {
   const location = useLocation();
@@ -123,6 +124,13 @@ const router = createBrowserRouter([
           { path: 'new', element: <NewCabinet/> },
           { path: ':id/edit', element: <EditCabinet/> },
           { path: ':cabinetId/documents', element: <ListDocuments/> },
+        ]
+      },
+      { path: 'classifier-blocks',
+        children: [
+          { index: true, element: <ListClassifierBlocks/> },
+          { path: 'new', element: <NewClassifierBlock/> },
+          { path: ':id/edit', element: <EditClassifierBlock/> },
         ]
       },
       { path: 'indexes', 
