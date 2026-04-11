@@ -31,8 +31,10 @@ pub struct ClassifierRules {
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct ClassifierPattern {
-    pub text: String,
-    pub metadata: HashMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<HashMap<String, String>>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -66,7 +68,11 @@ pub enum ClassifierModifier {
     #[serde(rename = "currency")]
     Currency { from: String, to: u32 },
     #[serde(rename = "sprintf")]
-    Sprintf { from: String, to: u32, format: String },
+    Sprintf {
+        from: String,
+        to: u32,
+        format: String,
+    },
     #[serde(rename = "replace")]
     Replace { from: String, to: u32 },
     #[serde(rename = "alnum_sanitize")]

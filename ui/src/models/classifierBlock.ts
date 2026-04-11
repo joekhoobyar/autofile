@@ -1,6 +1,6 @@
 export interface ClassifierPattern {
-  text: string;
-  metadata: Record<string, string>;
+  text?: string;
+  metadata?: Record<string, string>;
 }
 
 export type ClassifierModifier =

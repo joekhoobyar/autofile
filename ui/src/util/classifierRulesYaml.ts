@@ -75,7 +75,17 @@ function validatePattern(value: unknown, path: string): string | null {
     return `${path} must be an object`;
   }
 
-  return validateString(value.text, `${path}.text`) ?? validateStringMap(value.metadata, `${path}.metadata`);
+  if (value.text !== undefined && value.text !== null) {
+    const textError = validateString(value.text, `${path}.text`);
+    if (textError) return textError;
+  }
+
+  if (value.metadata !== undefined && value.metadata !== null) {
+    const metadataError = validateStringMap(value.metadata, `${path}.metadata`);
+    if (metadataError) return metadataError;
+  }
+
+  return null;
 }
 
 function validateModifier(value: unknown, path: string): string | null {
