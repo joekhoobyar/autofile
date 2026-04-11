@@ -113,9 +113,9 @@ function validateModifier(value: unknown, path: string): string | null {
     case 'tax_year':
     case 'replace':
     case 'alnum_sanitize':
-      return validateString(value.from, `${path}.from`) ?? validateNumber(value.to, `${path}.to`);
     case 'month_number':
     case 'currency':
+      return validateString(value.from, `${path}.from`) ?? validateNumber(value.to, `${path}.to`);
     case 'add':
     case 'sub':
     case 'mul':
@@ -134,13 +134,15 @@ function validateChildRule(value: unknown, path: string): string | null {
   const patternError = validatePattern(value.pattern, `${path}.pattern`);
   if (patternError) return patternError;
 
-  if (!Array.isArray(value.modifiers)) {
-    return `${path}.modifiers must be an array`;
-  }
+  if (value.modifiers !== undefined && value.modifiers !== null) {
+    if (!Array.isArray(value.modifiers)) {
+      return `${path}.modifiers must be an array`;
+    }
 
-  for (let index = 0; index < value.modifiers.length; index += 1) {
-    const modifierError = validateModifier(value.modifiers[index], `${path}.modifiers[${index}]`);
-    if (modifierError) return modifierError;
+    for (let index = 0; index < value.modifiers.length; index += 1) {
+      const modifierError = validateModifier(value.modifiers[index], `${path}.modifiers[${index}]`);
+      if (modifierError) return modifierError;
+    }
   }
 
   return validateStringMap(value.actions, `${path}.actions`);

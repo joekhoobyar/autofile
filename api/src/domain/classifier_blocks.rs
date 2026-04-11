@@ -40,7 +40,8 @@ pub struct ClassifierPattern {
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct ClassifierChildRule {
     pub pattern: ClassifierPattern,
-    pub modifiers: Vec<ClassifierModifier>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modifiers: Option<Vec<ClassifierModifier>>,
     pub actions: HashMap<String, String>,
 }
 

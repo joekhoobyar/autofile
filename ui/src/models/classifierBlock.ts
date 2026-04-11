@@ -25,7 +25,7 @@ export type ClassifierModifier =
 
 export interface ClassifierChildRule {
   pattern: ClassifierPattern;
-  modifiers: ClassifierModifier[];
+  modifiers?: ClassifierModifier[];
   actions: Record<string, string>;
 }
 
