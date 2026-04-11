@@ -85,8 +85,8 @@ export function ListClassifierBlocks() {
 
   return (
     <>
-      <Link to="new" style={{ float: 'right', padding: '1.5rem' }}>New Classifier Block &raquo;</Link>
-      <Card title="Classifier Blocks">
+      <Link to="new" style={{ float: 'right', padding: '1.5rem' }}>New Classifier &raquo;</Link>
+      <Card title="Classifiers">
         <DataTable lazy value={data?.items}
           onPage={onPage}
           paginator={true}
@@ -124,7 +124,7 @@ export function EditClassifierBlock() {
   }
 
   return (
-    <Card title="Edit Classifier Block">
+    <Card title="Edit Classifier">
       {!isLoading && !isError && <ClassifierBlockForm data={data} />}
     </Card>
   );
@@ -132,7 +132,7 @@ export function EditClassifierBlock() {
 
 export function NewClassifierBlock() {
   return (
-    <Card title="New Classifier Block">
+    <Card title="New Classifier">
       <ClassifierBlockForm />
     </Card>
   );

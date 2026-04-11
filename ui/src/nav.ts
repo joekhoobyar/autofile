@@ -22,7 +22,7 @@ export type NavItem = {
 export const NAV: NavItem[] = [
   { key: "documents", label: "Documents", icon: "pi pi-file", to: "/documents", matchPrefix: true },
   { key: "cabinets", label: "Cabinets", icon: "pi pi-inbox", to: "/cabinets", matchPrefix: true },
-  { key: "classifier-blocks", label: "Classifier Blocks", icon: "pi pi-sitemap", to: "/classifier-blocks", matchPrefix: true },
+  { key: "classifier-blocks", label: "Classifiers", icon: "pi pi-sitemap", to: "/classifier-blocks", matchPrefix: true },
   { key: "indexes", label: "Indexes", icon: "pi pi-list", to: "/indexes", matchPrefix: true },
   { key: "document-types", label: "Document Types", icon: "pi pi-file", to: "/document-types", matchPrefix: true },
   { key: "metadata-types", label: "Metadata Types", icon: "pi pi-database", to: "/metadata-types", matchPrefix: true },
