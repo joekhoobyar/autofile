@@ -30,6 +30,7 @@ mod api {
     pub mod auth;
     pub mod cabinet_documents;
     pub mod cabinets;
+    pub mod classifier_blocks;
     pub mod document_file_pages;
     pub mod document_files;
     pub mod document_index_templates;
@@ -226,6 +227,7 @@ async fn main() {
         .nest("/auth", api::auth::routes())
         .nest("/cabinets", api::cabinets::routes())
         .nest("/cabinets", api::cabinet_documents::routes())
+        .nest("/classifier-blocks", api::classifier_blocks::routes())
         .nest("/document-indexes", api::document_indexes::routes())
         .nest("/document-indexes", api::document_index_templates::routes())
         .nest("/document-indexes", api::document_index_values::routes())
