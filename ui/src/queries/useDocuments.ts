@@ -148,6 +148,16 @@ export function useProcessDocumentFilePages(): UseMutationResult<void, HttpError
   });
 }
 
+export function useClassifyDocument(): UseMutationResult<void, HttpError, number> {
+  return useMutation<void, HttpError, number>({
+    mutationFn: async (input) => {
+      return apiMutate<void, void>(`api/v1/documents/${input}/classify-document`, {
+        method: "POST",
+      });
+    },
+  });
+}
+
 export function useSaveCabinetDocument(): UseMutationResult<CabinetDocument[], HttpError, CabinetDocumentInput> {
   const qc = useQueryClient();
 

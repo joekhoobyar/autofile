@@ -9,7 +9,7 @@ import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 
 import { useCabinets } from '../queries/useCabinets';
 import { useTags } from '../queries/useTags';
-import { useDeleteDocument, useProcessDocumentFilePages, useRemoveCabinetDocument, useRemoveTagDocument, useSaveCabinetDocument, useSaveTagDocument } from '../queries/useDocuments';
+import { useClassifyDocument, useDeleteDocument, useProcessDocumentFilePages, useRemoveCabinetDocument, useRemoveTagDocument, useSaveCabinetDocument, useSaveTagDocument } from '../queries/useDocuments';
 import { MAX_CABINETS } from '../models/cabinet';
 
 type DocumentActionsProps = {
@@ -36,6 +36,7 @@ export function DocumentActions({
   const hasSelection = documentIds.length > 0;
   const deleteDocument = useDeleteDocument();
   const processDocumentFilePages = useProcessDocumentFilePages();
+  const classifyDocument = useClassifyDocument();
   const saveCabinetDocument = useSaveCabinetDocument();
   const removeCabinetDocument = useRemoveCabinetDocument();
   const saveTagDocument = useSaveTagDocument();
@@ -134,6 +135,12 @@ export function DocumentActions({
     onAfterAction?.();
   };
 
+  const classifySelectedDocuments = async () => {
+    if (!hasSelection) return;
+    await Promise.all(documentIds.map((id) => classifyDocument.mutateAsync(id)));
+    onAfterAction?.();
+  };
+
   const confirmDeleteSelectedDocuments = () => {
     if (!hasSelection) return;
     const count = documentIds.length;
@@ -164,6 +171,22 @@ export function DocumentActions({
     });
   };
 
+  const confirmClassifySelectedDocuments = () => {
+    if (!hasSelection) return;
+    const count = documentIds.length;
+    const message = count === 1
+      ? 'Are you sure you want to classify this document?'
+      : 'Are you sure you want to classify these documents?';
+
+    confirmDialog({
+      message,
+      header: 'Classify Document',
+      icon: 'pi pi-bolt',
+      defaultFocus: 'reject',
+      accept: () => void classifySelectedDocuments(),
+    });
+  };
+
   const actionMenuItems: MenuItem[] = [];
   if (includeNewDocument) {
     actionMenuItems.push(
@@ -173,19 +196,20 @@ export function DocumentActions({
   }
   actionMenuItems.push(
     { icon: 'pi pi-plus-circle', label: 'Add to Cabinet', command: () => { openAddToCabinetDialog(); }, disabled: !hasSelection },
-    { icon: 'pi pi-minus-circle', label: 'Remove Cabinet', command: () => { openRemoveFromCabinetDialog(); }, disabled: !hasSelection },
+    { icon: 'pi pi-minus-circle', label: 'Remove from Cabinet', command: () => { openRemoveFromCabinetDialog(); }, disabled: !hasSelection },
     { separator: true },
     { icon: 'pi pi-plus-circle', label: 'Add Tag', command: () => { openAddTagDialog(); }, disabled: !hasSelection },
     { icon: 'pi pi-minus-circle', label: 'Remove Tag', command: () => { openRemoveTagDialog(); }, disabled: !hasSelection },
     { separator: true },
     { icon: 'pi pi-refresh', label: 'Reprocess Pages', command: () => { confirmReprocessSelectedDocuments(); }, disabled: !hasSelection || processDocumentFilePages.isPending },
+    { icon: 'pi pi-bolt', label: 'Classify Document', command: () => { confirmClassifySelectedDocuments(); }, disabled: !hasSelection || classifyDocument.isPending },
     { separator: true },
     { icon: 'pi pi-trash', label: 'Delete Document', command: () => { confirmDeleteSelectedDocuments(); }, disabled: !hasSelection },
   );
 
   return (
     <div className={containerClassName}>
-      <Menu model={actionMenuItems} popup ref={actionMenu} popupAlignment="right" id={menuId} />
+      <Menu model={actionMenuItems} popup ref={actionMenu} popupAlignment="right" id={menuId} style={{ minWidth: '16rem' }} />
       <Button
         label="Actions"
         className={buttonClassName}

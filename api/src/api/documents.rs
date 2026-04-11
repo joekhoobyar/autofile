@@ -338,6 +338,38 @@ pub async fn process_file_pages(
     Ok(Json(()))
 }
 
+pub async fn classify_document(
+    _user: AuthUser,
+    State(state): State<Arc<AppState>>,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+) -> Result<Json<()>, ApiError> {
+    documents::table
+        .find(id)
+        .select(documents::id)
+        .first::<i64>(&mut db)
+        .await
+        .map_err(|e| {
+            if matches!(e, diesel::result::Error::NotFound) {
+                ApiError::not_found("Document not found")
+            } else {
+                ApiError::new(diesel_to_http(e), "Failed to fetch document")
+            }
+        })?;
+
+    let mut medium_jobs = state.medium_jobs.as_ref().clone();
+    if let Err(_) = medium_jobs
+        .push(MediumJob::ClassifyDocument { document_id: id })
+        .await
+    {
+        return Err(ApiError::internal_server_error(
+            "Failed to enqueue classify document job",
+        ));
+    }
+
+    Ok(Json(()))
+}
+
 /**
  * This handler serves the thumbnail image for a document, streaming it directly from S3.
  * It supports conditional GET with If-Modified-Since header to optimize caching.
@@ -811,6 +843,7 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(list).post(create))
         .route("/{id}", get(get_by_id).patch(update).delete(delete))
+        .route("/{id}/classify-document", post(classify_document))
         .route("/{id}/index-values", get(list_index_values))
         .route("/{id}/thumbnail", get(thumbnail_get))
         .route("/{id}/process-file-pages", post(process_file_pages))
