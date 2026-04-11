@@ -16,12 +16,12 @@ use diesel_async::{
 };
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use redis::AsyncCommands;
-use tokio::time::{Duration, timeout};
 use tokio::signal;
 use tokio::sync::watch;
+use tokio::time::{Duration, timeout};
 
-use apalis::layers::retry::RetryPolicy;
 use apalis::layers::WorkerBuilderExt;
+use apalis::layers::retry::RetryPolicy;
 use apalis::prelude::*;
 use apalis_redis::RedisStorage;
 
@@ -54,6 +54,7 @@ mod application {
 mod domain {
     pub mod cabinet_documents;
     pub mod cabinets;
+    pub mod classifier_blocks;
     pub mod document_files;
     pub mod document_indexes;
     pub mod document_metadatas;

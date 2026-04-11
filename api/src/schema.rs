@@ -24,6 +24,21 @@ diesel::table! {
 }
 
 diesel::table! {
+    classifier_blocks (id) {
+        id -> Int8,
+        name -> Varchar,
+        description -> Nullable<Varchar>,
+        enabled -> Bool,
+        order -> Int4,
+        rules -> Jsonb,
+        created_at -> Timestamptz,
+        created_by -> Int8,
+        updated_at -> Timestamptz,
+        updated_by -> Int8,
+    }
+}
+
+diesel::table! {
     document_file_ocr_pages (document_file_id, page_number) {
         document_file_id -> Int8,
         page_number -> Int4,
@@ -227,6 +242,7 @@ diesel::joinable!(tag_documents -> users (updated_by));
 diesel::allow_tables_to_appear_in_same_query!(
     cabinet_documents,
     cabinets,
+    classifier_blocks,
     document_file_ocr_pages,
     document_file_pages,
     document_files,

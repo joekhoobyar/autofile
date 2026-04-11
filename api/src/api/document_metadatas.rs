@@ -130,38 +130,38 @@ async fn validate_document_metadata_input(
         return Ok(());
     }
 
-    let rules: HashMap<i64, MetadataValidationRule> = documents::table
-        .filter(documents::id.eq(document_id))
-        .inner_join(document_types_metadata_types::table.on(
-            document_types_metadata_types::document_type_id.eq(documents::document_type_id),
-        ))
-        .inner_join(
-            metadata_types::table.on(
-                metadata_types::id.eq(document_types_metadata_types::metadata_type_id),
-            ),
-        )
-        .filter(document_types_metadata_types::metadata_type_id.eq_any(&metadata_type_ids))
-        .select((
-            document_types_metadata_types::metadata_type_id,
-            document_types_metadata_types::required,
-            metadata_types::data_type,
-            metadata_types::options,
-        ))
-        .load::<(i64, bool, DataType, Option<Value>)>(db)
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to validate document metadata"))?
-        .into_iter()
-        .map(|(metadata_type_id, required, data_type, options)| {
-            (
-                metadata_type_id,
-                MetadataValidationRule {
-                    required,
-                    data_type,
-                    options,
-                },
+    let rules: HashMap<i64, MetadataValidationRule> =
+        documents::table
+            .filter(documents::id.eq(document_id))
+            .inner_join(document_types_metadata_types::table.on(
+                document_types_metadata_types::document_type_id.eq(documents::document_type_id),
+            ))
+            .inner_join(
+                metadata_types::table
+                    .on(metadata_types::id.eq(document_types_metadata_types::metadata_type_id)),
             )
-        })
-        .collect();
+            .filter(document_types_metadata_types::metadata_type_id.eq_any(&metadata_type_ids))
+            .select((
+                document_types_metadata_types::metadata_type_id,
+                document_types_metadata_types::required,
+                metadata_types::data_type,
+                metadata_types::options,
+            ))
+            .load::<(i64, bool, DataType, Option<Value>)>(db)
+            .await
+            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to validate document metadata"))?
+            .into_iter()
+            .map(|(metadata_type_id, required, data_type, options)| {
+                (
+                    metadata_type_id,
+                    MetadataValidationRule {
+                        required,
+                        data_type,
+                        options,
+                    },
+                )
+            })
+            .collect();
 
     for m in input {
         let Some(rule) = rules.get(&m.metadata_type_id) else {
@@ -198,7 +198,6 @@ async fn upsert(
     Path(document_id): Path<i64>,
     Json(input): Json<Vec<NewDocumentMetadata>>,
 ) -> Result<Json<Vec<DocumentMetadata>>, ApiError> {
-
     // Validate the input metadata against the document type's rules,
     // including required fields, data types, and lookup choices.
     validate_document_metadata_input(&mut db, document_id, &input).await?;
