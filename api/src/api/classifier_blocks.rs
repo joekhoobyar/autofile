@@ -15,14 +15,13 @@ use axum::{
     routing::get,
 };
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 
 #[derive(Debug, Deserialize)]
 struct NewClassifierBlock {
     name: String,
     description: Option<String>,
     enabled: bool,
-    order: i32,
     rules: ClassifierRules,
 }
 
@@ -31,7 +30,6 @@ struct ClassifierBlockChangeset {
     name: Option<String>,
     description: Option<String>,
     enabled: Option<bool>,
-    order: Option<i32>,
     rules: Option<ClassifierRules>,
 }
 
@@ -76,18 +74,35 @@ async fn create(
     DbConn(mut db): DbConn,
     Json(input): Json<NewClassifierBlock>,
 ) -> Result<Json<ClassifierBlock>, ApiError> {
-    let inserted: ClassifierBlock = diesel::insert_into(classifier_blocks::table)
-        .values((
-            classifier_blocks::name.eq(input.name),
-            classifier_blocks::description.eq(input.description),
-            classifier_blocks::enabled.eq(input.enabled),
-            classifier_blocks::order.eq(input.order),
-            classifier_blocks::rules.eq(diesel_json::Json(input.rules)),
-            classifier_blocks::created_by.eq(user.user_id),
-            classifier_blocks::updated_by.eq(user.user_id),
-        ))
-        .returning(ClassifierBlock::as_returning())
-        .get_result(&mut db)
+    let inserted: ClassifierBlock = db
+        .transaction::<_, diesel::result::Error, _>(move |conn| {
+            Box::pin(async move {
+                diesel::sql_query("LOCK TABLE classifier_blocks IN EXCLUSIVE MODE")
+                    .execute(conn)
+                    .await?;
+
+                let next_order = classifier_blocks::table
+                    .select(diesel::dsl::max(classifier_blocks::order))
+                    .get_result::<Option<i32>>(conn)
+                    .await?
+                    .unwrap_or(0)
+                    + 1;
+
+                diesel::insert_into(classifier_blocks::table)
+                    .values((
+                        classifier_blocks::name.eq(input.name),
+                        classifier_blocks::description.eq(input.description),
+                        classifier_blocks::enabled.eq(input.enabled),
+                        classifier_blocks::order.eq(next_order),
+                        classifier_blocks::rules.eq(diesel_json::Json(input.rules)),
+                        classifier_blocks::created_by.eq(user.user_id),
+                        classifier_blocks::updated_by.eq(user.user_id),
+                    ))
+                    .returning(ClassifierBlock::as_returning())
+                    .get_result(conn)
+                    .await
+            })
+        })
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to create classifier_block"))?;
 
@@ -112,7 +127,6 @@ async fn update(
                 patch
                     .enabled
                     .map(|value| classifier_blocks::enabled.eq(value)),
-                patch.order.map(|value| classifier_blocks::order.eq(value)),
                 patch
                     .rules
                     .map(|value| classifier_blocks::rules.eq(diesel_json::Json(value))),
@@ -132,14 +146,36 @@ async fn delete(
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
 ) -> Result<Json<()>, ApiError> {
-    let affected = diesel::delete(classifier_blocks::table.filter(classifier_blocks::id.eq(id)))
-        .execute(&mut db)
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete classifier_block"))?;
+    db.transaction::<_, diesel::result::Error, _>(move |conn| {
+        Box::pin(async move {
+            let deleted_order = classifier_blocks::table
+                .filter(classifier_blocks::id.eq(id))
+                .select(classifier_blocks::order)
+                .first::<i32>(conn)
+                .await?;
 
-    if affected == 0 {
-        return Err(ApiError::not_found("Classifier block not found"));
-    }
+            diesel::delete(classifier_blocks::table.filter(classifier_blocks::id.eq(id)))
+                .execute(conn)
+                .await?;
+
+            diesel::update(
+                classifier_blocks::table.filter(classifier_blocks::order.gt(deleted_order)),
+            )
+            .set(classifier_blocks::order.eq(classifier_blocks::order - 1))
+            .execute(conn)
+            .await?;
+
+            Ok(())
+        })
+    })
+    .await
+    .map_err(|e| {
+        if matches!(e, diesel::result::Error::NotFound) {
+            ApiError::not_found("Classifier block not found")
+        } else {
+            ApiError::new(diesel_to_http(e), "Failed to delete classifier_block")
+        }
+    })?;
 
     Ok(Json(()))
 }
