@@ -7,18 +7,24 @@ import { Column } from 'primereact/column';
 import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
-import { InputTextarea } from 'primereact/inputtextarea';
 import { Checkbox } from 'primereact/checkbox';
 import { Message } from 'primereact/message';
 import { Toast } from 'primereact/toast';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import { classNames } from 'primereact/utils';
+import CodeMirror from '@uiw/react-codemirror';
+import { yaml as yamlLanguage } from '@codemirror/lang-yaml';
+import { indentWithTab } from '@codemirror/commands';
+import { EditorView, keymap } from '@codemirror/view';
+import { vscodeDark } from '@uiw/codemirror-theme-vscode';
 
 import type { ListParams } from '../api';
 import { type ClassifierBlock } from '../models/classifierBlock';
 import { useClassifierBlock, useClassifierBlocks, useDeleteClassifierBlock, useSaveClassifierBlock } from '../queries/useClassifierBlocks';
 import { useId } from '../util';
 import { defaultClassifierRules, rulesToYaml, yamlToRules } from '../util/classifierRulesYaml';
+
+const yamlEditorExtensions = [yamlLanguage(), keymap.of([indentWithTab]), EditorView.lineWrapping];
 
 type ClassifierBlockFormValues = Partial<ClassifierBlock> & {
   rulesYaml: string;
@@ -285,12 +291,21 @@ function ClassifierBlockForm({ data }: Readonly<{ data?: Partial<ClassifierBlock
               required: 'Rules are required',
             }}
             render={({ field }) => (
-              <InputTextarea id="rulesYaml" {...field}
-                rows={20}
-                autoComplete="off"
-                className={classNames({ 'p-invalid': !!errors.rulesYaml || !!rulesError })}
+              <CodeMirror
+                id="rulesYaml"
+                value={field.value ?? ''}
+                height="24rem"
+                theme={vscodeDark}
+                extensions={yamlEditorExtensions}
+                basicSetup={{
+                  lineNumbers: true,
+                  foldGutter: true,
+                  highlightActiveLine: true,
+                  highlightActiveLineGutter: true,
+                }}
+                onChange={(value) => field.onChange(value)}
+                className={classNames('aut-yaml-editor', { 'is-invalid': !!errors.rulesYaml || !!rulesError })}
                 placeholder="match_patterns: []\nmatch_actions: {}\nchild_rules: []"
-                style={{ fontFamily: 'monospace' }}
               />
             )}
           />

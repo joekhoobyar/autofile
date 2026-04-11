@@ -220,6 +220,31 @@ body {
   }
 }
 
+.aut-yaml-editor {
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.aut-yaml-editor .cm-editor {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.95rem;
+  background: var(--surface-ground);
+}
+
+.aut-yaml-editor .cm-scroller {
+  overflow: auto;
+}
+
+.aut-yaml-editor .cm-focused {
+  outline: 2px solid var(--highlight-bg);
+  outline-offset: -2px;
+}
+
+.aut-yaml-editor.is-invalid {
+  border-color: var(--red-500);
+}
+
 a { color: inherit; }
 a:visited { color: inherit; }
 
