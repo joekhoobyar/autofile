@@ -13,8 +13,8 @@ use crate::domain::documents::{Document, DocumentChangeset, DocumentView};
 use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_to_s3};
 use crate::schema::{
     cabinet_documents, document_file_ocr_pages, document_file_pages, document_files,
-    document_index_documents, document_index_values, document_metadatas,
-    documents, metadata_types, tag_documents,
+    document_index_documents, document_index_values, document_metadatas, documents, metadata_types,
+    tag_documents,
 };
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;

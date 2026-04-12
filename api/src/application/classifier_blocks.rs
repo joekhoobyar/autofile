@@ -543,11 +543,75 @@ fn apply_modifier(
                 snippets.insert(*to, value.clone());
             }
         }
-        ClassifierModifier::Add { from, to } => todo!(),
-        ClassifierModifier::Sub { from, to } => todo!(),
-        ClassifierModifier::Mul { from, to } => todo!(),
-        ClassifierModifier::Div { from, to } => todo!(),
+        ClassifierModifier::Add { from, to } => {
+            if let Some(value) = mod_add(snippets, *from, *to) {
+                snippets.insert(*to, value);
+            }
+        }
+        ClassifierModifier::Sub { from, to } => {
+            if let Some(value) = mod_sub(snippets, *from, *to) {
+                snippets.insert(*to, value);
+            }
+        }
+        ClassifierModifier::Mul { from, to } => {
+            if let Some(value) = mod_mul(snippets, *from, *to) {
+                snippets.insert(*to, value);
+            }
+        }
+        ClassifierModifier::Div { from, to } => {
+            if let Some(value) = mod_div(snippets, *from, *to) {
+                snippets.insert(*to, value);
+            }
+        }
     }
+}
+
+fn snippet_number(snippets: &HashMap<u32, String>, index: u32) -> Option<f64> {
+    let value = snippets.get(&index)?;
+    let normalized = value.trim().replace([',', '$'], "");
+    normalized.parse::<f64>().ok()
+}
+
+fn format_number(value: f64) -> String {
+    if value.fract().abs() < f64::EPSILON {
+        return (value as i64).to_string();
+    }
+
+    let mut formatted = format!("{value:.10}");
+    while formatted.contains('.') && formatted.ends_with('0') {
+        formatted.pop();
+    }
+    if formatted.ends_with('.') {
+        formatted.pop();
+    }
+    formatted
+}
+
+fn mod_add(snippets: &HashMap<u32, String>, from: u32, to: u32) -> Option<String> {
+    Some(format_number(
+        snippet_number(snippets, to)? + snippet_number(snippets, from)?,
+    ))
+}
+
+fn mod_sub(snippets: &HashMap<u32, String>, from: u32, to: u32) -> Option<String> {
+    Some(format_number(
+        snippet_number(snippets, to)? - snippet_number(snippets, from)?,
+    ))
+}
+
+fn mod_mul(snippets: &HashMap<u32, String>, from: u32, to: u32) -> Option<String> {
+    Some(format_number(
+        snippet_number(snippets, to)? * snippet_number(snippets, from)?,
+    ))
+}
+
+fn mod_div(snippets: &HashMap<u32, String>, from: u32, to: u32) -> Option<String> {
+    let denominator = snippet_number(snippets, from)?;
+    if denominator.abs() < f64::EPSILON {
+        return None;
+    }
+
+    Some(format_number(snippet_number(snippets, to)? / denominator))
 }
 
 fn mod_month_number(value: &str) -> Option<String> {
