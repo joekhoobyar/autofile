@@ -334,7 +334,7 @@ fn mod_sprintf(value: &str, fmt: &str) -> String {
         }
     }
 
-    sprintf!(fmt, v).unwrap()
+    sprintf!(fmt, v).unwrap().replace(" ", "0")
 }
 
 fn mod_month_end(value: &str, fmt: Option<&str>) -> Result<String, chrono::ParseError> {
