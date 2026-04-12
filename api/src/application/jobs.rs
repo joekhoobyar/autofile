@@ -26,7 +26,7 @@ pub enum FastJob {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MediumJob {
     ProcessFilePages { document_file_id: i64 },
-    ClassifyDocument { document_id: i64 },
+    ClassifyDocument { document_id: i64, user_id: i64 },
 }
 
 /**
@@ -58,6 +58,9 @@ pub async fn handle_medium_job(job: MediumJob, state: Data<Arc<AppState>>) -> Re
         MediumJob::ProcessFilePages { document_file_id } => {
             process_file_pages(document_file_id, state).await
         }
-        MediumJob::ClassifyDocument { document_id } => classify_document(document_id, state).await,
+        MediumJob::ClassifyDocument {
+            document_id,
+            user_id,
+        } => classify_document(document_id, user_id, state).await,
     }
 }

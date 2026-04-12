@@ -5,16 +5,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::AppState;
 use crate::application::document_index_documents::delete_document_index_document;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
-use crate::application::documents::get_document_view;
+use crate::application::documents::{get_document_view, update_document};
 use crate::application::jobs::{FastJob, MediumJob};
 use crate::domain::document_files::DocumentFile;
 use crate::domain::document_indexes::DocumentIndexValue;
-use crate::domain::documents::{Document, DocumentView};
+use crate::domain::documents::{Document, DocumentChangeset, DocumentView};
 use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_to_s3};
 use crate::schema::{
     cabinet_documents, document_file_ocr_pages, document_file_pages, document_files,
     document_index_documents, document_index_values, document_metadatas,
-    document_types_metadata_types, documents, metadata_types, tag_documents,
+    documents, metadata_types, tag_documents,
 };
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
@@ -22,7 +22,7 @@ use crate::shared::s3::serve_s3_file;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http, write_field_to_temp_file};
 
 use aws_sdk_s3::primitives::ByteStream;
-use diesel::dsl::{exists, not, sum};
+use diesel::dsl::{exists, sum};
 use serde::Deserialize;
 
 use axum::{
@@ -32,7 +32,6 @@ use axum::{
     response::Response,
     routing::{get, post},
 };
-use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use uuid::Uuid;
@@ -45,14 +44,6 @@ use apalis::prelude::*;
 struct NewDocument {
     title: String,
     document_type_id: i64,
-}
-
-#[derive(Debug, Deserialize, AsChangeset)]
-#[diesel(table_name = documents)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-struct DocumentChangeset {
-    title: Option<String>,
-    document_type_id: Option<i64>,
 }
 
 #[derive(Debug, Insertable)]
@@ -339,7 +330,7 @@ pub async fn process_file_pages(
 }
 
 pub async fn classify_document(
-    _user: AuthUser,
+    user: AuthUser,
     State(state): State<Arc<AppState>>,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
@@ -359,7 +350,10 @@ pub async fn classify_document(
 
     let mut medium_jobs = state.medium_jobs.as_ref().clone();
     if let Err(_) = medium_jobs
-        .push(MediumJob::ClassifyDocument { document_id: id })
+        .push(MediumJob::ClassifyDocument {
+            document_id: id,
+            user_id: user.user_id,
+        })
         .await
     {
         return Err(ApiError::internal_server_error(
@@ -572,45 +566,7 @@ async fn update(
     Path(id): Path<i64>,
     Json(input): Json<DocumentChangeset>,
 ) -> Result<Json<Document>, ApiError> {
-    let updated = db
-        .build_transaction()
-        .run::<_, diesel::result::Error, _>(|conn| {
-            Box::pin(async move {
-                // Update + return the updated row in one round-trip.
-                let updated: Document =
-                    diesel::update(documents::table.filter(documents::id.eq(id)))
-                        .set((
-                            &input,
-                            documents::updated_by.eq(user.user_id),
-                            documents::updated_at.eq(Utc::now()),
-                        ))
-                        .returning(Document::as_returning())
-                        .get_result(conn)
-                        .await?;
-
-                let allowed_metadata_link = document_types_metadata_types::table
-                    .filter(
-                        document_types_metadata_types::document_type_id
-                            .eq(updated.document_type_id),
-                    )
-                    .filter(
-                        document_types_metadata_types::metadata_type_id
-                            .eq(document_metadatas::metadata_type_id),
-                    );
-
-                diesel::delete(
-                    document_metadatas::table
-                        .filter(document_metadatas::document_id.eq(id))
-                        .filter(not(exists(allowed_metadata_link))),
-                )
-                .execute(conn)
-                .await?;
-
-                Ok(updated)
-            })
-        })
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update document"))?;
+    let updated = update_document(user.user_id, &mut db, id, input).await?;
 
     // Enqueue jobs to update document indexes for this document, as the tags may be used in index rules.
     enqueue_document_index_document_updates(id, state).await?;

@@ -1,13 +1,15 @@
+use chrono::Utc;
 use std::collections::HashMap;
 
-use crate::domain::documents::{Document, DocumentView};
+use crate::domain::documents::{Document, DocumentChangeset, DocumentView};
 use crate::schema::{
-    cabinet_documents, document_files, document_metadatas, documents, metadata_types, tag_documents,
+    cabinet_documents, document_files, document_metadatas, document_types_metadata_types,
+    documents, metadata_types, tag_documents,
 };
 use crate::shared::util::{ApiError, diesel_to_http};
 
 use bb8::PooledConnection;
-use diesel::dsl::sum;
+use diesel::dsl::{exists, not, sum};
 use diesel::prelude::*;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
@@ -72,4 +74,55 @@ pub async fn get_document_view(
         updated_by: document.updated_by,
         updated_at: document.updated_at,
     })
+}
+
+pub async fn update_document(
+    user_id: i64,
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    id: i64,
+    input: DocumentChangeset,
+) -> Result<Document, ApiError> {
+    let updated = db
+        .build_transaction()
+        .run::<_, diesel::result::Error, _>(|conn| {
+            Box::pin(async move {
+                // Update + return the updated row in one round-trip.
+                let updated: Document =
+                    diesel::update(documents::table.filter(documents::id.eq(id)))
+                        .set((
+                            &input,
+                            documents::updated_by.eq(user_id),
+                            documents::updated_at.eq(Utc::now()),
+                        ))
+                        .returning(Document::as_returning())
+                        .get_result(conn)
+                        .await?;
+
+                // Determine the metadata types that are allowed by the document type.
+                let allowed_metadata_link = document_types_metadata_types::table
+                    .filter(
+                        document_types_metadata_types::document_type_id
+                            .eq(updated.document_type_id),
+                    )
+                    .filter(
+                        document_types_metadata_types::metadata_type_id
+                            .eq(document_metadatas::metadata_type_id),
+                    );
+
+                // Delete any metadata for this document that is not allowed by the document type.
+                diesel::delete(
+                    document_metadatas::table
+                        .filter(document_metadatas::document_id.eq(id))
+                        .filter(not(exists(allowed_metadata_link))),
+                )
+                .execute(conn)
+                .await?;
+
+                Ok(updated)
+            })
+        })
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update document"))?;
+
+    Ok(updated)
 }

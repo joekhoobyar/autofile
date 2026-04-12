@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::schema::documents;
 
@@ -50,4 +50,12 @@ pub struct TemplateDocumentView {
     pub created_at: DateTime<Utc>,
     pub updated_by: i64,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize, AsChangeset)]
+#[diesel(table_name = documents)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct DocumentChangeset {
+    pub title: Option<String>,
+    pub document_type_id: Option<i64>,
 }

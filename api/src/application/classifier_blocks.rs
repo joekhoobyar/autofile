@@ -1,25 +1,49 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use apalis::prelude::*;
 use bb8::PooledConnection;
+use chrono::{Datelike, Duration, NaiveDate, Utc};
 use diesel::prelude::*;
+use diesel::upsert::excluded;
 use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
-use regex::{Regex, Captures};
+use regex::{Captures, Regex};
 use sprintf::sprintf;
-use chrono::{Datelike, Duration, NaiveDate};
 
+use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::documents::get_document_view;
+use crate::application::documents::update_document;
 use crate::domain::classifier_blocks::ClassifierModifier;
-use crate::domain::classifier_blocks::{ClassifierBlock, ClassifierPattern, ClassifierChildRule};
+use crate::domain::classifier_blocks::{ClassifierBlock, ClassifierChildRule, ClassifierPattern};
+use crate::domain::documents::DocumentChangeset;
 use crate::domain::documents::DocumentView;
+use crate::schema::document_types;
 use crate::schema::{
-    classifier_blocks, document_file_ocr_pages, document_file_pages, document_files,
+    cabinet_documents, cabinets, classifier_blocks, document_file_ocr_pages, document_file_pages,
+    document_files, tag_documents, tags,
 };
 use crate::shared::app_state::AppState;
 use crate::shared::util::JobResult;
+
+#[derive(Insertable)]
+#[diesel(table_name = tag_documents)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+struct InsertableSuggestedTagDocument {
+    tag_id: i64,
+    document_id: i64,
+    updated_by: i64,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = cabinet_documents)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+struct InsertableSuggestedCabinetDocument {
+    cabinet_id: i64,
+    document_id: i64,
+    updated_by: i64,
+}
 
 #[derive(Debug)]
 pub enum PatternMatch<'a> {
@@ -28,13 +52,21 @@ pub enum PatternMatch<'a> {
     Metadata,
 }
 
-pub async fn classify_document(document_id: i64, state: Data<Arc<AppState>>) -> Result<(), Error> {
-    classify_document_inner(document_id, state)
+pub async fn classify_document(
+    document_id: i64,
+    user_id: i64,
+    state: Data<Arc<AppState>>,
+) -> Result<(), Error> {
+    classify_document_inner(document_id, user_id, state)
         .await
         .map_err(Into::into)
 }
 
-async fn classify_document_inner(document_id: i64, state: Data<Arc<AppState>>) -> JobResult<()> {
+async fn classify_document_inner(
+    document_id: i64,
+    user_id: i64,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
     tracing::info!(document_id, "classifying document");
 
     let mut db = state.db_pool.get().await?;
@@ -49,7 +81,7 @@ async fn classify_document_inner(document_id: i64, state: Data<Arc<AppState>>) -
     // Load all of the classifier blocks from the database, ordered by their "order" field.
     let classifier_blocks = load_classifier_blocks(&mut db).await?;
 
-    let mut computed_metadata = HashMap::new();
+    let mut computed_actions = HashMap::new();
 
     // Iterate over each classifier block and pull out it's ClassifierRules.
     // Try to match the document against the ClassifierRules, starting with the match_patterns.
@@ -63,17 +95,198 @@ async fn classify_document_inner(document_id: i64, state: Data<Arc<AppState>>) -
         // If any of the match_patterns match, then we can apply the match_actions to the document,
         // and then move on to the child_rules application.
         if pattern_match.is_some() {
-            apply_match_actions(&mut computed_metadata, &rules.match_actions);
-            apply_child_rules(&document_view, &document_text, &mut computed_metadata, &rules.child_rules)?;
-            break
+            apply_match_actions(&mut computed_actions, &rules.match_actions);
+            apply_child_rules(
+                &document_view,
+                &document_text,
+                &mut computed_actions,
+                &rules.child_rules,
+            )?;
+            break;
         }
     }
 
+    // Finally, we will have a set of computed actions that we want to apply to the document.
+    // Iterate over all of the computed actions.
+    let mut document_type_id: Option<i64> = None;
+    let mut title: Option<String> = None;
+    let mut metadata: HashMap<String, String> = HashMap::new();
+    for (key, value) in computed_actions {
+        match key.as_str() {
+            "_suggested_doctype" => {
+                tracing::info!(
+                    document_id,
+                    document_type = value,
+                    "suggested document_type"
+                );
+                let doctype = document_types::table
+                    .filter(document_types::slug.eq(value))
+                    .select(document_types::id)
+                    .first::<i64>(&mut db)
+                    .await?;
+                document_type_id = Some(doctype);
+            }
+            "_suggested_filename" => {
+                tracing::info!(document_id, title = value, "suggested title");
+                title = Some(value);
+            }
+            "_suggested_tags" => {
+                tracing::info!(document_id, tags = value, "suggested tags");
+                let slugs = parse_slug_list(&value);
+                apply_suggested_tags(&mut db, document_id, user_id, &slugs).await?;
+            }
+            "_suggested_cabinets" => {
+                tracing::info!(document_id, cabinets = value, "suggested cabinet");
+                let slugs = parse_slug_list(&value);
+                apply_suggested_cabinets(&mut db, document_id, user_id, &slugs).await?;
+            }
+            _ if key.starts_with('_') => continue,
+            _ => {
+                // Otherwise, this is metadata that we want to apply to the document.
+                metadata.insert(key, value);
+                ()
+            }
+        }
+    }
+
+    // Now, we need to update the document title and type.
+    if document_type_id.is_some() || title.is_some() {
+        update_document(
+            user_id,
+            &mut db,
+            document_id,
+            DocumentChangeset {
+                title,
+                document_type_id,
+            },
+        )
+        .await?;
+    }
+
+    // Finally, we have the metadata that we want to apply to the document.
+    // It is time to upsert it.
     tracing::info!(
         document_id,
-        ?computed_metadata,
-        "computed classifier metadata"
+        ?metadata,
+        "computed metadata to apply to document"
     );
+
+    enqueue_document_index_document_updates(document_id, (*state).clone()).await?;
+
+    Ok(())
+}
+
+fn parse_slug_list(value: &str) -> Vec<String> {
+    let mut seen = HashSet::new();
+
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|slug| !slug.is_empty())
+        .filter(|slug| seen.insert((*slug).to_string()))
+        .map(str::to_string)
+        .collect()
+}
+
+async fn apply_suggested_tags(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    user_id: i64,
+    slugs: &[String],
+) -> JobResult<()> {
+    if slugs.is_empty() {
+        return Ok(());
+    }
+
+    let rows: Vec<(i64, String)> = tags::table
+        .filter(tags::slug.eq_any(slugs))
+        .select((tags::id, tags::slug))
+        .load::<(i64, String)>(db)
+        .await?;
+
+    let found_slugs: HashSet<String> = rows.iter().map(|(_, slug)| slug.clone()).collect();
+    for slug in slugs {
+        if !found_slugs.contains(slug) {
+            tracing::warn!(document_id, slug, "suggested tag not found");
+        }
+    }
+
+    let values: Vec<InsertableSuggestedTagDocument> = rows
+        .into_iter()
+        .map(|(tag_id, _)| InsertableSuggestedTagDocument {
+            tag_id,
+            document_id,
+            updated_by: user_id,
+        })
+        .collect();
+
+    if values.is_empty() {
+        return Ok(());
+    }
+
+    diesel::insert_into(tag_documents::table)
+        .values(&values)
+        .on_conflict((tag_documents::tag_id, tag_documents::document_id))
+        .do_update()
+        .set((
+            tag_documents::updated_by.eq(excluded(tag_documents::updated_by)),
+            tag_documents::updated_at.eq(Utc::now()),
+        ))
+        .execute(db)
+        .await?;
+
+    Ok(())
+}
+
+async fn apply_suggested_cabinets(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    user_id: i64,
+    slugs: &[String],
+) -> JobResult<()> {
+    if slugs.is_empty() {
+        return Ok(());
+    }
+
+    let rows: Vec<(i64, String)> = cabinets::table
+        .filter(cabinets::slug.eq_any(slugs))
+        .select((cabinets::id, cabinets::slug))
+        .load::<(i64, String)>(db)
+        .await?;
+
+    let found_slugs: HashSet<String> = rows.iter().map(|(_, slug)| slug.clone()).collect();
+    for slug in slugs {
+        if !found_slugs.contains(slug) {
+            tracing::warn!(document_id, slug, "suggested cabinet not found");
+        }
+    }
+
+    let values: Vec<InsertableSuggestedCabinetDocument> = rows
+        .into_iter()
+        .map(|(cabinet_id, _)| InsertableSuggestedCabinetDocument {
+            cabinet_id,
+            document_id,
+            updated_by: user_id,
+        })
+        .collect();
+
+    if values.is_empty() {
+        return Ok(());
+    }
+
+    diesel::insert_into(cabinet_documents::table)
+        .values(&values)
+        .on_conflict((
+            cabinet_documents::cabinet_id,
+            cabinet_documents::document_id,
+        ))
+        .do_update()
+        .set((
+            cabinet_documents::updated_by.eq(excluded(cabinet_documents::updated_by)),
+            cabinet_documents::updated_at.eq(Utc::now()),
+        ))
+        .execute(db)
+        .await?;
 
     Ok(())
 }
@@ -154,18 +367,18 @@ fn find_first_match<'a>(
 }
 
 fn apply_match_actions(
-    computed_metadata: &mut HashMap<String, String>,
+    computed_actions: &mut HashMap<String, String>,
     actions: &HashMap<String, String>,
 ) {
     for (key, value) in actions {
-        computed_metadata.insert(key.clone(), value.clone());
+        computed_actions.insert(key.clone(), value.clone());
     }
 }
 
 fn apply_child_rules(
     document: &DocumentView,
     document_text: &str,
-    computed_metadata: &mut HashMap<String, String>,
+    computed_actions: &mut HashMap<String, String>,
     child_rules: &Vec<ClassifierChildRule>,
 ) -> JobResult<()> {
     for rule in child_rules {
@@ -179,27 +392,28 @@ fn apply_child_rules(
 
         // We now will extract match groups and apply modifiers.
         if let PatternMatch::Text(captures) = matched {
-
-            // - Extract captured groups into the snippets Vec.
+            // - Extract captured groups into the snippets.
             for (i, cap) in captures.iter().enumerate() {
-                if i > 0 && let Some(cap) = cap {
+                if i > 0
+                    && let Some(cap) = cap
+                {
                     snippets.insert(i as u32, cap.as_str().to_string());
                 }
             }
 
-            // - For each modifier in the rule, apply the modifier to the Vec.
+            // - For each modifier in the rule, apply the modifier to the snippets.
             if let Some(modifiers) = &rule.modifiers {
                 for modifier in modifiers {
-                    apply_modifier(&mut snippets, &modifier, computed_metadata);
+                    apply_modifier(&mut snippets, &modifier, computed_actions);
                 }
             }
         }
 
-        // Finally, collect all of the match actions, and apply them to the computed metadata.
-        // But in this phase, we will need to apply replacements to the values, based on the Vec.
+        // Now, collect all of the match actions, and apply them to the computed metadata.
+        // But in this phase, we will need to apply replacements to the values, based on the snippets.
         for (key, value) in &rule.actions {
             let replaced_value = apply_replacements(value, &snippets);
-            computed_metadata.insert(key.clone(), replaced_value);
+            computed_actions.insert(key.clone(), replaced_value);
         }
     }
 
@@ -251,11 +465,11 @@ fn does_document_match_pattern<'a>(
 fn apply_modifier(
     snippets: &mut HashMap<u32, String>,
     modifier: &ClassifierModifier,
-    computed_metadata: &mut HashMap<String, String>,
+    computed_actions: &mut HashMap<String, String>,
 ) {
     match modifier {
         ClassifierModifier::Metadata { to, slug } => {
-            if let Some(value) = computed_metadata.get(slug) {
+            if let Some(value) = computed_actions.get(slug) {
                 snippets.insert(*to, value.clone());
             }
         }
@@ -270,33 +484,71 @@ fn apply_modifier(
             if let Some(value) = mod_month_end(&value, None).ok() {
                 snippets.insert(*to, value.clone());
             }
-        },
+        }
         ClassifierModifier::MonthStart { from, to } => {
             let value = apply_replacements(from, snippets);
             if let Some(value) = mod_month_start(&value, None).ok() {
                 snippets.insert(*to, value.clone());
             }
-        },
-        ClassifierModifier::NextDay { from, to } => todo!(),
-        ClassifierModifier::PrevDay { from, to } => todo!(),
-        ClassifierModifier::NextMonth { from, to } => todo!(),
-        ClassifierModifier::PrevMonth { from, to } => todo!(),
-        ClassifierModifier::TaxYear { from, to } => todo!(),
-        ClassifierModifier::Currency { from, to } => todo!(),
+        }
+        ClassifierModifier::NextDay { from, to } => {
+            let value = apply_replacements(from, snippets);
+            if let Some(value) = mod_next_day(&value, None).ok() {
+                snippets.insert(*to, value.clone());
+            }
+        }
+        ClassifierModifier::PrevDay { from, to } => {
+            let value = apply_replacements(from, snippets);
+            if let Some(value) = mod_prev_day(&value, None).ok() {
+                snippets.insert(*to, value.clone());
+            }
+        }
+        ClassifierModifier::NextMonth { from, to } => {
+            let value = apply_replacements(from, snippets);
+            if let Some(value) = mod_next_month(&value, None).ok() {
+                snippets.insert(*to, value.clone());
+            }
+        }
+        ClassifierModifier::PrevMonth { from, to } => {
+            let value = apply_replacements(from, snippets);
+            if let Some(value) = mod_prev_month(&value, None).ok() {
+                snippets.insert(*to, value.clone());
+            }
+        }
+        ClassifierModifier::TaxYear { from, to } => {
+            let value = apply_replacements(from, snippets);
+            if let Some(value) = mod_tax_year(&value).ok() {
+                snippets.insert(*to, value.clone());
+            }
+        }
+        ClassifierModifier::Currency { from, to } => {
+            let value = apply_replacements(from, snippets);
+            snippets.insert(*to, mod_currency(&value));
+        }
         ClassifierModifier::Sprintf { from, to, format } => {
             let value = apply_replacements(from, snippets);
             snippets.insert(*to, mod_sprintf(&value, format));
         }
-        ClassifierModifier::Replace { from, to } => todo!(),
-        ClassifierModifier::AlnumSanitize { from, to } => todo!(),
-        ClassifierModifier::DateFormat { from, to, format } => todo!(),
+        ClassifierModifier::Replace { from, to } => {
+            let value = apply_replacements(from, snippets);
+            snippets.insert(*to, value);
+        }
+        ClassifierModifier::AlnumSanitize { from, to } => {
+            let value = apply_replacements(from, snippets);
+            snippets.insert(*to, mod_alnum_sanitize(&value));
+        }
+        ClassifierModifier::DateFormat { from, to, format } => {
+            let value = apply_replacements(from, snippets);
+            if let Some(value) = mod_date_format(&value, Some(format)).ok() {
+                snippets.insert(*to, value.clone());
+            }
+        }
         ClassifierModifier::Add { from, to } => todo!(),
         ClassifierModifier::Sub { from, to } => todo!(),
         ClassifierModifier::Mul { from, to } => todo!(),
         ClassifierModifier::Div { from, to } => todo!(),
     }
 }
-
 
 fn mod_month_number(value: &str) -> Option<String> {
     // Normalize: remove spaces and capitalize first letter, lowercase rest
@@ -307,26 +559,37 @@ fn mod_month_number(value: &str) -> Option<String> {
 
     // Month name tables (like Ruby's Date::MONTHNAMES / ABBR_MONTHNAMES)
     const MONTHS: [&str; 13] = [
-        "", "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December",
+        "",
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
     ];
 
     const ABBR_MONTHS: [&str; 13] = [
-        "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        "", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     ];
 
     // Find index (like Ruby's `.index`)
-    let number = MONTHS.iter().position(|&m| m == name)
+    let number = MONTHS
+        .iter()
+        .position(|&m| m == name)
         .or_else(|| ABBR_MONTHS.iter().position(|&m| m == name));
 
     // Format like '%02d'
     number.map(|n| format!("{:02}", n))
 }
 
-
 fn mod_sprintf(value: &str, fmt: &str) -> String {
-    let mut v= value;
+    let mut v = value;
     let re = Regex::new(r"^0+([1-9])").unwrap();
     if let Some(caps) = re.captures(value) {
         if let Some(m) = caps.get(1) {
@@ -355,17 +618,156 @@ fn mod_month_end(value: &str, fmt: Option<&str>) -> Result<String, chrono::Parse
 
     // Equivalent to .strftime(args[0] || '%Y-%m-%d')
     let format_str = fmt.unwrap_or("%Y-%m-%d");
-    Ok(last_of_original_shifted_month.format(format_str).to_string())
+    Ok(last_of_original_shifted_month
+        .format(format_str)
+        .to_string())
 }
 
 fn mod_month_start(value: &str, fmt: Option<&str>) -> Result<String, chrono::ParseError> {
-    // Equivalent to Date.parse(value)
+    let d = NaiveDate::parse_from_str(value, "%Y-%m-%d")?;
+    let first_of_month = NaiveDate::from_ymd_opt(d.year(), d.month(), 1).unwrap();
+    Ok(first_of_month.format(fmt.unwrap_or("%Y-%m-%d")).to_string())
+}
+
+fn mod_next_day(value: &str, fmt: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    let mut parts = value.splitn(2, '|').collect::<Vec<_>>();
+    parts.reverse();
+
+    let (date_str, days) = match parts.as_slice() {
+        [date] => (*date, 1),
+        [date, days_str] => (*date, days_str.parse::<i64>()?),
+        _ => return Err("invalid input".into()),
+    };
+
+    // (Date.parse(value) + days)
+    let d = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
+    let shifted = d + Duration::days(days);
+
+    // .strftime(args[0] || '%Y-%m-%d')
+    Ok(shifted.format(fmt.unwrap_or("%Y-%m-%d")).to_string())
+}
+
+fn mod_prev_day(value: &str, fmt: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    // Equivalent to: value, days = value.split('|', 2).reverse
+    let mut parts = value.splitn(2, '|').collect::<Vec<_>>();
+    parts.reverse();
+
+    let (date_str, days) = match parts.as_slice() {
+        [date] => (*date, 1),
+        [date, days_str] => (*date, days_str.parse::<i64>()?),
+        _ => return Err("invalid input".into()),
+    };
+
+    // Date.parse(value)
+    let d = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
+
+    // (Date.parse(value) - days)
+    let shifted = d - Duration::days(days);
+
+    // .strftime(args[0] || '%Y-%m-%d')
+    Ok(shifted.format(fmt.unwrap_or("%Y-%m-%d")).to_string())
+}
+
+fn mod_next_month(value: &str, fmt: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    // Equivalent to: value, months = value.split('|', 2).reverse
+    let mut parts = value.splitn(2, '|').collect::<Vec<_>>();
+    parts.reverse();
+
+    let (date_str, months) = match parts.as_slice() {
+        [date] => (*date, 1),
+        [date, months_str] => (*date, months_str.parse::<i32>()?),
+        _ => return Err("invalid input".into()),
+    };
+
+    let d = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
+
+    // Equivalent to Date.parse(value) >> months
+    let shifted = add_months(d, months);
+
+    Ok(shifted.format(fmt.unwrap_or("%Y-%m-%d")).to_string())
+}
+
+fn mod_prev_month(value: &str, fmt: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    // Equivalent to: value, months = value.split('|', 2).reverse
+    let mut parts = value.splitn(2, '|').collect::<Vec<_>>();
+    parts.reverse();
+
+    let (date_str, months) = match parts.as_slice() {
+        [date] => (*date, 1),
+        [date, months_str] => (*date, months_str.parse::<i32>()?),
+        _ => return Err("invalid input".into()),
+    };
+
+    let d = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
+
+    // Equivalent to: Date.parse(value) << months
+    let shifted = add_months(d, -months);
+
+    Ok(shifted.format(fmt.unwrap_or("%Y-%m-%d")).to_string())
+}
+
+fn mod_tax_year(value: &str) -> Result<String, chrono::ParseError> {
+    // Date.parse(value)
     let d = NaiveDate::parse_from_str(value, "%Y-%m-%d")?;
 
-    // Equivalent to Date.new(d.year, d.month, 1)
-    let first_of_month = NaiveDate::from_ymd_opt(d.year(), d.month(), 1).unwrap();
+    // (Date.parse(value) << -1)  => add 1 month
+    let shifted = add_months(d, 1);
 
-    // Equivalent to .strftime(args[0] || '%Y-%m-%d')
-    let format_str = fmt.unwrap_or("%Y-%m-%d");
-    Ok(first_of_month.format(format_str).to_string())
+    // Date.new(d.year, d.month, 1).year.to_s
+    Ok(shifted.year().to_string())
+}
+
+fn mod_currency(value: &str) -> String {
+    let re = Regex::new(r"^\$?0*([1-9])").unwrap();
+    let result = re.replace(value, "$1");
+    result.replace(',', "")
+}
+
+fn mod_date_format(value: &str, fmt: Option<&str>) -> Result<String, chrono::ParseError> {
+    let d = NaiveDate::parse_from_str(value, "%Y-%m-%d")?;
+    Ok(d.format(fmt.unwrap_or("%Y-%m-%d")).to_string())
+}
+
+fn mod_alnum_sanitize(value: &str) -> String {
+    let mut result = String::with_capacity(value.len());
+    let mut last_was_space = false;
+
+    for c in value.chars() {
+        if c.is_ascii_alphanumeric() {
+            result.push(c);
+            last_was_space = false;
+        } else if c.is_whitespace() {
+            if !last_was_space {
+                result.push(' ');
+                last_was_space = true;
+            }
+        }
+        // else: drop non-alnum chars
+    }
+
+    result.trim().to_string()
+}
+
+fn add_months(date: NaiveDate, months: i32) -> NaiveDate {
+    let year = date.year();
+    let month0 = date.month0() as i32; // 0-based
+    let total = year * 12 + month0 + months;
+
+    let new_year = total.div_euclid(12);
+    let new_month0 = total.rem_euclid(12);
+    let new_month = (new_month0 + 1) as u32;
+
+    let last_day = last_day_of_month(new_year, new_month);
+    let day = date.day().min(last_day);
+
+    NaiveDate::from_ymd_opt(new_year, new_month, day).unwrap()
+}
+
+fn last_day_of_month(year: i32, month: u32) -> u32 {
+    for day in (28..=31).rev() {
+        if NaiveDate::from_ymd_opt(year, month, day).is_some() {
+            return day;
+        }
+    }
+    unreachable!()
 }
