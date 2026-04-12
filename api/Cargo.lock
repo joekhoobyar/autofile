@@ -151,6 +151,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "sprintf",
  "tokio",
  "tokio-util",
  "tower",
@@ -2662,6 +2663,15 @@ checksum = "67cf02bbac7a337dc36e4f5a693db6c21e7863f45070f7064577eb4367a3212b"
 dependencies = [
  "base64ct",
  "der",
+]
+
+[[package]]
+name = "sprintf"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0e59842c3aac5c7901ea11bbb02e60e5d67263b43d4361dec9303cca8e764eb"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]
