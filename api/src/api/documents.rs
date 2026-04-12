@@ -221,6 +221,13 @@ pub async fn delete(
                 .execute(conn)
                 .await?;
 
+                // Delete the tag document associations
+                diesel::delete(
+                    tag_documents::table.filter(tag_documents::document_id.eq(id)),
+                )
+                .execute(conn)
+                .await?;
+
                 // Delete the document metadata associations
                 diesel::delete(
                     document_metadatas::table.filter(document_metadatas::document_id.eq(id)),
