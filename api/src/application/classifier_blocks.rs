@@ -13,6 +13,7 @@ use regex::{Captures, Regex};
 use sprintf::sprintf;
 
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
+use crate::application::document_metadatas::{NewDocumentMetadata, document_metadatas_upsert};
 use crate::application::documents::get_document_view;
 use crate::application::documents::update_document;
 use crate::domain::classifier_blocks::ClassifierModifier;
@@ -22,7 +23,7 @@ use crate::domain::documents::DocumentView;
 use crate::schema::document_types;
 use crate::schema::{
     cabinet_documents, cabinets, classifier_blocks, document_file_ocr_pages, document_file_pages,
-    document_files, tag_documents, tags,
+    document_files, metadata_types, tag_documents, tags,
 };
 use crate::shared::app_state::AppState;
 use crate::shared::util::JobResult;
@@ -110,7 +111,7 @@ async fn classify_document_inner(
     // Iterate over all of the computed actions.
     let mut document_type_id: Option<i64> = None;
     let mut title: Option<String> = None;
-    let mut metadata: HashMap<String, String> = HashMap::new();
+    let mut computed_metadata: HashMap<String, String> = HashMap::new();
     for (key, value) in computed_actions {
         match key.as_str() {
             "_suggested_doctype" => {
@@ -143,7 +144,7 @@ async fn classify_document_inner(
             _ if key.starts_with('_') => continue,
             _ => {
                 // Otherwise, this is metadata that we want to apply to the document.
-                metadata.insert(key, value);
+                computed_metadata.insert(key, value);
                 ()
             }
         }
@@ -167,9 +168,40 @@ async fn classify_document_inner(
     // It is time to upsert it.
     tracing::info!(
         document_id,
-        ?metadata,
+        ?computed_metadata,
         "computed metadata to apply to document"
     );
+
+    if !computed_metadata.is_empty() {
+        let metadata_slugs: Vec<String> = computed_metadata.keys().cloned().collect();
+        let metadata_rows: Vec<(String, i64)> = metadata_types::table
+            .filter(metadata_types::slug.eq_any(&metadata_slugs))
+            .select((metadata_types::slug, metadata_types::id))
+            .load::<(String, i64)>(&mut db)
+            .await?;
+
+        let metadata_type_ids: HashMap<String, i64> = metadata_rows.into_iter().collect();
+        let mut metadata_input = Vec::new();
+
+        for (slug, value) in computed_metadata {
+            if let Some(metadata_type_id) = metadata_type_ids.get(&slug) {
+                metadata_input.push(NewDocumentMetadata {
+                    metadata_type_id: *metadata_type_id,
+                    value,
+                });
+            } else {
+                tracing::error!(
+                    document_id,
+                    slug,
+                    "classifier produced unknown metadata slug"
+                );
+            }
+        }
+
+        if !metadata_input.is_empty() {
+            document_metadatas_upsert(user_id, &mut db, document_id, metadata_input).await?;
+        }
+    }
 
     enqueue_document_index_document_updates(document_id, (*state).clone()).await?;
 
