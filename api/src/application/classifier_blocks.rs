@@ -1011,7 +1011,7 @@ mod tests {
 
     use chrono::Utc;
 
-    use crate::domain::classifier_blocks::ClassifierRules;
+    use crate::domain::classifier_blocks::{ClassifierModifier, ClassifierRules};
     use crate::domain::documents::DocumentView;
 
     fn build_document_view(metadata: &[(&str, &str)]) -> DocumentView {
@@ -1062,6 +1062,24 @@ mod tests {
             updated_by: 1,
             updated_at: Utc::now(),
         }
+    }
+
+    fn apply_modifier_for_test(
+        modifier: ClassifierModifier,
+        snippets: &[(u32, &str)],
+        computed_actions: &[(&str, &str)],
+    ) -> HashMap<u32, String> {
+        let mut snippets: HashMap<u32, String> = snippets
+            .iter()
+            .map(|(index, value)| (*index, (*value).to_string()))
+            .collect();
+        let mut computed_actions: HashMap<String, String> = computed_actions
+            .iter()
+            .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
+            .collect();
+
+        apply_modifier(&mut snippets, &modifier, &mut computed_actions);
+        snippets
     }
 
     #[test]
@@ -1177,5 +1195,313 @@ mod tests {
                 .expect("classification should succeed");
 
         assert_eq!(computed_actions.get("stage"), Some(&"first".to_string()));
+    }
+
+    #[test]
+    fn modifier_metadata_copies_from_computed_actions() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::Metadata {
+                to: 2,
+                slug: "invoice_number".to_string(),
+            },
+            &[],
+            &[("invoice_number", "123")],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"123".to_string()));
+    }
+
+    #[test]
+    fn modifier_month_number_formats_full_and_abbreviated_months() {
+        let full = apply_modifier_for_test(
+            ClassifierModifier::MonthNumber {
+                from: "\\1".to_string(),
+                to: 2,
+            },
+            &[(1, "January")],
+            &[],
+        );
+        let abbreviated = apply_modifier_for_test(
+            ClassifierModifier::MonthNumber {
+                from: "\\1".to_string(),
+                to: 2,
+            },
+            &[(1, "sep")],
+            &[],
+        );
+
+        assert_eq!(full.get(&2), Some(&"01".to_string()));
+        assert_eq!(abbreviated.get(&2), Some(&"09".to_string()));
+    }
+
+    #[test]
+    fn modifier_month_end_returns_last_day_of_month() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::MonthEnd {
+                from: "\\1".to_string(),
+                to: 2,
+            },
+            &[(1, "2024-02-10")],
+            &[],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"2024-02-29".to_string()));
+    }
+
+    #[test]
+    fn modifier_month_start_returns_first_day_of_month() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::MonthStart {
+                from: "\\1".to_string(),
+                to: 2,
+            },
+            &[(1, "2024-02-10")],
+            &[],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"2024-02-01".to_string()));
+    }
+
+    #[test]
+    fn modifier_next_day_supports_default_and_explicit_offsets() {
+        let default_offset = apply_modifier_for_test(
+            ClassifierModifier::NextDay {
+                from: "\\1".to_string(),
+                to: 2,
+            },
+            &[(1, "2024-01-10")],
+            &[],
+        );
+        let explicit_offset = apply_modifier_for_test(
+            ClassifierModifier::NextDay {
+                from: "2|\\1".to_string(),
+                to: 2,
+            },
+            &[(1, "2024-01-10")],
+            &[],
+        );
+
+        assert_eq!(default_offset.get(&2), Some(&"2024-01-11".to_string()));
+        assert_eq!(explicit_offset.get(&2), Some(&"2024-01-12".to_string()));
+    }
+
+    #[test]
+    fn modifier_prev_day_supports_default_and_explicit_offsets() {
+        let default_offset = apply_modifier_for_test(
+            ClassifierModifier::PrevDay {
+                from: "\\1".to_string(),
+                to: 2,
+            },
+            &[(1, "2024-01-10")],
+            &[],
+        );
+        let explicit_offset = apply_modifier_for_test(
+            ClassifierModifier::PrevDay {
+                from: "2|\\1".to_string(),
+                to: 2,
+            },
+            &[(1, "2024-01-10")],
+            &[],
+        );
+
+        assert_eq!(default_offset.get(&2), Some(&"2024-01-09".to_string()));
+        assert_eq!(explicit_offset.get(&2), Some(&"2024-01-08".to_string()));
+    }
+
+    #[test]
+    fn modifier_next_month_clamps_to_valid_day() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::NextMonth {
+                from: "\\1".to_string(),
+                to: 2,
+            },
+            &[(1, "2024-01-31")],
+            &[],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"2024-02-29".to_string()));
+    }
+
+    #[test]
+    fn modifier_prev_month_clamps_to_valid_day() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::PrevMonth {
+                from: "\\1".to_string(),
+                to: 2,
+            },
+            &[(1, "2024-03-31")],
+            &[],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"2024-02-29".to_string()));
+    }
+
+    #[test]
+    fn modifier_tax_year_uses_shifted_month_year() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::TaxYear {
+                from: "\\1".to_string(),
+                to: 2,
+            },
+            &[(1, "2024-12-31")],
+            &[],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"2025".to_string()));
+    }
+
+    #[test]
+    fn modifier_currency_normalizes_currency_text() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::Currency {
+                from: "\\1".to_string(),
+                to: 2,
+            },
+            &[(1, "$001,234")],
+            &[],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"1234".to_string()));
+    }
+
+    #[test]
+    fn modifier_sprintf_formats_and_zero_pads() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::Sprintf {
+                from: "\\1".to_string(),
+                to: 2,
+                format: "%4s".to_string(),
+            },
+            &[(1, "007")],
+            &[],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"0007".to_string()));
+    }
+
+    #[test]
+    fn modifier_replace_applies_snippet_replacements() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::Replace {
+                from: "INV-\\1".to_string(),
+                to: 2,
+            },
+            &[(1, "123")],
+            &[],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"INV-123".to_string()));
+    }
+
+    #[test]
+    fn modifier_alnum_sanitize_removes_punctuation_and_compacts_whitespace() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::AlnumSanitize {
+                from: "\\1".to_string(),
+                to: 2,
+            },
+            &[(1, " ACME-123 / West ")],
+            &[],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"ACME123 West".to_string()));
+    }
+
+    #[test]
+    fn modifier_date_format_uses_requested_output_format() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::DateFormat {
+                from: "\\1".to_string(),
+                to: 2,
+                format: "%m/%d/%Y".to_string(),
+            },
+            &[(1, "2024-01-10")],
+            &[],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"01/10/2024".to_string()));
+    }
+
+    #[test]
+    fn modifier_add_sums_numeric_snippets() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::Add { from: 1, to: 2 },
+            &[(1, "2"), (2, "10")],
+            &[],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"12".to_string()));
+    }
+
+    #[test]
+    fn modifier_sub_subtracts_numeric_snippets() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::Sub { from: 1, to: 2 },
+            &[(1, "2"), (2, "10")],
+            &[],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"8".to_string()));
+    }
+
+    #[test]
+    fn modifier_mul_multiplies_numeric_snippets() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::Mul { from: 1, to: 2 },
+            &[(1, "2"), (2, "10")],
+            &[],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"20".to_string()));
+    }
+
+    #[test]
+    fn modifier_div_divides_numeric_snippets() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::Div { from: 1, to: 2 },
+            &[(1, "2"), (2, "10")],
+            &[],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"5".to_string()));
+    }
+
+    #[test]
+    fn modifier_invalid_inputs_do_not_write_output() {
+        let missing_metadata = apply_modifier_for_test(
+            ClassifierModifier::Metadata {
+                to: 2,
+                slug: "missing".to_string(),
+            },
+            &[],
+            &[],
+        );
+        let invalid_month = apply_modifier_for_test(
+            ClassifierModifier::MonthNumber {
+                from: "\\1".to_string(),
+                to: 2,
+            },
+            &[(1, "NotAMonth")],
+            &[],
+        );
+        let invalid_date = apply_modifier_for_test(
+            ClassifierModifier::DateFormat {
+                from: "\\1".to_string(),
+                to: 2,
+                format: "%m/%d/%Y".to_string(),
+            },
+            &[(1, "not-a-date")],
+            &[],
+        );
+        let divide_by_zero = apply_modifier_for_test(
+            ClassifierModifier::Div { from: 1, to: 2 },
+            &[(1, "0"), (2, "10")],
+            &[],
+        );
+
+        assert!(!missing_metadata.contains_key(&2));
+        assert!(!invalid_month.contains_key(&2));
+        assert!(!invalid_date.contains_key(&2));
+        assert_eq!(divide_by_zero.get(&2), Some(&"10".to_string()));
     }
 }
