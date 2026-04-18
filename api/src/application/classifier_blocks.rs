@@ -472,6 +472,12 @@ fn does_document_match_pattern<'a>(
     // If the pattern has metadata, check if the document metadata contains all of the key-value pairs in the pattern metadata.
     if let Some(pattern_metadata) = &pattern.metadata {
         for (key, value) in pattern_metadata {
+            tracing::debug!(
+                document_id = document.id,
+                metadata_key = key,
+                metadata_value = value,
+                "testing metadata"
+            );
             match document.metadata.get(key) {
                 Some(document_value) if document_value == value => (),
                 _ => return Ok(PatternMatch::None),
@@ -481,6 +487,11 @@ fn does_document_match_pattern<'a>(
 
     // If the pattern has text, check if the document content text contains the pattern text.
     if let Some(pattern_text) = &pattern.text {
+        tracing::debug!(
+            document_id = document.id,
+            pattern_text = pattern.text,
+            "testing pattern"
+        );
         // Convert the pattern text to a regex pattern.
         // Test if the document text matches the regex pattern.
         let reg = Regex::new(pattern_text)?;
@@ -653,30 +664,26 @@ fn mod_div(snippets: &HashMap<u32, String>, from: u32, to: u32) -> Option<String
 
 fn mod_month_number(value: &str) -> Option<String> {
     // Normalize: remove spaces and capitalize first letter, lowercase rest
-    let mut name = value.replace(' ', "").to_lowercase();
-    if let Some(first) = name.get_mut(0..1) {
-        first.make_ascii_uppercase();
-    }
+    let name = value.replace(' ', "").to_lowercase();
 
     // Month name tables (like Ruby's Date::MONTHNAMES / ABBR_MONTHNAMES)
-    const MONTHS: [&str; 13] = [
-        "",
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
+    const MONTHS: [&str; 12] = [
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
     ];
 
-    const ABBR_MONTHS: [&str; 13] = [
-        "", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    const ABBR_MONTHS: [&str; 12] = [
+        "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
     ];
 
     // Find index (like Ruby's `.index`)
@@ -686,10 +693,13 @@ fn mod_month_number(value: &str) -> Option<String> {
         .or_else(|| ABBR_MONTHS.iter().position(|&m| m == name));
 
     // Format like '%02d'
-    number.map(|n| format!("{:02}", n))
+    let result = number.map(|n| format!("{:02}", n + 1));
+    tracing::debug!(value, result = &result, "classifier modifier: month_number");
+    result
 }
 
 fn mod_sprintf(value: &str, fmt: &str) -> String {
+    tracing::debug!(value, fmt, "classifier modifier: sprintf");
     let mut v = value;
     let re = Regex::new(r"^0+([1-9])").unwrap();
     if let Some(caps) = re.captures(value) {
