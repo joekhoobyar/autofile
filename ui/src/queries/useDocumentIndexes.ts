@@ -60,3 +60,13 @@ export function useDeleteDocumentIndex(): UseMutationResult<void, HttpError, num
     },
   });
 }
+
+export function useRebuildDocumentIndex(): UseMutationResult<void, HttpError, number> {
+  return useMutation<void, HttpError, number>({
+    mutationFn: async (input) => {
+      return apiMutate<void, void>(`api/v1/document-indexes/${input}/rebuild`, {
+        method: 'POST',
+      });
+    },
+  });
+}

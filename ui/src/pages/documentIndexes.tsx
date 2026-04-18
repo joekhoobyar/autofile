@@ -8,10 +8,12 @@ import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
 import { Checkbox } from 'primereact/checkbox';
+import { Menu } from 'primereact/menu';
+import type { MenuItem } from 'primereact/menuitem';
 import { classNames } from 'primereact/utils';
 
 import type { ListParams } from '../api';
-import { useDeleteDocumentIndex, useDocumentIndex, useDocumentIndexes, useSaveDocumentIndex } from '../queries/useDocumentIndexes';
+import { useDeleteDocumentIndex, useDocumentIndex, useDocumentIndexes, useRebuildDocumentIndex, useSaveDocumentIndex } from '../queries/useDocumentIndexes';
 import { type DocumentIndex } from '../models/documentIndex';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
@@ -19,8 +21,9 @@ import { Toast } from 'primereact/toast';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 
 export function ListDocumentIndexes() {
-  const toast = useRef(null);
+  const toast = useRef<Toast>(null);
   const deleteDocumentIndex = useDeleteDocumentIndex();
+  const rebuildDocumentIndex = useRebuildDocumentIndex();
   const [listParams, setListParams] = useState<ListParams>({sf: 'name'});
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useDocumentIndexes(listParams);
@@ -43,21 +46,29 @@ export function ListDocumentIndexes() {
         <i className="pi pi-times" style={{color: 'var(--red-600)'}} />;
   }, []);
 
-  const actionTemplate = (c: DocumentIndex) => {
-    return (
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" icon="pi pi-folder-open" severity="info" rounded text raised aria-description="Edit"
-          onClick={() => navigate(`${c.id}/templates`)}
-        ></Button>
-        <Button type="button" icon="pi pi-pencil" severity="success" rounded text raised aria-description="Edit"
-          onClick={() => navigate(`${c.id}/edit`)}
-        ></Button>
-        <Button type="button" icon="pi pi-trash" severity="danger" rounded text raised aria-description="Delete"
-          onClick={() => confirmDeleteDocumentIndex(c)}
-        ></Button>
-      </div>
-    );
+  const doRebuildDocumentIndex = async (c: DocumentIndex) => {
+    try {
+      await rebuildDocumentIndex.mutateAsync(c.id);
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Rebuild queued',
+        detail: `Rebuild queued for ${c.name}.`,
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Failed to queue rebuild';
+      toast.current?.show({ severity: 'error', summary: 'Rebuild failed', detail });
+    }
   };
+
+  const actionTemplate = (c: DocumentIndex) => (
+    <DocumentIndexRowActions
+      documentIndex={c}
+      navigate={navigate}
+      onDelete={confirmDeleteDocumentIndex}
+      onRebuild={doRebuildDocumentIndex}
+      rebuildPending={rebuildDocumentIndex.isPending && rebuildDocumentIndex.variables === c.id}
+    />
+  );
 
   const doDeleteDocumentIndex = async (c: DocumentIndex) => {
     await deleteDocumentIndex.mutateAsync(c.id, {
@@ -109,6 +120,51 @@ export function ListDocumentIndexes() {
     <Toast ref={toast} />
     <ConfirmDialog />
     </>
+  );
+}
+
+function DocumentIndexRowActions({
+  documentIndex,
+  navigate,
+  onDelete,
+  onRebuild,
+  rebuildPending,
+}: Readonly<{
+  documentIndex: DocumentIndex;
+  navigate: ReturnType<typeof useNavigate>;
+  onDelete: (documentIndex: DocumentIndex) => void;
+  onRebuild: (documentIndex: DocumentIndex) => void | Promise<void>;
+  rebuildPending: boolean;
+}>) {
+  const actionMenu = useRef<Menu>(null);
+
+  const menuItems: MenuItem[] = [
+    {
+      label: 'Edit Templates',
+      icon: 'pi pi-folder-open',
+      command: () => navigate(`${documentIndex.id}/templates`),
+    },
+    {
+      label: 'Rebuild Index',
+      icon: rebuildPending ? 'pi pi-spin pi-spinner' : 'pi pi-refresh',
+      disabled: rebuildPending,
+      command: () => void onRebuild(documentIndex),
+    },
+  ];
+
+  return (
+    <div className="flex justify-content-end gap-2">
+      <Menu model={menuItems} popup ref={actionMenu} popupAlignment="right" style={{ minWidth: '14rem' }} />
+      <Button type="button" icon="pi pi-pencil" severity="success" rounded text raised aria-description="Edit"
+        onClick={() => navigate(`${documentIndex.id}/edit`)}
+      ></Button>
+      <Button type="button" icon="pi pi-trash" severity="danger" rounded text raised aria-description="Delete"
+        onClick={() => onDelete(documentIndex)}
+      ></Button>
+      <Button type="button" icon="pi pi-ellipsis-v" severity="secondary" rounded text raised aria-description="More actions"
+        onClick={(event) => actionMenu.current?.toggle(event)}
+      ></Button>
+    </div>
   );
 }
 
