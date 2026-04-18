@@ -90,8 +90,12 @@ async fn classify_document_inner(
     for classifier_block in classifier_blocks {
         let rules = &classifier_block.rules.0;
 
-        let pattern_match =
-            find_first_match(&document_view, &document_text, &rules.match_patterns)?;
+        let pattern_match = find_first_match(
+            &document_view,
+            &document_text,
+            &computed_actions,
+            &rules.match_patterns,
+        )?;
 
         // If any of the match_patterns match, then we can apply the match_actions to the document,
         // and then move on to the child_rules application.
@@ -391,6 +395,7 @@ async fn load_classifier_blocks(
 fn find_first_match<'a>(
     document: &'a DocumentView,
     document_text: &'a str,
+    computed_actions: &HashMap<String, String>,
     patterns: &'a [ClassifierPattern],
 ) -> JobResult<Option<PatternMatch<'a>>> {
 
@@ -400,7 +405,8 @@ fn find_first_match<'a>(
     }
 
     for pattern in patterns {
-        let pattern_match = does_document_match_pattern(document, document_text, pattern)?;
+        let pattern_match =
+            does_document_match_pattern(document, document_text, computed_actions, pattern)?;
         if !matches!(pattern_match, PatternMatch::None) {
             return Ok(Some(pattern_match));
         }
@@ -431,7 +437,12 @@ fn apply_child_rules(
 ) -> JobResult<()> {
     for rule in child_rules {
         // Skip non-matching rules
-        let matched = does_document_match_pattern(document, document_text, &rule.pattern)?;
+        let matched = does_document_match_pattern(
+            document,
+            document_text,
+            computed_actions,
+            &rule.pattern,
+        )?;
         if matches!(matched, PatternMatch::None) {
             continue;
         }
@@ -485,20 +496,55 @@ fn apply_replacements(value: &str, snippets: &HashMap<u32, String>) -> String {
 fn does_document_match_pattern<'a>(
     document: &'a DocumentView,
     document_text: &'a str,
+    computed_actions: &HashMap<String, String>,
     pattern: &'a ClassifierPattern,
 ) -> JobResult<PatternMatch<'a>> {
     // If the pattern has metadata, check if the document metadata contains all of the key-value pairs in the pattern metadata.
     if let Some(pattern_metadata) = &pattern.metadata {
         for (key, value) in pattern_metadata {
-            tracing::debug!(
-                document_id = document.id,
-                metadata_key = key,
-                metadata_value = value,
-                "classification: testing metadata"
-            );
+            if let Some(computed_value) = computed_actions.get(key) {
+                tracing::debug!(
+                    document_id = document.id,
+                    metadata_key = key,
+                    metadata_expected_value = value,
+                    metadata_actual_value = computed_value,
+                    metadata_source = "computed_actions",
+                    "classification: testing metadata"
+                );
+
+                if computed_value != value {
+                    return Ok(PatternMatch::None);
+                }
+
+                continue;
+            }
+
             match document.metadata.get(key) {
-                Some(document_value) if document_value == value => (),
-                _ => return Ok(PatternMatch::None),
+                Some(document_value) => {
+                    tracing::debug!(
+                        document_id = document.id,
+                        metadata_key = key,
+                        metadata_expected_value = value,
+                        metadata_actual_value = document_value,
+                        metadata_source = "document",
+                        "classification: testing metadata"
+                    );
+
+                    if document_value != value {
+                        return Ok(PatternMatch::None);
+                    }
+                }
+                None => {
+                    tracing::debug!(
+                        document_id = document.id,
+                        metadata_key = key,
+                        metadata_expected_value = value,
+                        metadata_source = "document",
+                        "classification: testing metadata"
+                    );
+
+                    return Ok(PatternMatch::None);
+                }
             }
         }
     }
