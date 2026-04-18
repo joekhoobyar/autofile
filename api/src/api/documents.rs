@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::AppState;
+use crate::shared::app_state::AppState;
 use crate::application::document_index_documents::delete_document_index_document;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::documents::{get_document_view, update_document};
@@ -222,11 +222,9 @@ pub async fn delete(
                 .await?;
 
                 // Delete the tag document associations
-                diesel::delete(
-                    tag_documents::table.filter(tag_documents::document_id.eq(id)),
-                )
-                .execute(conn)
-                .await?;
+                diesel::delete(tag_documents::table.filter(tag_documents::document_id.eq(id)))
+                    .execute(conn)
+                    .await?;
 
                 // Delete the document metadata associations
                 diesel::delete(

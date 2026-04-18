@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::AppState;
+use crate::shared::app_state::AppState;
 use crate::domain::tags::Tag;
 use crate::schema::tags;
 use crate::shared::auth::AuthUser;

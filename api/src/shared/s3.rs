@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use httpdate::{fmt_http_date, parse_http_date};
 use tokio_util::io::ReaderStream;
 
-use crate::AppState;
+use crate::shared::app_state::AppState;
 use crate::shared::util::ApiError;
 
 pub async fn serve_s3_file(

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::AppState;
+use crate::shared::app_state::AppState;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::domain::tag_documents::TagDocument;
 use crate::schema::tag_documents;

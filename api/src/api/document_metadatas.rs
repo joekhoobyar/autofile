@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::AppState;
+use crate::shared::app_state::AppState;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::document_metadatas::{NewDocumentMetadata, document_metadatas_upsert};
 use crate::domain::document_metadatas::DocumentMetadata;

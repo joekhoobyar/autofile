@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::AppState;
+use crate::shared::app_state::AppState;
 use crate::domain::classifier_blocks::{ClassifierBlock, ClassifierRules};
 use crate::schema::classifier_blocks;
 use crate::shared::auth::AuthUser;
@@ -256,14 +256,15 @@ async fn reorder(
                         .map_err(Into::into);
                 }
 
-                diesel::sql_query(
-                    "SET CONSTRAINTS classifier_blocks_order_key DEFERRED",
-                )
-                .execute(conn)
-                .await
-                .map_err(|e| {
-                    ApiError::new(diesel_to_http(e), "Failed to prepare classifier_block reorder")
-                })?;
+                diesel::sql_query("SET CONSTRAINTS classifier_blocks_order_key DEFERRED")
+                    .execute(conn)
+                    .await
+                    .map_err(|e| {
+                        ApiError::new(
+                            diesel_to_http(e),
+                            "Failed to prepare classifier_block reorder",
+                        )
+                    })?;
 
                 diesel::sql_query(
                     r#"
@@ -302,7 +303,9 @@ async fn reorder(
                     .select(ClassifierBlock::as_select())
                     .first::<ClassifierBlock>(conn)
                     .await
-                    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block"))
+                    .map_err(|e| {
+                        ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block")
+                    })
                     .map_err(Into::into)
             })
         })

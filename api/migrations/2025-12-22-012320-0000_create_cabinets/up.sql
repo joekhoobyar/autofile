@@ -1,5 +1,5 @@
 -- Your SQL goes here
-ALTER TABLE "users" ADD COLUMN "email" VARCHAR NOT NULL;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "email" VARCHAR NOT NULL;
 
 CREATE TABLE "cabinets"(
 	"id" BIGSERIAL PRIMARY KEY,
@@ -9,4 +9,3 @@ CREATE TABLE "cabinets"(
 	"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 	"updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-

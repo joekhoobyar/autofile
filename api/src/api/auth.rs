@@ -7,7 +7,8 @@ use crate::shared::auth::{
 };
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, diesel_to_http};
-use crate::{AppState, is_production};
+use crate::is_production;
+use crate::shared::app_state::AppState;
 
 use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
 use chrono::Utc;

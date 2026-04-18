@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::AppState;
+use crate::shared::app_state::AppState;
 use crate::domain::document_indexes::DocumentIndex;
 use crate::schema::{
     document_index_documents, document_index_templates, document_index_values, document_indexes,

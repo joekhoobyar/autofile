@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::AppState;
+use crate::shared::app_state::AppState;
 use crate::domain::document_types_metadata_types::DocumentTypeMetadataType;
 use crate::schema::{document_types_metadata_types, metadata_types};
 use crate::shared::auth::AuthUser;

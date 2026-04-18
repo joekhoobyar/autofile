@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::AppState;
+use crate::shared::app_state::AppState;
 use crate::domain::document_files::{DocumentFileOcrPage, DocumentFilePage};
 use crate::schema::{document_file_ocr_pages, document_file_pages, document_files};
 use crate::shared::auth::AuthUser;

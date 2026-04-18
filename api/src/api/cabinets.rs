@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::AppState;
+use crate::shared::app_state::AppState;
 use crate::domain::cabinets::Cabinet;
 use crate::schema::cabinets;
 use crate::shared::auth::AuthUser;

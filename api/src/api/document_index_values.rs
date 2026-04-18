@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::AppState;
+use crate::shared::app_state::AppState;
 use crate::domain::document_indexes::DocumentIndexValue;
 use crate::schema::document_index_values;
 use crate::shared::auth::AuthUser;

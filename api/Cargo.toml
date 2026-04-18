@@ -40,3 +40,7 @@ redis = { version = "0.32", features = ["tokio-comp"] }
 minijinja = { version = "2.18" } 
 regex = "1.12.3"
 sprintf = "0.4.3"
+
+[dev-dependencies]
+testcontainers = "0.23"
+testcontainers-modules = { version = "0.11", features = ["postgres"] }

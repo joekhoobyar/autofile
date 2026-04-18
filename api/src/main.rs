@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::sync::OnceLock;
 
 use axum::{
     Json, Router,
@@ -14,7 +13,6 @@ use diesel_async::{
     AsyncPgConnection,
     pooled_connection::{AsyncDieselConnectionManager, bb8},
 };
-use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use redis::AsyncCommands;
 use tokio::signal;
 use tokio::sync::watch;
@@ -25,68 +23,12 @@ use apalis::layers::retry::RetryPolicy;
 use apalis::prelude::*;
 use apalis_redis::RedisStorage;
 
-mod schema;
-mod api {
-    pub mod auth;
-    pub mod cabinet_documents;
-    pub mod cabinets;
-    pub mod classifier_blocks;
-    pub mod document_file_pages;
-    pub mod document_files;
-    pub mod document_index_templates;
-    pub mod document_index_values;
-    pub mod document_indexes;
-    pub mod document_metadatas;
-    pub mod document_types;
-    pub mod document_types_metadata_types;
-    pub mod documents;
-    pub mod metadata_types;
-    pub mod tag_documents;
-    pub mod tags;
-    pub mod users;
-}
-mod application {
-    pub mod classifier_blocks;
-    pub mod document_files;
-    pub mod document_index_documents;
-    pub mod document_metadatas;
-    pub mod document_thumbnails;
-    pub mod documents;
-    pub mod jobs;
-}
-mod domain {
-    pub mod cabinet_documents;
-    pub mod cabinets;
-    pub mod classifier_blocks;
-    pub mod document_files;
-    pub mod document_indexes;
-    pub mod document_metadatas;
-    pub mod document_types;
-    pub mod document_types_metadata_types;
-    pub mod documents;
-    pub mod metadata_types;
-    pub mod tag_documents;
-    pub mod tags;
-    pub mod users;
-}
-mod infrastructure {
-    pub mod s3;
-}
-mod shared {
-    pub mod app_state;
-    pub mod auth;
-    pub mod extractors;
-    pub mod s3;
-    pub mod util;
-}
-
-use shared::extractors::DbConn;
-
-use crate::application::jobs::{FastJob, MediumJob, handle_fast_job, handle_medium_job};
-use crate::shared::app_state::AppState;
-use crate::shared::util::ApiError;
-
-pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
+use autofile_api::api;
+use autofile_api::application::jobs::{FastJob, MediumJob, handle_fast_job, handle_medium_job};
+use autofile_api::run_migrations;
+use autofile_api::shared::app_state::AppState;
+use autofile_api::shared::extractors::DbConn;
+use autofile_api::shared::util::ApiError;
 
 #[tokio::main]
 async fn main() {
@@ -317,32 +259,6 @@ async fn health_ready(DbConn(mut conn): DbConn) -> Result<Json<ReadyResponse>, A
 pub struct ReadyResponse {
     ok: bool,
     db: bool,
-}
-
-async fn run_migrations(database_url: &str) {
-    let database_url = database_url.to_string();
-
-    tokio::task::spawn_blocking(move || {
-        let mut conn = <diesel::PgConnection as diesel::Connection>::establish(&database_url)
-            .expect("Failed to establish connection for migrations");
-
-        conn.run_pending_migrations(MIGRATIONS)
-            .expect("Failed to run migrations");
-
-        tracing::info!("Migrations completed successfully");
-    })
-    .await
-    .expect("Migration task panicked");
-}
-
-static IS_PRODUCTION: OnceLock<bool> = OnceLock::new();
-
-pub fn is_production() -> bool {
-    *IS_PRODUCTION.get_or_init(|| {
-        std::env::var("APP_MODE")
-            .map(|v| v.eq_ignore_ascii_case("production"))
-            .unwrap_or(false)
-    })
 }
 
 async fn shutdown_signal() {

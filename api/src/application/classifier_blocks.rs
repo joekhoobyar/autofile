@@ -68,6 +68,18 @@ async fn classify_document_inner(
     user_id: i64,
     state: Data<Arc<AppState>>,
 ) -> JobResult<()> {
+    classify_document_inner_without_enqueue(document_id, user_id, state.clone()).await?;
+
+    enqueue_document_index_document_updates(document_id, (*state).clone()).await?;
+
+    Ok(())
+}
+
+pub async fn classify_document_inner_without_enqueue(
+    document_id: i64,
+    user_id: i64,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
     tracing::info!(document_id, "classification: classifying document");
 
     let mut db = state.db_pool.get().await?;
@@ -82,6 +94,25 @@ async fn classify_document_inner(
     // Load all of the classifier blocks from the database, ordered by their "order" field.
     let classifier_blocks = load_classifier_blocks(&mut db).await?;
 
+    let computed_actions = compute_classification_actions(
+        document_id,
+        &document_view,
+        &document_text,
+        &classifier_blocks,
+    )?;
+
+    // Finally, we will have a set of computed actions that we want to apply to the document.
+    persist_computed_actions(&mut db, document_id, user_id, computed_actions).await?;
+
+    Ok(())
+}
+
+pub fn compute_classification_actions(
+    document_id: i64,
+    document_view: &DocumentView,
+    document_text: &str,
+    classifier_blocks: &[ClassifierBlock],
+) -> JobResult<HashMap<String, String>> {
     let mut computed_actions = HashMap::new();
 
     // Iterate over each classifier block and pull out it's ClassifierRules.
@@ -91,8 +122,8 @@ async fn classify_document_inner(
         let rules = &classifier_block.rules.0;
 
         let pattern_match = find_first_match(
-            &document_view,
-            &document_text,
+            document_view,
+            document_text,
             &computed_actions,
             &rules.match_patterns,
         )?;
@@ -100,11 +131,15 @@ async fn classify_document_inner(
         // If any of the match_patterns match, then we can apply the match_actions to the document,
         // and then move on to the child_rules application.
         if pattern_match.is_some() {
-            tracing::debug!(document_id, classifier_block_id = classifier_block.id, "classification: block matched");
+            tracing::debug!(
+                document_id,
+                classifier_block_id = classifier_block.id,
+                "classification: block matched"
+            );
             apply_match_actions(&mut computed_actions, &rules.match_actions);
             apply_child_rules(
-                &document_view,
-                &document_text,
+                document_view,
+                document_text,
                 &mut computed_actions,
                 &rules.child_rules,
             )?;
@@ -115,9 +150,21 @@ async fn classify_document_inner(
         }
     }
 
-    // Finally, we will have a set of computed actions that we want to apply to the document.
+    Ok(computed_actions)
+}
+
+pub async fn persist_computed_actions(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    user_id: i64,
+    computed_actions: HashMap<String, String>,
+) -> JobResult<()> {
     // Iterate over all of the computed actions.
-    tracing::debug!(document_id, ?computed_actions, "classification: computed actions");
+    tracing::debug!(
+        document_id,
+        ?computed_actions,
+        "classification: computed actions"
+    );
     let mut document_type_id: Option<i64> = None;
     let mut title: Option<String> = None;
     let mut computed_metadata: HashMap<String, String> = HashMap::new();
@@ -132,23 +179,31 @@ async fn classify_document_inner(
                 let doctype = document_types::table
                     .filter(document_types::slug.eq(value))
                     .select(document_types::id)
-                    .first::<i64>(&mut db)
+                    .first::<i64>(db)
                     .await?;
                 document_type_id = Some(doctype);
             }
             "_suggested_filename" => {
-                tracing::info!(document_id, title = value, "classification: suggested title");
+                tracing::info!(
+                    document_id,
+                    title = value,
+                    "classification: suggested title"
+                );
                 title = Some(value);
             }
             "_suggested_tags" => {
                 tracing::info!(document_id, tags = value, "classification: suggested tags");
                 let slugs = parse_slug_list(&value);
-                apply_suggested_tags(&mut db, document_id, user_id, &slugs).await?;
+                apply_suggested_tags(db, document_id, user_id, &slugs).await?;
             }
             "_suggested_cabinets" => {
-                tracing::info!(document_id, cabinets = value, "classification: suggested cabinet");
+                tracing::info!(
+                    document_id,
+                    cabinets = value,
+                    "classification: suggested cabinet"
+                );
                 let slugs = parse_slug_list(&value);
-                apply_suggested_cabinets(&mut db, document_id, user_id, &slugs).await?;
+                apply_suggested_cabinets(db, document_id, user_id, &slugs).await?;
             }
             _ if key.starts_with('_') => continue,
             _ => {
@@ -163,7 +218,7 @@ async fn classify_document_inner(
     if document_type_id.is_some() || title.is_some() {
         update_document(
             user_id,
-            &mut db,
+            db,
             document_id,
             DocumentChangeset {
                 title,
@@ -186,7 +241,7 @@ async fn classify_document_inner(
         let metadata_rows: Vec<(String, i64)> = metadata_types::table
             .filter(metadata_types::slug.eq_any(&metadata_slugs))
             .select((metadata_types::slug, metadata_types::id))
-            .load::<(String, i64)>(&mut db)
+            .load::<(String, i64)>(db)
             .await?;
 
         let metadata_type_ids: HashMap<String, i64> = metadata_rows.into_iter().collect();
@@ -208,11 +263,9 @@ async fn classify_document_inner(
         }
 
         if !metadata_input.is_empty() {
-            document_metadatas_upsert(user_id, &mut db, document_id, metadata_input).await?;
+            document_metadatas_upsert(user_id, db, document_id, metadata_input).await?;
         }
     }
-
-    enqueue_document_index_document_updates(document_id, (*state).clone()).await?;
 
     Ok(())
 }
@@ -298,7 +351,11 @@ async fn apply_suggested_cabinets(
     let found_slugs: HashSet<String> = rows.iter().map(|(_, slug)| slug.clone()).collect();
     for slug in slugs {
         if !found_slugs.contains(slug) {
-            tracing::warn!(document_id, slug, "classification: suggested cabinet not found");
+            tracing::warn!(
+                document_id,
+                slug,
+                "classification: suggested cabinet not found"
+            );
         }
     }
 
@@ -332,7 +389,7 @@ async fn apply_suggested_cabinets(
     Ok(())
 }
 
-async fn load_document_text(
+pub async fn load_document_text(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
     document_id: i64,
 ) -> JobResult<String> {
@@ -381,7 +438,7 @@ fn join_non_empty_pages(pages: Vec<Option<String>>) -> String {
         .join("\n\n")
 }
 
-async fn load_classifier_blocks(
+pub async fn load_classifier_blocks(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
 ) -> JobResult<Vec<ClassifierBlock>> {
     Ok(classifier_blocks::table
@@ -398,7 +455,6 @@ fn find_first_match<'a>(
     computed_actions: &HashMap<String, String>,
     patterns: &'a [ClassifierPattern],
 ) -> JobResult<Option<PatternMatch<'a>>> {
-
     // Allow empty patterns to match by default, so that we can apply global child rules at any point during the flow.
     if patterns.len() == 0 {
         return Ok(Some(PatternMatch::Metadata));
@@ -437,12 +493,8 @@ fn apply_child_rules(
 ) -> JobResult<()> {
     for rule in child_rules {
         // Skip non-matching rules
-        let matched = does_document_match_pattern(
-            document,
-            document_text,
-            computed_actions,
-            &rule.pattern,
-        )?;
+        let matched =
+            does_document_match_pattern(document, document_text, computed_actions, &rule.pattern)?;
         if matches!(matched, PatternMatch::None) {
             continue;
         }
@@ -758,7 +810,11 @@ fn mod_month_number(value: &str) -> Option<String> {
 
     // Format like '%02d'
     let result = number.map(|n| format!("{:02}", n + 1));
-    tracing::debug!(value, result = &result, "classification: modifier: month_number");
+    tracing::debug!(
+        value,
+        result = &result,
+        "classification: modifier: month_number"
+    );
     result
 }
 
@@ -945,4 +1001,181 @@ fn last_day_of_month(year: i32, month: u32) -> u32 {
         }
     }
     unreachable!()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::collections::HashMap;
+
+    use chrono::Utc;
+
+    use crate::domain::classifier_blocks::ClassifierRules;
+    use crate::domain::documents::DocumentView;
+
+    fn build_document_view(metadata: &[(&str, &str)]) -> DocumentView {
+        DocumentView {
+            id: 1,
+            title: "Test Document".to_string(),
+            document_type_id: 1,
+            pages: 1,
+            metadata: metadata
+                .iter()
+                .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
+                .collect(),
+            cabinet_ids: Vec::new(),
+            tag_ids: Vec::new(),
+            created_by: 1,
+            created_at: Utc::now(),
+            updated_by: 1,
+            updated_at: Utc::now(),
+        }
+    }
+
+    fn build_rules(
+        continue_after_match: bool,
+        match_patterns: Vec<ClassifierPattern>,
+        match_actions: &[(&str, &str)],
+    ) -> ClassifierRules {
+        ClassifierRules {
+            continue_after_match,
+            match_patterns,
+            match_actions: match_actions
+                .iter()
+                .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
+                .collect(),
+            child_rules: Vec::new(),
+        }
+    }
+
+    fn build_block(id: i64, order: i32, rules: ClassifierRules) -> ClassifierBlock {
+        ClassifierBlock {
+            id,
+            name: format!("Block {id}"),
+            description: None,
+            enabled: true,
+            order,
+            rules: diesel_json::Json(rules),
+            created_by: 1,
+            created_at: Utc::now(),
+            updated_by: 1,
+            updated_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn metadata_matching_prefers_computed_actions_over_document_metadata() {
+        let document = build_document_view(&[("status", "fallback")]);
+        let computed_actions = HashMap::from([("status".to_string(), "computed".to_string())]);
+        let pattern = ClassifierPattern {
+            text: None,
+            metadata: Some(HashMap::from([(
+                "status".to_string(),
+                "computed".to_string(),
+            )])),
+        };
+
+        let matched = does_document_match_pattern(&document, "", &computed_actions, &pattern)
+            .expect("pattern match should succeed");
+
+        assert!(matches!(matched, PatternMatch::Metadata));
+    }
+
+    #[test]
+    fn metadata_matching_does_not_fallback_when_computed_action_key_exists() {
+        let document = build_document_view(&[("status", "fallback")]);
+        let computed_actions = HashMap::from([("status".to_string(), "computed".to_string())]);
+        let pattern = ClassifierPattern {
+            text: None,
+            metadata: Some(HashMap::from([(
+                "status".to_string(),
+                "fallback".to_string(),
+            )])),
+        };
+
+        let matched = does_document_match_pattern(&document, "", &computed_actions, &pattern)
+            .expect("pattern match should succeed");
+
+        assert!(matches!(matched, PatternMatch::None));
+    }
+
+    #[test]
+    fn compute_classification_actions_continues_and_overwrites_later_blocks() {
+        let document = build_document_view(&[]);
+        let blocks = vec![
+            build_block(
+                1,
+                1,
+                build_rules(
+                    true,
+                    vec![ClassifierPattern {
+                        text: Some("Invoice".to_string()),
+                        metadata: None,
+                    }],
+                    &[("stage", "first"), ("shared", "from-first")],
+                ),
+            ),
+            build_block(
+                2,
+                2,
+                build_rules(
+                    false,
+                    vec![ClassifierPattern {
+                        text: None,
+                        metadata: Some(HashMap::from([("stage".to_string(), "first".to_string())])),
+                    }],
+                    &[("shared", "from-second"), ("final", "done")],
+                ),
+            ),
+        ];
+
+        let computed_actions =
+            compute_classification_actions(document.id, &document, "Invoice #123", &blocks)
+                .expect("classification should succeed");
+
+        assert_eq!(computed_actions.get("stage"), Some(&"first".to_string()));
+        assert_eq!(
+            computed_actions.get("shared"),
+            Some(&"from-second".to_string())
+        );
+        assert_eq!(computed_actions.get("final"), Some(&"done".to_string()));
+    }
+
+    #[test]
+    fn compute_classification_actions_stops_when_continue_after_match_is_false() {
+        let document = build_document_view(&[]);
+        let blocks = vec![
+            build_block(
+                1,
+                1,
+                build_rules(
+                    false,
+                    vec![ClassifierPattern {
+                        text: Some("Invoice".to_string()),
+                        metadata: None,
+                    }],
+                    &[("stage", "first")],
+                ),
+            ),
+            build_block(
+                2,
+                2,
+                build_rules(
+                    false,
+                    vec![ClassifierPattern {
+                        text: Some("Invoice".to_string()),
+                        metadata: None,
+                    }],
+                    &[("stage", "second")],
+                ),
+            ),
+        ];
+
+        let computed_actions =
+            compute_classification_actions(document.id, &document, "Invoice #123", &blocks)
+                .expect("classification should succeed");
+
+        assert_eq!(computed_actions.get("stage"), Some(&"first".to_string()));
+    }
 }
