@@ -397,6 +397,18 @@ export function ListDocuments() {
     });
   };
 
+  const clearSearch = () => {
+    setSearchText('');
+    setListParams({
+      ...listParams,
+      match_any: true,
+      q: undefined,
+      text: undefined,
+      metadata_value: undefined,
+      page: 1,
+    });
+  }
+
   const openPreview = (src: string | undefined, title: string) => {
     if (!src) return;
     setPreviewSrc(src);
@@ -459,7 +471,7 @@ export function ListDocuments() {
     return (
       <div className="flex flex-column gap-3 md:flex-row md:justify-content-between md:align-items-center">
         <div className="w-full md:w-auto">
-          <div className="p-inputgroup w-full md:w-20rem">
+          <div className="p-inputgroup w-full md:w-30rem">
             <InputText
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
@@ -472,6 +484,18 @@ export function ListDocuments() {
               placeholder="Search title and document text"
               aria-label="Search documents"
             />
+{searchText && (
+              <span className="p-inputgroup-addon p-0">
+                <Button
+                  type="button"
+                  icon="pi pi-times"
+                  aria-label="Clear search"
+                  onClick={clearSearch}
+                  className="p-button-secondary h-full"
+                  style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+                />
+              </span>
+            )}
             <span className="p-inputgroup-addon p-0">
               <Button
                 type="button"
