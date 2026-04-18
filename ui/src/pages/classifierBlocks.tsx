@@ -363,9 +363,9 @@ function ClassifierBlockForm({ data }: Readonly<{ data?: Partial<ClassifierBlock
         <div className="col-12">
           <div className="flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
             <label htmlFor="rulesYaml" className="font-medium block mb-0">Rules</label>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" label="Format YAML" icon="pi pi-align-left" severity="secondary" text onClick={handleFormatYaml} disabled={!!rulesError} />
-              {!data?.id && <Button type="button" label="Reset to template" icon="pi pi-refresh" severity="secondary" text onClick={handleResetTemplate} />}
+            <div className="flex flex-nowrap align-items-center gap-2">
+              <Button type="button" label="Format" icon="pi pi-align-left" severity="secondary" text onClick={handleFormatYaml} disabled={!!rulesError} />
+              {!data?.id && <Button type="button" label="Reset" icon="pi pi-refresh" severity="secondary" text onClick={handleResetTemplate} />}
             </div>
           </div>
 
