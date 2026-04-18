@@ -111,7 +111,7 @@ export function useDeleteDocumentIndexTemplate(documentIndexId: string | number)
     },
 
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["documentIndexTemplate", documentIndexId] });
+      qc.invalidateQueries({ queryKey: ["documentIndexTemplate"] });
     },
   });
 }
