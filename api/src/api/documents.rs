@@ -76,6 +76,8 @@ pub struct ListDocumentsQuery {
     pub per_page: Option<i64>,
     // optional substring search
     pub q: Option<String>,
+    // optional text search
+    pub text: Option<String>,
     // optional document type search
     pub document_type_id: Option<i64>,
     // optional cabinet search
@@ -601,6 +603,28 @@ pub async fn list(
         // Filter by document type
         if let Some(id) = params.document_type_id {
             query = query.filter(documents::document_type_id.eq(id));
+        }
+
+        // Filter by document text
+        if let Some(text) = params.text.as_deref().filter(|s| !s.is_empty()) {
+            let pattern = format!("%{}%", text);
+            let text_subquery = document_file_pages::table
+                .inner_join(
+                    document_files::table
+                        .on(document_files::id.eq(document_file_pages::document_file_id)),
+                )
+                .filter(document_file_pages::text_content.ilike(pattern.clone()))
+                .filter(document_files::document_id.eq(documents::id));
+
+            let ocr_subquery = document_file_ocr_pages::table
+                .inner_join(
+                    document_files::table
+                        .on(document_files::id.eq(document_file_ocr_pages::document_file_id)),
+                )
+                .filter(document_file_ocr_pages::ocr_content.ilike(pattern))
+                .filter(document_files::document_id.eq(documents::id));
+
+            query = query.filter(exists(text_subquery).or(exists(ocr_subquery)));
         }
 
         // Filter by cabinet ID
