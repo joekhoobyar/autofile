@@ -75,7 +75,7 @@ pub struct ListDocumentsQuery {
     // items per page (cap it)
     pub per_page: Option<i64>,
     // if true, match any of the search criteria instead of all.
-    pub match_any: bool,
+    pub match_any: Option<bool>,
     // optional substring search
     pub q: Option<String>,
     // optional text search
@@ -595,7 +595,7 @@ pub async fn list(
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
-    let match_any = params.match_any;
+    let match_any = params.match_any.unwrap_or_default();
 
     let base_filter = || -> documents::BoxedQuery<'_, diesel::pg::Pg> {
         // Start with a boxed query so we can conditionally add filters.
