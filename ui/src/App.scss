@@ -173,11 +173,14 @@ body {
   border-bottom: 1px solid var(--surface-border);
 }
 
-.p-datatable .p-datatable-tbody > tr.aut-classifier-block-row-pending > td {
+.p-datatable .p-datatable-tbody > tr.aut-classifier-block-row-pending {
   background: color-mix(in srgb, var(--highlight-bg) 20%, var(--surface-card));
-  box-shadow: inset 4px 0 0 color-mix(in srgb, var(--primary-color) 70%, transparent);
-  transition: background-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+  transition: background-color 160ms ease, opacity 160ms ease;
   opacity: 0.82;
+}
+
+.p-datatable .p-datatable-tbody > tr.aut-classifier-block-row-pending > td:first-child {
+  box-shadow: inset 4px 0 0 color-mix(in srgb, var(--primary-color) 70%, transparent);
 }
 
 .p-datatable .p-datatable-tbody > tr.aut-classifier-block-row-pending .p-rowreorder-handle {
@@ -185,8 +188,11 @@ body {
   pointer-events: none;
 }
 
-.p-datatable .p-datatable-tbody > tr.aut-classifier-block-row-success > td {
+.p-datatable .p-datatable-tbody > tr.aut-classifier-block-row-success {
   animation: aut-classifier-row-settle 1200ms ease-out;
+}
+
+.p-datatable .p-datatable-tbody > tr.aut-classifier-block-row-success > td:first-child {
   box-shadow: inset 4px 0 0 color-mix(in srgb, var(--green-500) 82%, transparent);
 }
 
