@@ -68,7 +68,7 @@ async fn classify_document_inner(
     user_id: i64,
     state: Data<Arc<AppState>>,
 ) -> JobResult<()> {
-    tracing::info!(document_id, "classifying document");
+    tracing::info!(document_id, "classification: classifying document");
 
     let mut db = state.db_pool.get().await?;
 
@@ -96,6 +96,7 @@ async fn classify_document_inner(
         // If any of the match_patterns match, then we can apply the match_actions to the document,
         // and then move on to the child_rules application.
         if pattern_match.is_some() {
+            tracing::debug!(document_id, classifier_block_id = classifier_block.id, "classification: block matched");
             apply_match_actions(&mut computed_actions, &rules.match_actions);
             apply_child_rules(
                 &document_view,
@@ -112,6 +113,7 @@ async fn classify_document_inner(
 
     // Finally, we will have a set of computed actions that we want to apply to the document.
     // Iterate over all of the computed actions.
+    tracing::debug!(document_id, ?computed_actions, "classification: computed actions");
     let mut document_type_id: Option<i64> = None;
     let mut title: Option<String> = None;
     let mut computed_metadata: HashMap<String, String> = HashMap::new();
@@ -121,7 +123,7 @@ async fn classify_document_inner(
                 tracing::info!(
                     document_id,
                     document_type = value,
-                    "suggested document_type"
+                    "classification: suggested document_type"
                 );
                 let doctype = document_types::table
                     .filter(document_types::slug.eq(value))
@@ -131,16 +133,16 @@ async fn classify_document_inner(
                 document_type_id = Some(doctype);
             }
             "_suggested_filename" => {
-                tracing::info!(document_id, title = value, "suggested title");
+                tracing::info!(document_id, title = value, "classification: suggested title");
                 title = Some(value);
             }
             "_suggested_tags" => {
-                tracing::info!(document_id, tags = value, "suggested tags");
+                tracing::info!(document_id, tags = value, "classification: suggested tags");
                 let slugs = parse_slug_list(&value);
                 apply_suggested_tags(&mut db, document_id, user_id, &slugs).await?;
             }
             "_suggested_cabinets" => {
-                tracing::info!(document_id, cabinets = value, "suggested cabinet");
+                tracing::info!(document_id, cabinets = value, "classification: suggested cabinet");
                 let slugs = parse_slug_list(&value);
                 apply_suggested_cabinets(&mut db, document_id, user_id, &slugs).await?;
             }
@@ -172,7 +174,7 @@ async fn classify_document_inner(
     tracing::info!(
         document_id,
         ?computed_metadata,
-        "computed metadata to apply to document"
+        "classification: computed metadata to apply to document"
     );
 
     if !computed_metadata.is_empty() {
@@ -196,7 +198,7 @@ async fn classify_document_inner(
                 tracing::error!(
                     document_id,
                     slug,
-                    "classifier produced unknown metadata slug"
+                    "classification: classifier produced unknown metadata slug"
                 );
             }
         }
@@ -242,7 +244,7 @@ async fn apply_suggested_tags(
     let found_slugs: HashSet<String> = rows.iter().map(|(_, slug)| slug.clone()).collect();
     for slug in slugs {
         if !found_slugs.contains(slug) {
-            tracing::warn!(document_id, slug, "suggested tag not found");
+            tracing::warn!(document_id, slug, "classification: suggested tag not found");
         }
     }
 
@@ -292,7 +294,7 @@ async fn apply_suggested_cabinets(
     let found_slugs: HashSet<String> = rows.iter().map(|(_, slug)| slug.clone()).collect();
     for slug in slugs {
         if !found_slugs.contains(slug) {
-            tracing::warn!(document_id, slug, "suggested cabinet not found");
+            tracing::warn!(document_id, slug, "classification: suggested cabinet not found");
         }
     }
 
@@ -391,6 +393,12 @@ fn find_first_match<'a>(
     document_text: &'a str,
     patterns: &'a [ClassifierPattern],
 ) -> JobResult<Option<PatternMatch<'a>>> {
+
+    // Allow empty patterns to match by default, so that we can apply global child rules at any point during the flow.
+    if patterns.len() == 0 {
+        return Ok(Some(PatternMatch::Metadata));
+    }
+
     for pattern in patterns {
         let pattern_match = does_document_match_pattern(document, document_text, pattern)?;
         if !matches!(pattern_match, PatternMatch::None) {
@@ -406,6 +414,11 @@ fn apply_match_actions(
     actions: &HashMap<String, String>,
 ) {
     for (key, value) in actions {
+        tracing::debug!(
+            metadata_key = key,
+            metadata_value = value,
+            "classification: applying match action"
+        );
         computed_actions.insert(key.clone(), value.clone());
     }
 }
@@ -448,6 +461,11 @@ fn apply_child_rules(
         // But in this phase, we will need to apply replacements to the values, based on the snippets.
         for (key, value) in &rule.actions {
             let replaced_value = apply_replacements(value, &snippets);
+            tracing::debug!(
+                metadata_key = key,
+                metadata_value = value,
+                "classification: applying child rule action"
+            );
             computed_actions.insert(key.clone(), replaced_value);
         }
     }
@@ -476,7 +494,7 @@ fn does_document_match_pattern<'a>(
                 document_id = document.id,
                 metadata_key = key,
                 metadata_value = value,
-                "testing metadata"
+                "classification: testing metadata"
             );
             match document.metadata.get(key) {
                 Some(document_value) if document_value == value => (),
@@ -490,7 +508,7 @@ fn does_document_match_pattern<'a>(
         tracing::debug!(
             document_id = document.id,
             pattern_text = pattern.text,
-            "testing pattern"
+            "classification: testing pattern"
         );
         // Convert the pattern text to a regex pattern.
         // Test if the document text matches the regex pattern.
@@ -694,12 +712,12 @@ fn mod_month_number(value: &str) -> Option<String> {
 
     // Format like '%02d'
     let result = number.map(|n| format!("{:02}", n + 1));
-    tracing::debug!(value, result = &result, "classifier modifier: month_number");
+    tracing::debug!(value, result = &result, "classification: modifier: month_number");
     result
 }
 
 fn mod_sprintf(value: &str, fmt: &str) -> String {
-    tracing::debug!(value, fmt, "classifier modifier: sprintf");
+    tracing::debug!(value, fmt, "classification: modifier: sprintf");
     let mut v = value;
     let re = Regex::new(r"^0+([1-9])").unwrap();
     if let Some(caps) = re.captures(value) {
