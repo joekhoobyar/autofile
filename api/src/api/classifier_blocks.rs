@@ -12,9 +12,10 @@ use serde::Deserialize;
 use axum::{
     Json, Router,
     extract::{Path, Query},
-    routing::get,
+    routing::{get, post},
 };
 use diesel::prelude::*;
+use diesel::sql_types::{BigInt, Integer};
 use diesel_async::{AsyncConnection, RunQueryDsl};
 
 #[derive(Debug, Deserialize)]
@@ -31,6 +32,29 @@ struct ClassifierBlockChangeset {
     description: Option<String>,
     enabled: Option<bool>,
     rules: Option<ClassifierRules>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReorderClassifierBlock {
+    order: i32,
+}
+
+#[derive(Debug)]
+enum ReorderClassifierBlockError {
+    Api(ApiError),
+    Diesel(diesel::result::Error),
+}
+
+impl From<ApiError> for ReorderClassifierBlockError {
+    fn from(value: ApiError) -> Self {
+        Self::Api(value)
+    }
+}
+
+impl From<diesel::result::Error> for ReorderClassifierBlockError {
+    fn from(value: diesel::result::Error) -> Self {
+        Self::Diesel(value)
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -180,6 +204,119 @@ async fn delete(
     Ok(Json(()))
 }
 
+async fn reorder(
+    user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+    Json(input): Json<ReorderClassifierBlock>,
+) -> Result<Json<ClassifierBlock>, ApiError> {
+    let target_order = input.order;
+
+    let reordered = db
+        .transaction::<_, ReorderClassifierBlockError, _>(move |conn| {
+            Box::pin(async move {
+                let current_order = classifier_blocks::table
+                    .filter(classifier_blocks::id.eq(id))
+                    .select(classifier_blocks::order)
+                    .first::<i32>(conn)
+                    .await
+                    .map_err(|e| {
+                        if matches!(e, diesel::result::Error::NotFound) {
+                            ApiError::not_found("Classifier block not found")
+                        } else {
+                            ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block")
+                        }
+                    })?;
+
+                let max_order = classifier_blocks::table
+                    .select(diesel::dsl::max(classifier_blocks::order))
+                    .get_result::<Option<i32>>(conn)
+                    .await
+                    .map_err(|e| {
+                        ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block order")
+                    })?
+                    .unwrap_or(0);
+
+                if !(1..=max_order).contains(&target_order) {
+                    return Err(ApiError::bad_request(
+                        "Classifier block order must be within the current list bounds",
+                    )
+                    .into());
+                }
+
+                if target_order == current_order {
+                    return classifier_blocks::table
+                        .find(id)
+                        .select(ClassifierBlock::as_select())
+                        .first::<ClassifierBlock>(conn)
+                        .await
+                        .map_err(|e| {
+                            ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block")
+                        })
+                        .map_err(Into::into);
+                }
+
+                diesel::sql_query(
+                    "SET CONSTRAINTS classifier_blocks_order_key DEFERRED",
+                )
+                .execute(conn)
+                .await
+                .map_err(|e| {
+                    ApiError::new(diesel_to_http(e), "Failed to prepare classifier_block reorder")
+                })?;
+
+                diesel::sql_query(
+                    r#"
+                    UPDATE classifier_blocks
+                    SET
+                        "order" = CASE
+                            WHEN id = $1 THEN $2
+                            WHEN $2 < $3 AND "order" >= $2 AND "order" < $3 THEN "order" + 1
+                            WHEN $2 > $3 AND "order" > $3 AND "order" <= $2 THEN "order" - 1
+                            ELSE "order"
+                        END,
+                        updated_at = CASE
+                            WHEN id = $1 THEN NOW()
+                            ELSE updated_at
+                        END,
+                        updated_by = CASE
+                            WHEN id = $1 THEN $4
+                            ELSE updated_by
+                        END
+                    WHERE id = $1
+                       OR "order" BETWEEN LEAST($2, $3) AND GREATEST($2, $3)
+                    "#,
+                )
+                .bind::<BigInt, _>(id)
+                .bind::<Integer, _>(target_order)
+                .bind::<Integer, _>(current_order)
+                .bind::<BigInt, _>(user.user_id)
+                .execute(conn)
+                .await
+                .map_err(|e| {
+                    ApiError::new(diesel_to_http(e), "Failed to reorder classifier_block")
+                })?;
+
+                classifier_blocks::table
+                    .find(id)
+                    .select(ClassifierBlock::as_select())
+                    .first::<ClassifierBlock>(conn)
+                    .await
+                    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block"))
+                    .map_err(Into::into)
+            })
+        })
+        .await
+        .map_err(|e| match e {
+            ReorderClassifierBlockError::Api(err) => err,
+            ReorderClassifierBlockError::Diesel(err) => {
+                ApiError::new(diesel_to_http(err), "Failed to reorder classifier_block")
+            }
+        })?;
+
+    Ok(Json(reordered))
+}
+
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -282,4 +419,5 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(list).post(create))
         .route("/{id}", get(get_by_id).patch(update).delete(delete))
+        .route("/{id}/reorder", post(reorder))
 }

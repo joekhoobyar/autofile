@@ -4,6 +4,9 @@ import { apiFetch, apiFetchList, HttpError, apiMutate, type ListParams, type Res
 import { type ClassifierBlock } from '../models/classifierBlock';
 
 export type ClassifierBlockInput = ResourceInput<ClassifierBlock>;
+export type ClassifierBlockReorderInput = { id: number; order: number };
+
+const REORDER_FEEDBACK_MIN_MS = 250;
 
 export function useClassifierBlocks(params: ListParams): UseQueryResult<ResourceList<ClassifierBlock>, HttpError> {
   return useQuery({
@@ -52,6 +55,27 @@ export function useDeleteClassifierBlock(): UseMutationResult<void, HttpError, n
       return apiMutate<void, void>(`api/v1/classifier-blocks/${input}`, {
         method: 'DELETE',
       });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['classifierBlock'] });
+    },
+  });
+}
+
+export function useReorderClassifierBlock(): UseMutationResult<ClassifierBlock, HttpError, ClassifierBlockReorderInput> {
+  const qc = useQueryClient();
+
+  return useMutation<ClassifierBlock, HttpError, ClassifierBlockReorderInput>({
+    mutationFn: async ({ id, order }) => {
+      const [result] = await Promise.all([
+        apiMutate<ClassifierBlock, { order: number }>(`api/v1/classifier-blocks/${id}/reorder`, {
+          method: 'POST',
+          body: { order },
+        }),
+        new Promise((resolve) => window.setTimeout(resolve, REORDER_FEEDBACK_MIN_MS)),
+      ]);
+
+      return result;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['classifierBlock'] });

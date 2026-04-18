@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
-import { DataTable, type DataTableStateEvent } from 'primereact/datatable';
+import { DataTable, type DataTableRowReorderEvent, type DataTableStateEvent } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
@@ -20,22 +20,45 @@ import { vscodeDark } from '@uiw/codemirror-theme-vscode';
 
 import type { ListParams } from '../api';
 import { type ClassifierBlock } from '../models/classifierBlock';
-import { useClassifierBlock, useClassifierBlocks, useDeleteClassifierBlock, useSaveClassifierBlock } from '../queries/useClassifierBlocks';
+import { useClassifierBlock, useClassifierBlocks, useDeleteClassifierBlock, useReorderClassifierBlock, useSaveClassifierBlock } from '../queries/useClassifierBlocks';
 import { useId } from '../util';
 import { defaultClassifierRules, rulesToYaml, yamlToRules } from '../util/classifierRulesYaml';
 
 const yamlEditorExtensions = [yamlLanguage(), keymap.of([indentWithTab]), EditorView.lineWrapping];
+const REORDER_SUCCESS_MS = 1200;
 
 type ClassifierBlockFormValues = Partial<ClassifierBlock> & {
   rulesYaml: string;
 };
 
 export function ListClassifierBlocks() {
-  const toast = useRef(null);
+  const toast = useRef<Toast>(null);
+  const reorderSuccessTimeout = useRef<number | null>(null);
   const deleteClassifierBlock = useDeleteClassifierBlock();
+  const reorderClassifierBlock = useReorderClassifierBlock();
   const [listParams, setListParams] = useState<ListParams>({ sf: 'order' });
+  const [recentlyReorderedRowId, setRecentlyReorderedRowId] = useState<number | null>(null);
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useClassifierBlocks(listParams);
+  const canReorder = (listParams.sf ?? 'order') === 'order' && listParams.sd !== true;
+  const pendingReorderRowId = reorderClassifierBlock.isPending ? (reorderClassifierBlock.variables?.id ?? null) : null;
+  const firstRowIndex = Math.max(((data?.page ?? listParams.page ?? 1) - 1) * (data?.per_page ?? listParams.per_page ?? 0), 0);
+  const tableItems = useMemo(
+    () => data?.items?.map((block) => ({
+      ...block,
+      __pendingReorder: block.id === pendingReorderRowId,
+      __recentlyReordered: block.id === recentlyReorderedRowId,
+    })) ?? [],
+    [data?.items, pendingReorderRowId, recentlyReorderedRowId],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (reorderSuccessTimeout.current !== null) {
+        globalThis.clearTimeout(reorderSuccessTimeout.current);
+      }
+    };
+  }, []);
 
   const nameTemplate = (block: ClassifierBlock) => (
     <Link className="title" to={`${block.id}/edit`}>{block.name}</Link>
@@ -44,6 +67,19 @@ export function ListClassifierBlocks() {
   const enabledTemplate = (block: ClassifierBlock) => (
     <span>{block.enabled ? 'Yes' : 'No'}</span>
   );
+
+  const orderTemplate = (block: ClassifierBlock & { __pendingReorder?: boolean; __recentlyReordered?: boolean }) => {
+    const isPendingRow = block.__pendingReorder === true;
+    const isSuccessRow = block.__recentlyReordered === true;
+
+    return (
+      <div className="aut-classifier-block-order-cell">
+        <span>{block.order}</span>
+        {isPendingRow && <span className="pi pi-spin pi-spinner aut-classifier-block-order-status" aria-hidden="true" />}
+        {!isPendingRow && isSuccessRow && <span className="pi pi-check aut-classifier-block-order-status aut-classifier-block-order-status-success" aria-hidden="true" />}
+      </div>
+    );
+  };
 
   const actionTemplate = (block: ClassifierBlock) => (
     <div className="flex flex-wrap gap-2">
@@ -83,20 +119,69 @@ export function ListClassifierBlocks() {
     setListParams({ ...listParams, page: (event.page ?? 0) + 1, per_page: event.rows });
   };
 
+  const onRowReorder = async (event: DataTableRowReorderEvent<ClassifierBlock[]>) => {
+    if (!canReorder || pendingReorderRowId !== null) {
+      return;
+    }
+
+    const movedBlock = data?.items?.[event.dragIndex];
+    if (!movedBlock) {
+      return;
+    }
+
+    const targetOrder = firstRowIndex + event.dropIndex + 1;
+    if (targetOrder === movedBlock.order) {
+      return;
+    }
+
+    try {
+      setRecentlyReorderedRowId(null);
+      await reorderClassifierBlock.mutateAsync({
+        id: movedBlock.id,
+        order: targetOrder,
+      });
+
+      if (reorderSuccessTimeout.current !== null) {
+        globalThis.clearTimeout(reorderSuccessTimeout.current);
+      }
+
+      setRecentlyReorderedRowId(movedBlock.id);
+      reorderSuccessTimeout.current = globalThis.setTimeout(() => {
+        setRecentlyReorderedRowId(null);
+        reorderSuccessTimeout.current = null;
+      }, REORDER_SUCCESS_MS);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Failed to reorder classifier block';
+      toast.current?.show({ severity: 'error', summary: 'Reorder failed', detail });
+    }
+  };
+
+  const rowClassName = (block: ClassifierBlock & { __pendingReorder?: boolean; __recentlyReordered?: boolean }) => classNames({
+    'aut-classifier-block-row-pending': block.__pendingReorder === true,
+    'aut-classifier-block-row-success': block.__recentlyReordered === true,
+  });
+
   return (
     <>
       <Link to="new" style={{ float: 'right', padding: '1.5rem' }}>New Classifier &raquo;</Link>
       <Card title="Classifiers">
-        <DataTable lazy value={data?.items}
+        {!canReorder && (
+          <Message severity="info" text="Drag reordering is available only when sorted by order ascending." className="mb-3" />
+        )}
+        <DataTable lazy value={tableItems}
           onPage={onPage}
           paginator={true}
-          first={Math.max(((data?.page ?? listParams.page ?? 1) - 1) * (data?.per_page ?? listParams.per_page ?? 0), 0)}
+          first={firstRowIndex}
           rows={data?.per_page ?? listParams.per_page}
           totalRecords={data?.total}
           loading={isPending || isFetching}
           onSort={onSort} sortField={listParams.sf} sortOrder={listParams.sd === true ? -1 : 1}
+          reorderableRows={canReorder}
+          onRowReorder={onRowReorder}
+          rowClassName={rowClassName}
         >
-          <Column field="order" header="Order" sortable></Column>
+          <Column rowReorder={canReorder} headerStyle={{ width: '3rem' }} bodyStyle={{ width: '3rem' }} />
+          <Column field="order" header="Order" body={orderTemplate} sortable></Column>
           <Column field="name" header="Name" body={nameTemplate} sortable></Column>
           <Column field="enabled" header="Enabled" body={enabledTemplate} sortable></Column>
           <Column field="description" header="Description" sortable></Column>
