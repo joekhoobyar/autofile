@@ -390,7 +390,7 @@ function ClassifierBlockForm({ data }: Readonly<{ data?: Partial<ClassifierBlock
                 }}
                 onChange={(value) => field.onChange(value)}
                 className={classNames('aut-yaml-editor', { 'is-invalid': !!errors.rulesYaml || !!rulesError })}
-                placeholder="match_patterns: []\nmatch_actions: {}\nchild_rules: []"
+                placeholder="continue_after_match: false\nmatch_patterns: []\nmatch_actions: {}\nchild_rules: []"
               />
             )}
           />

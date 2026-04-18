@@ -30,6 +30,7 @@ export interface ClassifierChildRule {
 }
 
 export interface ClassifierRules {
+  continue_after_match?: boolean;
   match_patterns: ClassifierPattern[];
   match_actions: Record<string, string>;
   child_rules: ClassifierChildRule[];

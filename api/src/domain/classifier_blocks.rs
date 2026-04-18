@@ -24,6 +24,8 @@ pub struct ClassifierBlock {
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct ClassifierRules {
+    #[serde(default)]
+    pub continue_after_match: bool,
     pub match_patterns: Vec<ClassifierPattern>,
     pub match_actions: HashMap<String, String>,
     pub child_rules: Vec<ClassifierChildRule>,

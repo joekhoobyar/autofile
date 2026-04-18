@@ -103,7 +103,10 @@ async fn classify_document_inner(
                 &mut computed_actions,
                 &rules.child_rules,
             )?;
-            break;
+
+            if !rules.continue_after_match {
+                break;
+            }
         }
     }
 
@@ -486,8 +489,10 @@ fn does_document_match_pattern<'a>(
             None => Ok(PatternMatch::None),
             Some(captures) => Ok(PatternMatch::Text(captures)),
         };
+
+        // Otherwise, if the pattern is empty, we allow it to be a match.
     } else if pattern.metadata.is_none() {
-        return Ok(PatternMatch::None);
+        return Ok(PatternMatch::Metadata);
     }
 
     // The document matched

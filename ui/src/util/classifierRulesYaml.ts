@@ -3,6 +3,7 @@ import { parseDocument, stringify } from 'yaml';
 import { type ClassifierBlock, type ClassifierModifier, type ClassifierRules } from '../models/classifierBlock';
 
 export const defaultClassifierRules: ClassifierRules = {
+  continue_after_match: false,
   match_patterns: [],
   match_actions: {},
   child_rules: [],
@@ -38,6 +39,7 @@ const modifierTypes = new Set<ModifierType>([
 
 function cloneDefaultRules(): ClassifierRules {
   return {
+    continue_after_match: false,
     match_patterns: [],
     match_actions: {},
     child_rules: [],
@@ -157,6 +159,10 @@ export function validateClassifierRules(value: unknown): string | null {
     return 'rules.match_patterns must be an array';
   }
 
+  if (value.continue_after_match !== undefined && typeof value.continue_after_match !== 'boolean') {
+    return 'rules.continue_after_match must be a boolean';
+  }
+
   for (let index = 0; index < value.match_patterns.length; index += 1) {
     const patternError = validatePattern(value.match_patterns[index], `rules.match_patterns[${index}]`);
     if (patternError) return patternError;
@@ -200,5 +206,12 @@ export function yamlToRules(text: string): ParseResult {
     return { error: validationError };
   }
 
-  return { value: value as ClassifierRules };
+  return {
+    value: {
+      continue_after_match: value.continue_after_match === true,
+      match_patterns: value.match_patterns as ClassifierRules['match_patterns'],
+      match_actions: value.match_actions as ClassifierRules['match_actions'],
+      child_rules: value.child_rules as ClassifierRules['child_rules'],
+    },
+  };
 }
