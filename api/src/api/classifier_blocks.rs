@@ -186,7 +186,7 @@ pub async fn list(
     Query(params): Query<ListClassifierBlocksQuery>,
 ) -> Result<Json<ResourceList<ClassifierBlock>>, ApiError> {
     let page = params.page.unwrap_or(1).max(1);
-    let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
+    let per_page = params.per_page.unwrap_or(1000).clamp(1, 1000);
     let offset = (page - 1) * per_page;
 
     let base_filter = || -> classifier_blocks::BoxedQuery<'_, diesel::pg::Pg> {
