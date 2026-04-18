@@ -379,7 +379,7 @@ function ClassifierBlockForm({ data }: Readonly<{ data?: Partial<ClassifierBlock
               <CodeMirror
                 id="rulesYaml"
                 value={field.value ?? ''}
-                height="24rem"
+                height="40rem"
                 theme={vscodeDark}
                 extensions={yamlEditorExtensions}
                 basicSetup={{
