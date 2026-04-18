@@ -1,9 +1,9 @@
 mod support;
 
 use autofile_api::application::classifier_blocks::{
-    compute_classification_actions, create_classifier_block, delete_classifier_block,
-    load_classifier_blocks, load_document_text, persist_computed_actions, reorder_classifier_block,
-    update_classifier_block, UpdateClassifierBlockInput,
+    UpdateClassifierBlockInput, compute_classification_actions, create_classifier_block,
+    delete_classifier_block, load_classifier_blocks, load_document_text, persist_computed_actions,
+    reorder_classifier_block, update_classifier_block,
 };
 use autofile_api::application::documents::get_document_view;
 use autofile_api::schema::classifier_blocks;
@@ -282,7 +282,11 @@ async fn delete_classifier_block_returns_not_found_for_missing_block() {
 #[tokio::test]
 async fn update_classifier_block_updates_selected_fields_without_changing_order() {
     let test_db = TestDatabase::new().await;
-    let mut db = test_db.pool.get().await.expect("db connection should succeed");
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
     insert_user(&mut db, 1, "tester", "tester@example.com").await;
     insert_user(&mut db, 42, "updater", "updater@example.com").await;
     seed_classifier_blocks(&mut db, 3).await;
@@ -311,13 +315,20 @@ async fn update_classifier_block_updates_selected_fields_without_changing_order(
         updated.rules.0.match_actions.get("status"),
         Some(&"updated".to_string())
     );
-    assert_eq!(list_block_orders(&mut db).await, vec![(1, 1), (2, 2), (3, 3)]);
+    assert_eq!(
+        list_block_orders(&mut db).await,
+        vec![(1, 1), (2, 2), (3, 3)]
+    );
 }
 
 #[tokio::test]
 async fn update_classifier_block_returns_not_found_for_missing_block() {
     let test_db = TestDatabase::new().await;
-    let mut db = test_db.pool.get().await.expect("db connection should succeed");
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
     insert_user(&mut db, 1, "tester", "tester@example.com").await;
     insert_user(&mut db, 42, "updater", "updater@example.com").await;
     seed_classifier_blocks(&mut db, 3).await;
@@ -337,5 +348,8 @@ async fn update_classifier_block_returns_not_found_for_missing_block() {
     .expect_err("update should fail");
 
     assert_eq!(err.status, 404);
-    assert_eq!(list_block_orders(&mut db).await, vec![(1, 1), (2, 2), (3, 3)]);
+    assert_eq!(
+        list_block_orders(&mut db).await,
+        vec![(1, 1), (2, 2), (3, 3)]
+    );
 }

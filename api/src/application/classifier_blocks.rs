@@ -329,8 +329,12 @@ pub async fn update_classifier_block(
     diesel::update(classifier_blocks::table.filter(classifier_blocks::id.eq(id)))
         .set((
             input.name.map(|value| classifier_blocks::name.eq(value)),
-            input.description.map(|value| classifier_blocks::description.eq(value)),
-            input.enabled.map(|value| classifier_blocks::enabled.eq(value)),
+            input
+                .description
+                .map(|value| classifier_blocks::description.eq(value)),
+            input
+                .enabled
+                .map(|value| classifier_blocks::enabled.eq(value)),
             input
                 .rules
                 .map(|value| classifier_blocks::rules.eq(diesel_json::Json(value))),
