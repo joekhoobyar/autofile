@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 
 use autofile_api::domain::classifier_blocks::{
@@ -11,8 +13,9 @@ use diesel_async::RunQueryDsl;
 use diesel_async::pooled_connection::bb8;
 
 use autofile_api::schema::{
-    classifier_blocks, document_file_pages, document_files, document_metadatas, document_types,
-    document_types_metadata_types, documents, metadata_types, users,
+    classifier_blocks, document_file_pages, document_files, document_index_documents,
+    document_index_templates, document_index_values, document_indexes, document_metadatas,
+    document_types, document_types_metadata_types, documents, metadata_types, users,
 };
 
 pub async fn seed_classifier_document_scenario(
@@ -305,4 +308,96 @@ pub async fn insert_classifier_block(
     .execute(db)
     .await
     .expect("classifier block id sequence should be updated");
+}
+
+pub async fn insert_document_index(
+    db: &mut bb8::PooledConnection<'_, AsyncPgConnection>,
+    id: i64,
+    slug: &str,
+    name: &str,
+    user_id: i64,
+) {
+    diesel::insert_into(document_indexes::table)
+        .values((
+            document_indexes::id.eq(id),
+            document_indexes::slug.eq(slug),
+            document_indexes::name.eq(name),
+            document_indexes::description.eq::<Option<String>>(None),
+            document_indexes::enabled.eq(true),
+            document_indexes::created_by.eq(user_id),
+            document_indexes::updated_by.eq(user_id),
+        ))
+        .execute(db)
+        .await
+        .expect("document index insert should succeed");
+}
+
+pub async fn insert_document_index_template(
+    db: &mut bb8::PooledConnection<'_, AsyncPgConnection>,
+    id: i64,
+    document_index_id: i64,
+    template: &str,
+    is_leaf: bool,
+    parent_id: Option<i64>,
+    user_id: i64,
+) {
+    diesel::insert_into(document_index_templates::table)
+        .values((
+            document_index_templates::id.eq(id),
+            document_index_templates::template.eq(template),
+            document_index_templates::is_leaf.eq(is_leaf),
+            document_index_templates::enabled.eq(true),
+            document_index_templates::document_index_id.eq(document_index_id),
+            document_index_templates::parent_id.eq(parent_id),
+            document_index_templates::created_by.eq(user_id),
+            document_index_templates::updated_by.eq(user_id),
+        ))
+        .execute(db)
+        .await
+        .expect("document index template insert should succeed");
+}
+
+pub async fn insert_document_index_value(
+    db: &mut bb8::PooledConnection<'_, AsyncPgConnection>,
+    id: i64,
+    document_index_id: i64,
+    document_index_template_id: i64,
+    value: &str,
+    parent_id: Option<i64>,
+    is_leaf: bool,
+) {
+    diesel::insert_into(document_index_values::table)
+        .values((
+            document_index_values::id.eq(id),
+            document_index_values::value.eq(value),
+            document_index_values::document_index_id.eq(document_index_id),
+            document_index_values::document_index_template_id.eq(document_index_template_id),
+            document_index_values::parent_id.eq(parent_id),
+            document_index_values::is_leaf.eq(is_leaf),
+        ))
+        .execute(db)
+        .await
+        .expect("document index value insert should succeed");
+
+    sql_query(
+        "SELECT setval(pg_get_serial_sequence('document_index_values', 'id'), COALESCE((SELECT MAX(id) FROM document_index_values), 1), true)",
+    )
+    .execute(db)
+    .await
+    .expect("document index value id sequence should be updated");
+}
+
+pub async fn insert_document_index_document(
+    db: &mut bb8::PooledConnection<'_, AsyncPgConnection>,
+    document_index_value_id: i64,
+    document_id: i64,
+) {
+    diesel::insert_into(document_index_documents::table)
+        .values((
+            document_index_documents::document_index_value_id.eq(document_index_value_id),
+            document_index_documents::document_id.eq(document_id),
+        ))
+        .execute(db)
+        .await
+        .expect("document index document insert should succeed");
 }

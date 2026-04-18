@@ -3,9 +3,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use apalis::prelude::*;
-use bb8::PooledConnection;
 use diesel::prelude::*;
-use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::pooled_connection::bb8;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
 use crate::application::documents::get_document_view;
@@ -14,7 +13,7 @@ use crate::domain::document_indexes::{DocumentIndex, DocumentIndexTemplate};
 use crate::domain::documents::{DocumentView, TemplateDocumentView};
 use crate::schema::{
     cabinets, document_index_documents, document_index_templates, document_index_values,
-    document_indexes, document_types, tags,
+    document_indexes, document_types, documents, tags,
 };
 use crate::shared::app_state::AppState;
 use crate::shared::util::{ApiError, JobResult};
@@ -77,6 +76,60 @@ pub async fn update_document_index_document(
     }
 }
 
+pub async fn rebuild_document_index(
+    document_index_id: i64,
+    state: Data<Arc<AppState>>,
+) -> Result<(), Error> {
+    match rebuild_document_index_inner(document_index_id, state.db_pool.clone()).await {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            tracing::error!(error = %err, "document_index {:?} rebuild job failed", document_index_id);
+            Err(err.into())
+        }
+    }
+}
+
+pub async fn rebuild_document_index_inner(
+    document_index_id: i64,
+    db_pool: bb8::Pool<AsyncPgConnection>,
+) -> JobResult<()> {
+    tracing::info!(document_index_id, "Rebuilding document_index");
+
+    let mut db = db_pool.get().await?;
+
+    diesel::delete(
+        document_index_documents::table.filter(
+            document_index_documents::document_index_value_id.eq_any(
+                document_index_values::table
+                    .filter(document_index_values::document_index_id.eq(document_index_id))
+                    .select(document_index_values::id),
+            ),
+        ),
+    )
+    .execute(&mut db)
+    .await?;
+
+    diesel::delete(
+        document_index_values::table
+            .filter(document_index_values::document_index_id.eq(document_index_id)),
+    )
+    .execute(&mut db)
+    .await?;
+
+    let document_ids = documents::table
+        .select(documents::id)
+        .order(documents::id.asc())
+        .load::<i64>(&mut db)
+        .await?;
+
+    for document_id in document_ids {
+        do_update_document_index_document_inner(document_index_id, document_id, db_pool.clone())
+            .await?;
+    }
+
+    Ok(())
+}
+
 /**
  * Internal function to update a document index for a given document.
  *
@@ -87,13 +140,22 @@ async fn do_update_document_index_document(
     document_id: i64,
     state: Data<Arc<AppState>>,
 ) -> JobResult<()> {
+    do_update_document_index_document_inner(document_index_id, document_id, state.db_pool.clone())
+        .await
+}
+
+async fn do_update_document_index_document_inner(
+    document_index_id: i64,
+    document_id: i64,
+    db_pool: bb8::Pool<AsyncPgConnection>,
+) -> JobResult<()> {
     tracing::info!(
         document_index_id,
         document_id,
         "Updating document_index for document"
     );
 
-    let mut db = state.db_pool.get().await?;
+    let mut db = db_pool.get().await?;
 
     // Build a TemplateDocumentView for this document, which includes loading the document type slug,
     // tag slugs and cabinet slugs, as these may be needed to evaluate the document index templates.
@@ -304,7 +366,7 @@ pub async fn delete_document_index_document(
  * This is needed to evaluate the document index templates, which may reference these fields.
  */
 async fn build_template_document_view(
-    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    db: &mut bb8::PooledConnection<'_, AsyncPgConnection>,
     document_view: DocumentView,
 ) -> JobResult<TemplateDocumentView> {
     let document_type_slug = document_types::table

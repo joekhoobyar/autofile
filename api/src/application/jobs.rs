@@ -6,7 +6,9 @@ use apalis::prelude::*;
 
 use crate::application::classifier_blocks::classify_document;
 use crate::application::document_files::process_file_pages;
-use crate::application::document_index_documents::update_document_index_document;
+use crate::application::document_index_documents::{
+    rebuild_document_index, update_document_index_document,
+};
 use crate::application::document_thumbnails::generate_thumbnail;
 use crate::shared::app_state::AppState;
 
@@ -27,6 +29,11 @@ pub enum FastJob {
 pub enum MediumJob {
     ProcessFilePages { document_file_id: i64 },
     ClassifyDocument { document_id: i64, user_id: i64 },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SlowJob {
+    RebuildDocumentIndex { document_index_id: i64 },
 }
 
 /**
@@ -62,5 +69,14 @@ pub async fn handle_medium_job(job: MediumJob, state: Data<Arc<AppState>>) -> Re
             document_id,
             user_id,
         } => classify_document(document_id, user_id, state).await,
+    }
+}
+
+pub async fn handle_slow_job(job: SlowJob, state: Data<Arc<AppState>>) -> Result<(), Error> {
+    match job {
+        SlowJob::RebuildDocumentIndex { document_index_id } => {
+            // Call the appropriate function to rebuild the document index
+            rebuild_document_index(document_index_id, state).await
+        }
     }
 }

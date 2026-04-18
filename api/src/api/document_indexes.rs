@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::application::jobs::SlowJob;
 use crate::domain::document_indexes::DocumentIndex;
 use crate::schema::{
     document_index_documents, document_index_templates, document_index_values, document_indexes,
@@ -11,10 +12,11 @@ use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
 
 use serde::Deserialize;
 
+use apalis::prelude::Storage;
 use axum::{
     Json, Router,
-    extract::{Path, Query},
-    routing::get,
+    extract::{Path, Query, State},
+    routing::{get, post},
 };
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
@@ -204,6 +206,40 @@ async fn delete(
     Ok(Json(()))
 }
 
+async fn rebuild(
+    _user: AuthUser,
+    State(state): State<Arc<AppState>>,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+) -> Result<Json<()>, ApiError> {
+    document_indexes::table
+        .find(id)
+        .select(document_indexes::id)
+        .first::<i64>(&mut db)
+        .await
+        .map_err(|e| {
+            if matches!(e, diesel::result::Error::NotFound) {
+                ApiError::not_found("Document index not found")
+            } else {
+                ApiError::new(diesel_to_http(e), "Failed to fetch document_index")
+            }
+        })?;
+
+    let mut slow_jobs = state.slow_jobs.as_ref().clone();
+    if let Err(_) = slow_jobs
+        .push(SlowJob::RebuildDocumentIndex {
+            document_index_id: id,
+        })
+        .await
+    {
+        return Err(ApiError::internal_server_error(
+            "Failed to enqueue rebuild document index job",
+        ));
+    }
+
+    Ok(Json(()))
+}
+
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -306,5 +342,6 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(list).post(create))
         .route("/{id}", get(get_by_id).patch(update).delete(delete))
+        .route("/{id}/rebuild", post(rebuild))
         .route("/by-slug/{slug}", get(get_by_slug))
 }

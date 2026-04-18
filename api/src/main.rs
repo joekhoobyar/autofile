@@ -23,12 +23,15 @@ use apalis::layers::retry::RetryPolicy;
 use apalis::prelude::*;
 use apalis_redis::RedisStorage;
 
-use autofile_api::api;
 use autofile_api::application::jobs::{FastJob, MediumJob, handle_fast_job, handle_medium_job};
 use autofile_api::run_migrations;
 use autofile_api::shared::app_state::AppState;
 use autofile_api::shared::extractors::DbConn;
 use autofile_api::shared::util::ApiError;
+use autofile_api::{
+    api,
+    application::jobs::{SlowJob, handle_slow_job},
+};
 
 #[tokio::main]
 async fn main() {
@@ -44,11 +47,9 @@ async fn main() {
     let redis_conn = apalis_redis::connect(redis_url.clone())
         .await
         .expect("Could not connect to Redis");
-    let fast_storage: RedisStorage<FastJob> = RedisStorage::new(redis_conn);
-    let medium_conn = apalis_redis::connect(redis_url)
-        .await
-        .expect("Could not connect to Redis");
-    let medium_storage: RedisStorage<MediumJob> = RedisStorage::new(medium_conn);
+    let fast_storage: RedisStorage<FastJob> = RedisStorage::new(redis_conn.clone());
+    let medium_storage: RedisStorage<MediumJob> = RedisStorage::new(redis_conn.clone());
+    let slow_storage: RedisStorage<SlowJob> = RedisStorage::new(redis_conn);
 
     // Get database URL from environment
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -96,6 +97,7 @@ async fn main() {
         jwt_secret: Arc::new(jwt_secret),
         fast_jobs: Arc::new(fast_storage),
         medium_jobs: Arc::new(medium_storage),
+        slow_jobs: Arc::new(slow_storage),
     });
 
     // Spawn apalis workers (in-process).
@@ -118,6 +120,15 @@ async fn main() {
                 .data(app_state.clone())
                 .backend(app_state.medium_jobs.as_ref().clone())
                 .build_fn(handle_medium_job)
+        })
+        .register({
+            WorkerBuilder::new("slow-job-worker")
+                .retry(RetryPolicy::retries(7))
+                .enable_tracing()
+                .concurrency(2)
+                .data(app_state.clone())
+                .backend(app_state.slow_jobs.as_ref().clone())
+                .build_fn(handle_slow_job)
         })
         .on_event(|e| tracing::info!("{e}"))
         // Wait 5 seconds after shutdown is triggered to allow any incomplete jobs to complete
