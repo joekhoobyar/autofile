@@ -74,6 +74,8 @@ pub struct ListDocumentsQuery {
     pub page: Option<i64>,
     // items per page (cap it)
     pub per_page: Option<i64>,
+    // if true, match any of the search criteria instead of all.
+    pub match_any: bool,
     // optional substring search
     pub q: Option<String>,
     // optional text search
@@ -593,6 +595,7 @@ pub async fn list(
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
+    let match_any = params.match_any;
 
     let base_filter = || -> documents::BoxedQuery<'_, diesel::pg::Pg> {
         // Start with a boxed query so we can conditionally add filters.
@@ -601,12 +604,22 @@ pub async fn list(
         // Optional search: case-insensitive substring on title
         if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
             let pattern = format!("%{}%", q);
-            query = query.filter(documents::title.ilike(pattern));
+            let criteria = documents::title.ilike(pattern);
+            if match_any {
+                query = query.or_filter(criteria);
+            } else {
+                query = query.filter(criteria);
+            }
         }
 
         // Filter by document type
         if let Some(id) = params.document_type_id {
-            query = query.filter(documents::document_type_id.eq(id));
+            let criteria = documents::document_type_id.eq(id);
+            if match_any {
+                query = query.or_filter(criteria);
+            } else {
+                query = query.filter(criteria);
+            }
         }
 
         // Filter by metadata type and value
@@ -621,7 +634,11 @@ pub async fn list(
             }
             */
 
-            query = query.filter(exists(subquery));
+            if match_any {
+                query = query.or_filter(exists(subquery));
+            } else {
+                query = query.filter(exists(subquery));
+            }
         }
 
         // Filter by document text
@@ -643,7 +660,11 @@ pub async fn list(
                 .filter(document_file_ocr_pages::ocr_content.ilike(pattern))
                 .filter(document_files::document_id.eq(documents::id));
 
-            query = query.filter(exists(text_subquery).or(exists(ocr_subquery)));
+            if match_any {
+                query = query.or_filter(exists(text_subquery)).or_filter(exists(ocr_subquery));
+            } else {
+                query = query.filter(exists(text_subquery).or(exists(ocr_subquery)));
+            }
         }
 
         // Filter by cabinet ID
@@ -652,7 +673,11 @@ pub async fn list(
                 .filter(cabinet_documents::cabinet_id.eq(id))
                 .filter(cabinet_documents::document_id.eq(documents::id));
 
-            query = query.filter(exists(subquery));
+            if match_any {
+                query = query.or_filter(exists(subquery));
+            } else {
+                query = query.filter(exists(subquery));
+            }
         }
 
         // Filter by tag ID
@@ -661,7 +686,11 @@ pub async fn list(
                 .filter(tag_documents::tag_id.eq(id))
                 .filter(tag_documents::document_id.eq(documents::id));
 
-            query = query.filter(exists(subquery));
+            if match_any {
+                query = query.or_filter(exists(subquery));
+            } else {
+                query = query.filter(exists(subquery));
+            }
         }
 
         // Filter by document index value ID
@@ -670,7 +699,11 @@ pub async fn list(
                 .filter(document_index_documents::document_index_value_id.eq(id))
                 .filter(document_index_documents::document_id.eq(documents::id));
 
-            query = query.filter(exists(subquery));
+            if match_any {
+                query = query.or_filter(exists(subquery));
+            } else {
+                query = query.filter(exists(subquery));
+            }
         }
 
         query

@@ -16,6 +16,7 @@ export interface Document {
 export interface DocumentListParams {
   page?: number;
   per_page?: number;
+  match_any?: boolean;
   q?: string;
   text?: string;
   metadata_type_id?: number;

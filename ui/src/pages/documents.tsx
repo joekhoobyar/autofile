@@ -389,6 +389,7 @@ export function ListDocuments() {
 
     setListParams({
       ...listParams,
+      match_any: true,
       q: value || undefined,
       text: value || undefined,
       metadata_value: value || undefined,
