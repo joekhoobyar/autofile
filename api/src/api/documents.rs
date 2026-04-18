@@ -84,6 +84,10 @@ pub struct ListDocumentsQuery {
     pub cabinet_id: Option<i64>,
     // optional tag search
     pub tag_id: Option<i64>,
+    // optional metadata type search
+    pub metadata_type_id: Option<i64>,
+    // optional metadata value search
+    pub metadata_value: Option<String>,
     // optional document index value search
     pub document_index_value_id: Option<i64>,
     // optional sort field
@@ -603,6 +607,21 @@ pub async fn list(
         // Filter by document type
         if let Some(id) = params.document_type_id {
             query = query.filter(documents::document_type_id.eq(id));
+        }
+
+        // Filter by metadata type and value
+        if let Some(value) = params.metadata_value.as_deref().filter(|s| !s.is_empty()) {
+            let pattern = format!("%{}%", value);
+            let subquery = document_metadatas::table
+                .filter(document_metadatas::document_id.eq(documents::id))
+                .filter(document_metadatas::value.ilike(pattern));
+            /*
+            if let Some(metadata_type_id) = params.metadata_type_id {
+                subquery = subquery.filter(document_metadatas::metadata_type_id.eq(metadata_type_id));
+            }
+            */
+
+            query = query.filter(exists(subquery));
         }
 
         // Filter by document text

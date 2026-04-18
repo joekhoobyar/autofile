@@ -391,6 +391,7 @@ export function ListDocuments() {
       ...listParams,
       q: value || undefined,
       text: value || undefined,
+      metadata_value: value || undefined,
       page: 1,
     });
   };
