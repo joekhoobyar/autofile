@@ -322,6 +322,7 @@ export function ListDocuments() {
   const [previewSrc, setPreviewSrc] = useState<string | undefined>(undefined);
   const [previewTitle, setPreviewTitle] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [searchText, setSearchText] = useState(listParams.q ?? '');
   const { isPending, data, isFetching } = useDocuments(effectiveListParams);
   const { data: cabinetOptions } = useCabinets({ page: 1, per_page: MAX_CABINETS });
   const { data: tagOptions } = useTags({ page: 1, per_page: 200 });
@@ -379,6 +380,17 @@ export function ListDocuments() {
       ...listParams,
       sf: field,
       sd: direction === 'desc',
+      page: 1,
+    });
+  };
+
+  const applySearch = () => {
+    const value = searchText.trim();
+
+    setListParams({
+      ...listParams,
+      q: value || undefined,
+      text: value || undefined,
       page: 1,
     });
   };
@@ -443,8 +455,36 @@ export function ListDocuments() {
 
   const header = () => {
     return (
-      <div className="flex justify-content-end">
-        <DataViewLayoutOptions layout={layout} onChange={(e) => setLayout(e.value as 'list' | 'grid')} />
+      <div className="flex flex-column gap-3 md:flex-row md:justify-content-between md:align-items-center">
+        <div className="w-full md:w-auto">
+          <div className="p-inputgroup w-full md:w-20rem">
+            <InputText
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  applySearch();
+                }
+              }}
+              placeholder="Search title and document text"
+              aria-label="Search documents"
+            />
+            <span className="p-inputgroup-addon p-0">
+              <Button
+                type="button"
+                icon="pi pi-search"
+                aria-label="Search"
+                onClick={applySearch}
+                className="p-button-info h-full"
+                style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+              />
+            </span>
+          </div>
+        </div>
+        <div className="flex justify-content-end">
+          <DataViewLayoutOptions layout={layout} onChange={(e) => setLayout(e.value as 'list' | 'grid')} />
+        </div>
       </div>
     );
   };

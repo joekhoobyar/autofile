@@ -17,6 +17,7 @@ export interface DocumentListParams {
   page?: number;
   per_page?: number;
   q?: string;
+  text?: string;
   document_index_value_id?: number;
   document_type_id?: number;
   cabinet_id?: number;
