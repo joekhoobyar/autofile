@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use crate::domain::users::User;
+use crate::is_production;
 use crate::schema::users;
+use crate::shared::app_state::AppState;
 use crate::shared::auth::{
     hash_password, sign_access, sign_refresh, verify_password, verify_refresh,
 };
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, diesel_to_http};
-use crate::is_production;
-use crate::shared::app_state::AppState;
 
 use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
 use chrono::Utc;

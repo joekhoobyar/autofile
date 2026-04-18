@@ -5,7 +5,9 @@ use apalis::prelude::*;
 use bb8::PooledConnection;
 use chrono::{Datelike, Duration, NaiveDate, Utc};
 use diesel::prelude::*;
+use diesel::sql_types::{BigInt, Integer};
 use diesel::upsert::excluded;
+use diesel_async::AsyncConnection;
 use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
@@ -26,7 +28,15 @@ use crate::schema::{
     document_files, metadata_types, tag_documents, tags,
 };
 use crate::shared::app_state::AppState;
-use crate::shared::util::JobResult;
+use crate::shared::util::{ApiError, JobResult, diesel_to_http};
+
+#[derive(Debug)]
+pub struct UpdateClassifierBlockInput {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub enabled: Option<bool>,
+    pub rules: Option<crate::domain::classifier_blocks::ClassifierRules>,
+}
 
 #[derive(Insertable)]
 #[diesel(table_name = tag_documents)]
@@ -268,6 +278,241 @@ pub async fn persist_computed_actions(
     }
 
     Ok(())
+}
+
+pub async fn create_classifier_block(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    user_id: i64,
+    name: String,
+    description: Option<String>,
+    enabled: bool,
+    rules: crate::domain::classifier_blocks::ClassifierRules,
+) -> Result<ClassifierBlock, ApiError> {
+    db.transaction::<_, diesel::result::Error, _>(move |conn| {
+        Box::pin(async move {
+            diesel::sql_query("LOCK TABLE classifier_blocks IN EXCLUSIVE MODE")
+                .execute(conn)
+                .await?;
+
+            let next_order = classifier_blocks::table
+                .select(diesel::dsl::max(classifier_blocks::order))
+                .get_result::<Option<i32>>(conn)
+                .await?
+                .unwrap_or(0)
+                + 1;
+
+            diesel::insert_into(classifier_blocks::table)
+                .values((
+                    classifier_blocks::name.eq(name),
+                    classifier_blocks::description.eq(description),
+                    classifier_blocks::enabled.eq(enabled),
+                    classifier_blocks::order.eq(next_order),
+                    classifier_blocks::rules.eq(diesel_json::Json(rules)),
+                    classifier_blocks::created_by.eq(user_id),
+                    classifier_blocks::updated_by.eq(user_id),
+                ))
+                .returning(ClassifierBlock::as_returning())
+                .get_result(conn)
+                .await
+        })
+    })
+    .await
+    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to create classifier_block"))
+}
+
+pub async fn update_classifier_block(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    user_id: i64,
+    id: i64,
+    input: UpdateClassifierBlockInput,
+) -> Result<ClassifierBlock, ApiError> {
+    diesel::update(classifier_blocks::table.filter(classifier_blocks::id.eq(id)))
+        .set((
+            input.name.map(|value| classifier_blocks::name.eq(value)),
+            input.description.map(|value| classifier_blocks::description.eq(value)),
+            input.enabled.map(|value| classifier_blocks::enabled.eq(value)),
+            input
+                .rules
+                .map(|value| classifier_blocks::rules.eq(diesel_json::Json(value))),
+            classifier_blocks::updated_at.eq(diesel::dsl::now),
+            classifier_blocks::updated_by.eq(user_id),
+        ))
+        .returning(ClassifierBlock::as_returning())
+        .get_result(db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update classifier_block"))
+}
+
+pub async fn delete_classifier_block(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    id: i64,
+) -> Result<(), ApiError> {
+    db.transaction::<_, diesel::result::Error, _>(move |conn| {
+        Box::pin(async move {
+            diesel::sql_query("LOCK TABLE classifier_blocks IN EXCLUSIVE MODE")
+                .execute(conn)
+                .await?;
+
+            let deleted_order = classifier_blocks::table
+                .filter(classifier_blocks::id.eq(id))
+                .select(classifier_blocks::order)
+                .first::<i32>(conn)
+                .await?;
+
+            diesel::delete(classifier_blocks::table.filter(classifier_blocks::id.eq(id)))
+                .execute(conn)
+                .await?;
+
+            diesel::update(
+                classifier_blocks::table.filter(classifier_blocks::order.gt(deleted_order)),
+            )
+            .set(classifier_blocks::order.eq(classifier_blocks::order - 1))
+            .execute(conn)
+            .await?;
+
+            Ok(())
+        })
+    })
+    .await
+    .map_err(|e| {
+        if matches!(e, diesel::result::Error::NotFound) {
+            ApiError::not_found("Classifier block not found")
+        } else {
+            ApiError::new(diesel_to_http(e), "Failed to delete classifier_block")
+        }
+    })
+}
+
+#[derive(Debug)]
+enum ReorderClassifierBlockError {
+    Api(ApiError),
+    Diesel(diesel::result::Error),
+}
+
+impl From<ApiError> for ReorderClassifierBlockError {
+    fn from(value: ApiError) -> Self {
+        Self::Api(value)
+    }
+}
+
+impl From<diesel::result::Error> for ReorderClassifierBlockError {
+    fn from(value: diesel::result::Error) -> Self {
+        Self::Diesel(value)
+    }
+}
+
+pub async fn reorder_classifier_block(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    user_id: i64,
+    id: i64,
+    target_order: i32,
+) -> Result<ClassifierBlock, ApiError> {
+    db.transaction::<_, ReorderClassifierBlockError, _>(move |conn| {
+        Box::pin(async move {
+            diesel::sql_query("LOCK TABLE classifier_blocks IN EXCLUSIVE MODE")
+                .execute(conn)
+                .await
+                .map_err(|e| {
+                    ApiError::new(diesel_to_http(e), "Failed to lock classifier_blocks")
+                })?;
+
+            let current_order = classifier_blocks::table
+                .filter(classifier_blocks::id.eq(id))
+                .select(classifier_blocks::order)
+                .first::<i32>(conn)
+                .await
+                .map_err(|e| {
+                    if matches!(e, diesel::result::Error::NotFound) {
+                        ApiError::not_found("Classifier block not found")
+                    } else {
+                        ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block")
+                    }
+                })?;
+
+            let max_order = classifier_blocks::table
+                .select(diesel::dsl::max(classifier_blocks::order))
+                .get_result::<Option<i32>>(conn)
+                .await
+                .map_err(|e| {
+                    ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block order")
+                })?
+                .unwrap_or(0);
+
+            if !(1..=max_order).contains(&target_order) {
+                return Err(ApiError::bad_request(
+                    "Classifier block order must be within the current list bounds",
+                )
+                .into());
+            }
+
+            if target_order == current_order {
+                return classifier_blocks::table
+                    .find(id)
+                    .select(ClassifierBlock::as_select())
+                    .first::<ClassifierBlock>(conn)
+                    .await
+                    .map_err(|e| {
+                        ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block")
+                    })
+                    .map_err(Into::into);
+            }
+
+            diesel::sql_query("SET CONSTRAINTS classifier_blocks_order_key DEFERRED")
+                .execute(conn)
+                .await
+                .map_err(|e| {
+                    ApiError::new(
+                        diesel_to_http(e),
+                        "Failed to prepare classifier_block reorder",
+                    )
+                })?;
+
+            diesel::sql_query(
+                r#"
+                UPDATE classifier_blocks
+                SET
+                    "order" = CASE
+                        WHEN id = $1 THEN $2
+                        WHEN $2 < $3 AND "order" >= $2 AND "order" < $3 THEN "order" + 1
+                        WHEN $2 > $3 AND "order" > $3 AND "order" <= $2 THEN "order" - 1
+                        ELSE "order"
+                    END,
+                    updated_at = CASE
+                        WHEN id = $1 THEN NOW()
+                        ELSE updated_at
+                    END,
+                    updated_by = CASE
+                        WHEN id = $1 THEN $4
+                        ELSE updated_by
+                    END
+                WHERE id = $1
+                   OR "order" BETWEEN LEAST($2, $3) AND GREATEST($2, $3)
+                "#,
+            )
+            .bind::<BigInt, _>(id)
+            .bind::<Integer, _>(target_order)
+            .bind::<Integer, _>(current_order)
+            .bind::<BigInt, _>(user_id)
+            .execute(conn)
+            .await
+            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to reorder classifier_block"))?;
+
+            classifier_blocks::table
+                .find(id)
+                .select(ClassifierBlock::as_select())
+                .first::<ClassifierBlock>(conn)
+                .await
+                .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block"))
+                .map_err(Into::into)
+        })
+    })
+    .await
+    .map_err(|e| match e {
+        ReorderClassifierBlockError::Api(err) => err,
+        ReorderClassifierBlockError::Diesel(err) => {
+            ApiError::new(diesel_to_http(err), "Failed to reorder classifier_block")
+        }
+    })
 }
 
 fn parse_slug_list(value: &str) -> Vec<String> {

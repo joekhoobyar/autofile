@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::shared::app_state::AppState;
 use crate::application::document_index_documents::delete_document_index_document;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::documents::{get_document_view, update_document};
@@ -16,6 +15,7 @@ use crate::schema::{
     document_index_documents, document_index_values, document_metadatas, documents, metadata_types,
     tag_documents,
 };
+use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::s3::serve_s3_file;

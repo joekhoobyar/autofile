@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use crate::shared::app_state::AppState;
 use crate::domain::users::User;
 use crate::schema::users;
+use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, diesel_to_http};

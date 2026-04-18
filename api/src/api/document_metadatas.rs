@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use crate::shared::app_state::AppState;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::document_metadatas::{NewDocumentMetadata, document_metadatas_upsert};
 use crate::domain::document_metadatas::DocumentMetadata;
 use crate::schema::{document_metadatas, document_types_metadata_types, documents};
+use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, diesel_to_http};

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use crate::shared::app_state::AppState;
 use crate::domain::metadata_types::{DataType, MetadataType};
 use crate::schema::{document_types_metadata_types, metadata_types};
+use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http};

@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use crate::shared::app_state::AppState;
 use crate::domain::document_indexes::DocumentIndex;
 use crate::schema::{
     document_index_documents, document_index_templates, document_index_values, document_indexes,
 };
+use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http};

@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use crate::shared::app_state::AppState;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::domain::tag_documents::TagDocument;
 use crate::schema::tag_documents;
+use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http};

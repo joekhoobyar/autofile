@@ -5,6 +5,7 @@ use autofile_api::domain::classifier_blocks::{
 };
 use diesel::dsl::now;
 use diesel::prelude::*;
+use diesel::sql_query;
 use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
 use diesel_async::pooled_connection::bb8;
@@ -68,6 +69,19 @@ pub async fn seed_classifier_document_scenario(
     .await;
 
     1
+}
+
+pub async fn seed_classifier_blocks(
+    db: &mut bb8::PooledConnection<'_, AsyncPgConnection>,
+    count: i32,
+) {
+    for index in 1..=count {
+        insert_classifier_block(
+            db,
+            build_block(index as i64, index, build_rules(false, vec![], &[])),
+        )
+        .await;
+    }
 }
 
 pub fn build_rules(
@@ -284,4 +298,11 @@ pub async fn insert_classifier_block(
         .execute(db)
         .await
         .expect("classifier block insert should succeed");
+
+    sql_query(
+        "SELECT setval(pg_get_serial_sequence('classifier_blocks', 'id'), COALESCE((SELECT MAX(id) FROM classifier_blocks), 1), true)",
+    )
+    .execute(db)
+    .await
+    .expect("classifier block id sequence should be updated");
 }
