@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 
 import { Button } from 'primereact/button';
 import { Dialog } from 'primereact/dialog';
@@ -6,6 +6,7 @@ import { Dropdown } from 'primereact/dropdown';
 import { Menu } from 'primereact/menu';
 import type { MenuItem } from 'primereact/menuitem';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
+import { Toast } from 'primereact/toast';
 
 import { useCabinets } from '../queries/useCabinets';
 import { useTags } from '../queries/useTags';
@@ -32,6 +33,8 @@ export function DocumentActions({
   containerClassName,
 }: Readonly<DocumentActionsProps>) {
   const actionMenu = useRef<Menu>(null);
+  const toast = useRef<Toast>(null);
+  const documentIdsRef = useRef(documentIds);
   const menuId = useId();
   const hasSelection = documentIds.length > 0;
   const deleteDocument = useDeleteDocument();
@@ -52,6 +55,23 @@ export function DocumentActions({
   const [removeTagVisible, setRemoveTagVisible] = useState(false);
   const [removeTagId, setRemoveTagId] = useState<number | null>(null);
 
+  useEffect(() => {
+    documentIdsRef.current = documentIds;
+  }, [documentIds]);
+
+  const showSuccess = (summary: string, detail: string) => {
+    toast.current?.show({ severity: 'success', summary, detail });
+  };
+
+  const showError = (summary: string, error: unknown) => {
+    const detail = error instanceof Error ? error.message : 'Something went wrong';
+    toast.current?.show({ severity: 'error', summary, detail });
+  };
+
+  const documentCountLabel = (count: number, singular: string, plural: string = `${singular}s`) => (
+    `${count} ${count === 1 ? singular : plural}`
+  );
+
   const openAddToCabinetDialog = () => {
     if (!hasSelection) return;
     setAddToCabinetVisible(true);
@@ -63,11 +83,18 @@ export function DocumentActions({
   };
 
   const saveAddToCabinet = async () => {
-    if (!selectedCabinetId || !hasSelection) return;
-    const documents = documentIds.map((id) => ({ document_id: id }));
-    await saveCabinetDocument.mutateAsync({ cabinet_id: selectedCabinetId, documents });
-    closeAddToCabinetDialog();
-    onAfterAction?.();
+    const currentDocumentIds = documentIdsRef.current;
+    const currentSelectionCount = currentDocumentIds.length;
+    if (!selectedCabinetId || currentSelectionCount === 0) return;
+    try {
+      const documents = currentDocumentIds.map((id) => ({ document_id: id }));
+      await saveCabinetDocument.mutateAsync({ cabinet_id: selectedCabinetId, documents });
+      closeAddToCabinetDialog();
+      onAfterAction?.();
+      showSuccess('Cabinet updated', `Added ${documentCountLabel(currentSelectionCount, 'document')} to cabinet.`);
+    } catch (error) {
+      showError('Add to cabinet failed', error);
+    }
   };
 
   const openRemoveFromCabinetDialog = () => {
@@ -81,10 +108,17 @@ export function DocumentActions({
   };
 
   const saveRemoveFromCabinet = async () => {
-    if (!removeCabinetId || !hasSelection) return;
-    await removeCabinetDocument.mutateAsync({ cabinet_id: removeCabinetId, documents: documentIds });
-    closeRemoveFromCabinetDialog();
-    onAfterAction?.();
+    const currentDocumentIds = documentIdsRef.current;
+    const currentSelectionCount = currentDocumentIds.length;
+    if (!removeCabinetId || currentSelectionCount === 0) return;
+    try {
+      await removeCabinetDocument.mutateAsync({ cabinet_id: removeCabinetId, documents: currentDocumentIds });
+      closeRemoveFromCabinetDialog();
+      onAfterAction?.();
+      showSuccess('Cabinet updated', `Removed ${documentCountLabel(currentSelectionCount, 'document')} from cabinet.`);
+    } catch (error) {
+      showError('Remove from cabinet failed', error);
+    }
   };
 
   const openAddTagDialog = () => {
@@ -98,11 +132,18 @@ export function DocumentActions({
   };
 
   const saveAddTag = async () => {
-    if (!selectedTagId || !hasSelection) return;
-    const documents = documentIds.map((id) => ({ document_id: id }));
-    await saveTagDocument.mutateAsync({ tag_id: selectedTagId, documents });
-    closeAddTagDialog();
-    onAfterAction?.();
+    const currentDocumentIds = documentIdsRef.current;
+    const currentSelectionCount = currentDocumentIds.length;
+    if (!selectedTagId || currentSelectionCount === 0) return;
+    try {
+      const documents = currentDocumentIds.map((id) => ({ document_id: id }));
+      await saveTagDocument.mutateAsync({ tag_id: selectedTagId, documents });
+      closeAddTagDialog();
+      onAfterAction?.();
+      showSuccess('Tags updated', `Added tag to ${documentCountLabel(currentSelectionCount, 'document')}.`);
+    } catch (error) {
+      showError('Add tag failed', error);
+    }
   };
 
   const openRemoveTagDialog = () => {
@@ -116,29 +157,57 @@ export function DocumentActions({
   };
 
   const saveRemoveTag = async () => {
-    if (!removeTagId || !hasSelection) return;
-    await removeTagDocument.mutateAsync({ tag_id: removeTagId, documents: documentIds });
-    closeRemoveTagDialog();
-    onAfterAction?.();
+    const currentDocumentIds = documentIdsRef.current;
+    const currentSelectionCount = currentDocumentIds.length;
+    if (!removeTagId || currentSelectionCount === 0) return;
+    try {
+      await removeTagDocument.mutateAsync({ tag_id: removeTagId, documents: currentDocumentIds });
+      closeRemoveTagDialog();
+      onAfterAction?.();
+      showSuccess('Tags updated', `Removed tag from ${documentCountLabel(currentSelectionCount, 'document')}.`);
+    } catch (error) {
+      showError('Remove tag failed', error);
+    }
   };
 
   const deleteSelectedDocuments = async () => {
-    if (!hasSelection) return;
-    await Promise.all(documentIds.map((id) => deleteDocument.mutateAsync(id)));
-    onAfterAction?.();
-    onAfterDelete?.();
+    const currentDocumentIds = documentIdsRef.current;
+    const currentSelectionCount = currentDocumentIds.length;
+    if (currentSelectionCount === 0) return;
+    try {
+      await Promise.all(currentDocumentIds.map((id) => deleteDocument.mutateAsync(id)));
+      onAfterAction?.();
+      onAfterDelete?.();
+      showSuccess('Documents deleted', `Deleted ${documentCountLabel(currentSelectionCount, 'document')}.`);
+    } catch (error) {
+      showError('Delete failed', error);
+    }
   };
 
   const reprocessSelectedDocuments = async () => {
-    if (!hasSelection) return;
-    await Promise.all(documentIds.map((id) => processDocumentFilePages.mutateAsync(id)));
-    onAfterAction?.();
+    const currentDocumentIds = documentIdsRef.current;
+    const currentSelectionCount = currentDocumentIds.length;
+    if (currentSelectionCount === 0) return;
+    try {
+      await Promise.all(currentDocumentIds.map((id) => processDocumentFilePages.mutateAsync(id)));
+      onAfterAction?.();
+      showSuccess('Reprocess queued', `Queued page processing for ${documentCountLabel(currentSelectionCount, 'document')}.`);
+    } catch (error) {
+      showError('Reprocess failed', error);
+    }
   };
 
   const classifySelectedDocuments = async () => {
-    if (!hasSelection) return;
-    await Promise.all(documentIds.map((id) => classifyDocument.mutateAsync(id)));
-    onAfterAction?.();
+    const currentDocumentIds = documentIdsRef.current;
+    const currentSelectionCount = currentDocumentIds.length;
+    if (currentSelectionCount === 0) return;
+    try {
+      await Promise.all(currentDocumentIds.map((id) => classifyDocument.mutateAsync(id)));
+      onAfterAction?.();
+      showSuccess('Classification queued', `Queued classification for ${documentCountLabel(currentSelectionCount, 'document')}.`);
+    } catch (error) {
+      showError('Classification failed', error);
+    }
   };
 
   const confirmDeleteSelectedDocuments = () => {
@@ -368,6 +437,7 @@ export function DocumentActions({
         </div>
       </Dialog>
       <ConfirmDialog />
+      <Toast ref={toast} />
     </div>
   );
 }
