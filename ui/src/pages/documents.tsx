@@ -484,7 +484,7 @@ export function ListDocuments() {
               placeholder="Search title and document text"
               aria-label="Search documents"
             />
-{searchText && (
+            {searchText && (
               <span className="p-inputgroup-addon p-0">
                 <Button
                   type="button"
@@ -492,7 +492,7 @@ export function ListDocuments() {
                   aria-label="Clear search"
                   onClick={clearSearch}
                   className="p-button-secondary h-full"
-                  style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+                  style={{ borderRadius: 0 }}
                 />
               </span>
             )}
