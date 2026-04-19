@@ -66,6 +66,16 @@ async fn process_file_pages_inner(
                 )
                 .await
             }
+            DocumentFileContentType::Html => {
+                process_file_pages_html(
+                    document_file_id,
+                    &document_file,
+                    &temp_dir,
+                    &temp_file,
+                    state,
+                )
+                .await
+            }
             DocumentFileContentType::Markdown => {
                 process_file_pages_markdown(
                     document_file_id,
@@ -113,6 +123,7 @@ pub(crate) enum DocumentFileContentType {
     Image,
     Markdown,
     PlainText,
+    Html,
 }
 
 pub(crate) fn parse_document_file_content_type(
@@ -139,6 +150,14 @@ pub(crate) fn parse_document_file_content_type(
         || (content_type == "text/plain" && filename.ends_with(".md"))
     {
         return Ok(DocumentFileContentType::Markdown);
+    }
+
+    if content_type == "text/html"
+        || content_type == "application/xhtml+xml"
+        || (content_type == "text/plain"
+            && (filename.ends_with(".html") || filename.ends_with(".htm")))
+    {
+        return Ok(DocumentFileContentType::Html);
     }
 
     if content_type == "text/plain" {
@@ -244,6 +263,53 @@ async fn process_file_pages_markdown(
     .await?;
 
     Ok(())
+}
+
+/**
+ * Internal function to extract the images and text from an HTML document
+ * by running `weasyprint` on the file, converting to a PDF, then running process_file_pages_pdf().
+ */
+async fn process_file_pages_html(
+    document_file_id: i64,
+    document_file: &DocumentFile,
+    temp_dir: &Path,
+    temp_file: &str,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
+    let pdf_file = convert_html_to_pdf(temp_file).await?;
+
+    process_file_pages_pdf(
+        document_file_id,
+        document_file,
+        temp_dir,
+        pdf_file.as_str(),
+        state,
+    )
+    .await?;
+
+    Ok(())
+}
+
+/**
+ * Internal function to convert an HTML file to PDF by running `weasyprint`.
+ */
+pub(crate) async fn convert_html_to_pdf(html_file: &str) -> JobResult<String> {
+    let pdf_file = format!("{}.pdf", html_file);
+
+    let status = Command::new("weasyprint")
+        .arg(html_file)
+        .arg(pdf_file.as_str())
+        .status()
+        .await?;
+    if !status.success() {
+        let error = std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("weasyprint failed with status {status}"),
+        );
+        return Err(error.into());
+    }
+
+    Ok(pdf_file)
 }
 
 /**
