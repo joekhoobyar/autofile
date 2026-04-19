@@ -84,7 +84,18 @@ async fn main() {
     let s3_client = aws_sdk_s3::Client::from_conf(s3_client_config.build());
     let s3_bucket = std::env::var("S3_BUCKET").expect("S3_BUCKET must be set");
 
-    let allowed_origins = vec!["http://localhost:5173".to_string()];
+    let allowed_origins = std::env::var("ALLOWED_ORIGINS")
+        .ok()
+        .map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .filter(|origin| !origin.is_empty())
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .filter(|origins| !origins.is_empty())
+        .unwrap_or_else(|| vec!["http://localhost:5173".to_string()]);
 
     let jwt_secret = std::env::var("JWT_SECRET")
         .expect("JWT_SECRET not set")
@@ -164,7 +175,13 @@ async fn main() {
         .allow_origin(
             allowed_origins
                 .iter()
-                .map(|origin| origin.parse::<HeaderValue>().unwrap())
+                .filter_map(|origin| match origin.parse::<HeaderValue>() {
+                    Ok(value) => Some(value),
+                    Err(err) => {
+                        tracing::warn!(origin = %origin, error = %err, "invalid origin in ALLOWED_ORIGINS");
+                        None
+                    }
+                })
                 .collect::<Vec<_>>(),
         )
         .allow_methods([

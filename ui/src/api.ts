@@ -1,4 +1,9 @@
-export const API_HOST = 'http://localhost:8000';
+const apiHostFromEnv = import.meta.env.VITE_API_HOST?.trim();
+export const API_HOST = apiHostFromEnv ? apiHostFromEnv.replace(/\/+$/, "") : "";
+
+function apiUrl(path: string): string {
+  return `${API_HOST}/${path.replace(/^\/+/, "")}`;
+}
 
 export type ResourceBase = {
   id: number;
@@ -115,7 +120,7 @@ export async function apiFetchRaw(url: string, init: FetchOptions = {}): Promise
   const headers = new Headers(init.headers);
   if (accessToken)
     headers.set("Authorization", `Bearer ${accessToken}`);
-  const res = await fetch(`${API_HOST}/${url}`, {
+  const res = await fetch(apiUrl(url), {
     ...init,
     headers,
     credentials: "include"
@@ -134,7 +139,7 @@ export async function apiFetchRaw(url: string, init: FetchOptions = {}): Promise
 
 async function tryRefresh(): Promise<boolean> {
   try {
-    const res = await fetch(`${API_HOST}/api/v1/auth/refresh`, {
+    const res = await fetch(apiUrl("api/v1/auth/refresh"), {
       method: "POST",
       credentials: "include",
       headers: { "Accept": "application/json" },
