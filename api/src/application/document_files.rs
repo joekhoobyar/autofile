@@ -246,10 +246,16 @@ pub(crate) fn parse_document_file_content_type(
     if content_type == "application/msword"
         || content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         || content_type == "application/vnd.oasis.opendocument.text"
+        || content_type == "application/vnd.ms-excel"
+        || content_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        || content_type == "application/vnd.oasis.opendocument.spreadsheet"
         || ((content_type == "application/octet-stream" || content_type == "text/plain")
             && (filename.ends_with(".doc")
                 || filename.ends_with(".docx")
-                || filename.ends_with(".odt")))
+                || filename.ends_with(".odt")
+                || filename.ends_with(".xls")
+                || filename.ends_with(".xlsx")
+                || filename.ends_with(".ods")))
     {
         return Ok(DocumentFileContentType::OfficeDocument);
     }
@@ -1242,6 +1248,27 @@ mod tests {
             .unwrap(),
             DocumentFileContentType::OfficeDocument
         );
+        assert_eq!(
+            parse_document_file_content_type(Some("application/vnd.ms-excel"), "report.xls")
+                .unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(
+                Some("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+                "report.xlsx"
+            )
+            .unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(
+                Some("application/vnd.oasis.opendocument.spreadsheet"),
+                "report.ods"
+            )
+            .unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
     }
 
     #[test]
@@ -1258,6 +1285,20 @@ mod tests {
         );
         assert_eq!(
             parse_document_file_content_type(Some("text/plain"), "report.odt").unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(Some("application/octet-stream"), "report.xls")
+                .unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(Some("application/octet-stream"), "report.xlsx")
+                .unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(Some("text/plain"), "report.ods").unwrap(),
             DocumentFileContentType::OfficeDocument
         );
     }
