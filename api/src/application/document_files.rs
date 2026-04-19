@@ -9,6 +9,7 @@ use tokio::process::Command;
 use uuid::Uuid;
 
 use crate::domain::document_files::DocumentFile;
+use crate::infrastructure::s3::delete_from_s3;
 use crate::infrastructure::s3::upload_to_s3;
 use crate::schema::{document_file_ocr_pages, document_file_pages, document_files};
 use crate::shared::app_state::AppState;
@@ -145,6 +146,8 @@ async fn process_file_pages_pdf(
 ) -> JobResult<()> {
     let mut db = state.db_pool.get().await?;
 
+    let prev_pages = document_file.pages.max(0) as u32;
+
     tracing::info!(document_file_id, "counting pages");
     let pages = count_pages(temp_file.to_owned(), state.clone()).await?;
 
@@ -174,6 +177,16 @@ async fn process_file_pages_pdf(
             .await?;
     }
 
+    cleanup_extra_pages(
+        &mut db,
+        document_file_id,
+        &document_file.s3_prefix,
+        pages,
+        prev_pages,
+        state.clone(),
+    )
+    .await?;
+
     Ok(())
 }
 
@@ -185,6 +198,8 @@ async fn process_file_pages_image(
     state: Data<Arc<AppState>>,
 ) -> JobResult<()> {
     let mut db = state.db_pool.get().await?;
+
+    let prev_pages = document_file.pages.max(0) as u32;
 
     diesel::update(document_files::table.find(document_file_id))
         .set(document_files::pages.eq(1))
@@ -209,6 +224,62 @@ async fn process_file_pages_image(
     );
     let ocr_text = extract_page_ocr(image_path, state.clone()).await?;
     upsert_document_file_ocr_page(&mut db, document_file_id, 1, Some(ocr_text)).await?;
+
+    cleanup_extra_pages(
+        &mut db,
+        document_file_id,
+        &document_file.s3_prefix,
+        1,
+        prev_pages,
+        state.clone(),
+    )
+    .await?;
+
+    Ok(())
+}
+
+async fn cleanup_extra_pages(
+    db: &mut diesel_async::AsyncPgConnection,
+    document_file_id: i64,
+    s3_prefix: &str,
+    pages: u32,
+    prev_pages: u32,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
+    let pages_i32 = i32::try_from(pages).unwrap_or(i32::MAX);
+
+    diesel::delete(
+        document_file_pages::table
+            .filter(document_file_pages::document_file_id.eq(document_file_id))
+            .filter(document_file_pages::page_number.gt(pages_i32)),
+    )
+    .execute(db)
+    .await?;
+
+    diesel::delete(
+        document_file_ocr_pages::table
+            .filter(document_file_ocr_pages::document_file_id.eq(document_file_id))
+            .filter(document_file_ocr_pages::page_number.gt(pages_i32)),
+    )
+    .execute(db)
+    .await?;
+
+    if prev_pages > pages {
+        for page in (pages + 1)..=prev_pages {
+            let key = format!("{}/pages/{}.png", s3_prefix, page);
+            if let Err(err) =
+                delete_from_s3(&state.s3_client, state.s3_bucket.as_str(), &key).await
+            {
+                tracing::warn!(
+                    document_file_id,
+                    page,
+                    s3_key = %key,
+                    error = %err,
+                    "failed to delete stale page image from S3"
+                );
+            }
+        }
+    }
 
     Ok(())
 }
