@@ -15,6 +15,54 @@ use crate::schema::{document_file_ocr_pages, document_file_pages, document_files
 use crate::shared::app_state::AppState;
 use crate::shared::util::JobResult;
 
+#[derive(Clone, Debug)]
+struct ProcessCommandOutput {
+    success: bool,
+    status: String,
+    stderr: String,
+}
+
+#[async_trait::async_trait]
+trait ProcessRunner {
+    async fn run(&self, program: &str, args: &[String]) -> std::io::Result<ProcessCommandOutput>;
+}
+
+struct TokioProcessRunner;
+
+#[async_trait::async_trait]
+impl ProcessRunner for TokioProcessRunner {
+    async fn run(&self, program: &str, args: &[String]) -> std::io::Result<ProcessCommandOutput> {
+        let output = Command::new(program).args(args).output().await?;
+
+        Ok(ProcessCommandOutput {
+            success: output.status.success(),
+            status: output.status.to_string(),
+            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        })
+    }
+}
+
+async fn run_process<R: ProcessRunner + ?Sized>(
+    runner: &R,
+    program: &str,
+    args: &[String],
+    tool_name: &str,
+) -> JobResult<()> {
+    let output = runner.run(program, args).await?;
+    if !output.success {
+        let error = std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!(
+                "{tool_name} failed with status {}: {}",
+                output.status, output.stderr
+            ),
+        );
+        return Err(error.into());
+    }
+
+    Ok(())
+}
+
 /**
  * This job counts the pages in a document, and then extracts the text content for each page.
  */
@@ -185,8 +233,7 @@ pub(crate) fn parse_document_file_content_type(
         return Ok(DocumentFileContentType::Markdown);
     }
 
-    if content_type == "text/csv" || (content_type == "text/plain" && filename.ends_with(".csv"))
-    {
+    if content_type == "text/csv" || (content_type == "text/plain" && filename.ends_with(".csv")) {
         return Ok(DocumentFileContentType::Csv);
     }
 
@@ -245,7 +292,7 @@ struct NewDocumentFileOcrPage {
 }
 
 /**
- * Internal function to extract the images and text from a plain text document 
+ * Internal function to extract the images and text from a plain text document
  * by running `pandoc` on the file, converting to a PDF, then running process_file_pages_pdf().
  */
 async fn process_file_pages_plaintext(
@@ -273,24 +320,25 @@ async fn process_file_pages_plaintext(
  * Internal function to convert a text file to PDF by running `pandoc`.
  */
 pub(crate) async fn convert_plaintext_to_pdf(text_file: &str) -> JobResult<String> {
+    let runner = TokioProcessRunner;
+    convert_plaintext_to_pdf_with_runner(text_file, &runner).await
+}
+
+async fn convert_plaintext_to_pdf_with_runner<R: ProcessRunner + ?Sized>(
+    text_file: &str,
+    runner: &R,
+) -> JobResult<String> {
     let pdf_file = format!("{}.pdf", text_file);
 
-    let status = Command::new("pandoc")
-        .arg("-f")
-        .arg("markdown")
-        .arg(text_file)
-        .arg("-o")
-        .arg(pdf_file.as_str())
-        .arg("--pdf-engine=xelatex")
-        .status()
-        .await?;
-    if !status.success() {
-        let error = std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("pandoc failed with status {status}"),
-        );
-        return Err(error.into());
-    }
+    let args = vec![
+        "-f".to_string(),
+        "markdown".to_string(),
+        text_file.to_string(),
+        "-o".to_string(),
+        pdf_file.clone(),
+        "--pdf-engine=xelatex".to_string(),
+    ];
+    run_process(runner, "pandoc", &args, "pandoc").await?;
 
     Ok(pdf_file)
 }
@@ -349,24 +397,25 @@ async fn process_file_pages_csv(
  * Internal function to convert a CSV file to PDF by running `pandoc`.
  */
 pub(crate) async fn convert_csv_to_pdf(csv_file: &str) -> JobResult<String> {
+    let runner = TokioProcessRunner;
+    convert_csv_to_pdf_with_runner(csv_file, &runner).await
+}
+
+async fn convert_csv_to_pdf_with_runner<R: ProcessRunner + ?Sized>(
+    csv_file: &str,
+    runner: &R,
+) -> JobResult<String> {
     let pdf_file = format!("{}.pdf", csv_file);
 
-    let status = Command::new("pandoc")
-        .arg("-f")
-        .arg("csv")
-        .arg(csv_file)
-        .arg("-o")
-        .arg(pdf_file.as_str())
-        .arg("--pdf-engine=xelatex")
-        .status()
-        .await?;
-    if !status.success() {
-        let error = std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("pandoc failed with status {status}"),
-        );
-        return Err(error.into());
-    }
+    let args = vec![
+        "-f".to_string(),
+        "csv".to_string(),
+        csv_file.to_string(),
+        "-o".to_string(),
+        pdf_file.clone(),
+        "--pdf-engine=xelatex".to_string(),
+    ];
+    run_process(runner, "pandoc", &args, "pandoc").await?;
 
     Ok(pdf_file)
 }
@@ -429,6 +478,15 @@ pub(crate) async fn convert_office_document_to_pdf(
     source_file: &str,
     original_filename: &str,
 ) -> JobResult<String> {
+    let runner = TokioProcessRunner;
+    convert_office_document_to_pdf_with_runner(source_file, original_filename, &runner).await
+}
+
+async fn convert_office_document_to_pdf_with_runner<R: ProcessRunner + ?Sized>(
+    source_file: &str,
+    original_filename: &str,
+    runner: &R,
+) -> JobResult<String> {
     let source_path = Path::new(source_file);
     let source_dir = source_path.parent().ok_or_else(|| {
         std::io::Error::new(
@@ -463,26 +521,16 @@ pub(crate) async fn convert_office_document_to_pdf(
             source_path
         };
 
-        let output = Command::new("soffice")
-            .arg("--headless")
-            .arg("--convert-to")
-            .arg("pdf")
-            .arg("--outdir")
-            .arg(&convert_dir)
-            .arg(soffice_input)
-            .output()
-            .await?;
-        if !output.status.success() {
-            let error = std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!(
-                    "soffice failed with status {}: {}",
-                    output.status,
-                    String::from_utf8_lossy(&output.stderr)
-                ),
-            );
-            return Err(error.into());
-        }
+        let args = vec![
+            "--headless".to_string(),
+            "--convert-to".to_string(),
+            "pdf".to_string(),
+            "--outdir".to_string(),
+            convert_dir.to_string_lossy().to_string(),
+            soffice_input.to_string_lossy().to_string(),
+        ];
+
+        run_process(runner, "soffice", &args, "soffice").await?;
 
         let output_stem = soffice_input.file_stem().ok_or_else(|| {
             std::io::Error::new(
@@ -525,24 +573,25 @@ pub(crate) async fn convert_office_document_to_pdf(
  * Internal function to convert a TSV file to PDF by running `pandoc`.
  */
 pub(crate) async fn convert_tsv_to_pdf(tsv_file: &str) -> JobResult<String> {
+    let runner = TokioProcessRunner;
+    convert_tsv_to_pdf_with_runner(tsv_file, &runner).await
+}
+
+async fn convert_tsv_to_pdf_with_runner<R: ProcessRunner + ?Sized>(
+    tsv_file: &str,
+    runner: &R,
+) -> JobResult<String> {
     let pdf_file = format!("{}.pdf", tsv_file);
 
-    let status = Command::new("pandoc")
-        .arg("-f")
-        .arg("tsv")
-        .arg(tsv_file)
-        .arg("-o")
-        .arg(pdf_file.as_str())
-        .arg("--pdf-engine=xelatex")
-        .status()
-        .await?;
-    if !status.success() {
-        let error = std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("pandoc failed with status {status}"),
-        );
-        return Err(error.into());
-    }
+    let args = vec![
+        "-f".to_string(),
+        "tsv".to_string(),
+        tsv_file.to_string(),
+        "-o".to_string(),
+        pdf_file.clone(),
+        "--pdf-engine=xelatex".to_string(),
+    ];
+    run_process(runner, "pandoc", &args, "pandoc").await?;
 
     Ok(pdf_file)
 }
@@ -576,20 +625,18 @@ async fn process_file_pages_html(
  * Internal function to convert an HTML file to PDF by running `weasyprint`.
  */
 pub(crate) async fn convert_html_to_pdf(html_file: &str) -> JobResult<String> {
+    let runner = TokioProcessRunner;
+    convert_html_to_pdf_with_runner(html_file, &runner).await
+}
+
+async fn convert_html_to_pdf_with_runner<R: ProcessRunner + ?Sized>(
+    html_file: &str,
+    runner: &R,
+) -> JobResult<String> {
     let pdf_file = format!("{}.pdf", html_file);
 
-    let status = Command::new("weasyprint")
-        .arg(html_file)
-        .arg(pdf_file.as_str())
-        .status()
-        .await?;
-    if !status.success() {
-        let error = std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("weasyprint failed with status {status}"),
-        );
-        return Err(error.into());
-    }
+    let args = vec![html_file.to_string(), pdf_file.clone()];
+    run_process(runner, "weasyprint", &args, "weasyprint").await?;
 
     Ok(pdf_file)
 }
@@ -598,24 +645,25 @@ pub(crate) async fn convert_html_to_pdf(html_file: &str) -> JobResult<String> {
  * Internal function to convert a markdown file to PDF by running `pandoc`.
  */
 pub(crate) async fn convert_markdown_to_pdf(markdown_file: &str) -> JobResult<String> {
+    let runner = TokioProcessRunner;
+    convert_markdown_to_pdf_with_runner(markdown_file, &runner).await
+}
+
+async fn convert_markdown_to_pdf_with_runner<R: ProcessRunner + ?Sized>(
+    markdown_file: &str,
+    runner: &R,
+) -> JobResult<String> {
     let pdf_file = format!("{}.pdf", markdown_file);
 
-    let status = Command::new("pandoc")
-        .arg("-f")
-        .arg("markdown")
-        .arg(markdown_file)
-        .arg("-o")
-        .arg(pdf_file.as_str())
-        .arg("--pdf-engine=xelatex")
-        .status()
-        .await?;
-    if !status.success() {
-        let error = std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("pandoc failed with status {status}"),
-        );
-        return Err(error.into());
-    }
+    let args = vec![
+        "-f".to_string(),
+        "markdown".to_string(),
+        markdown_file.to_string(),
+        "-o".to_string(),
+        pdf_file.clone(),
+        "--pdf-engine=xelatex".to_string(),
+    ];
+    run_process(runner, "pandoc", &args, "pandoc").await?;
 
     Ok(pdf_file)
 }
@@ -1064,4 +1112,401 @@ pub async fn stage_document_file_from_s3(
     tokio::fs::write(&tmp_file, file_bytes).await?;
 
     Ok((tmp_dir, tmp_file.to_string_lossy().to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::sync::Mutex;
+
+    #[derive(Clone)]
+    enum FakeRunnerMode {
+        SuccessCreatesOutput,
+        SuccessNoOutput,
+        Failure { status: String, stderr: String },
+    }
+
+    struct FakeProcessRunner {
+        mode: FakeRunnerMode,
+        calls: Mutex<Vec<(String, Vec<String>)>>,
+    }
+
+    impl FakeProcessRunner {
+        fn new(mode: FakeRunnerMode) -> Self {
+            Self {
+                mode,
+                calls: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn calls(&self) -> Vec<(String, Vec<String>)> {
+            self.calls.lock().expect("calls lock poisoned").clone()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl ProcessRunner for FakeProcessRunner {
+        async fn run(
+            &self,
+            program: &str,
+            args: &[String],
+        ) -> std::io::Result<ProcessCommandOutput> {
+            self.calls
+                .lock()
+                .expect("calls lock poisoned")
+                .push((program.to_string(), args.to_vec()));
+
+            match &self.mode {
+                FakeRunnerMode::SuccessCreatesOutput => {
+                    let outdir = arg_value(args, "--outdir").expect("--outdir not passed");
+                    let input = args.last().expect("input path not passed");
+                    let input_stem = Path::new(input)
+                        .file_stem()
+                        .expect("input stem missing")
+                        .to_string_lossy();
+                    let output_path = Path::new(outdir).join(format!("{}.pdf", input_stem));
+                    tokio::fs::write(output_path, b"pdf").await?;
+
+                    Ok(ProcessCommandOutput {
+                        success: true,
+                        status: "0".to_string(),
+                        stderr: String::new(),
+                    })
+                }
+                FakeRunnerMode::SuccessNoOutput => Ok(ProcessCommandOutput {
+                    success: true,
+                    status: "0".to_string(),
+                    stderr: String::new(),
+                }),
+                FakeRunnerMode::Failure { status, stderr } => Ok(ProcessCommandOutput {
+                    success: false,
+                    status: status.clone(),
+                    stderr: stderr.clone(),
+                }),
+            }
+        }
+    }
+
+    fn arg_value<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
+        let idx = args.iter().position(|arg| arg == name)?;
+        args.get(idx + 1).map(String::as_str)
+    }
+
+    fn assert_single_process_call(
+        runner: &FakeProcessRunner,
+        expected_program: &str,
+        expected_args: &[&str],
+    ) {
+        let calls = runner.calls();
+        assert_eq!(calls.len(), 1);
+        let (program, args) = &calls[0];
+        assert_eq!(program, expected_program);
+        let expected: Vec<String> = expected_args.iter().map(|s| s.to_string()).collect();
+        assert_eq!(*args, expected);
+    }
+
+    async fn create_test_source_file() -> (PathBuf, PathBuf) {
+        let test_dir = std::env::temp_dir().join(format!("autofile-test-{}", Uuid::new_v4()));
+        tokio::fs::create_dir_all(&test_dir)
+            .await
+            .expect("failed to create test dir");
+
+        let source_path = test_dir.join("staged-file");
+        tokio::fs::write(&source_path, b"dummy")
+            .await
+            .expect("failed to write source file");
+
+        (test_dir, source_path)
+    }
+
+    #[test]
+    fn parse_content_type_handles_office_mime_types() {
+        assert_eq!(
+            parse_document_file_content_type(Some("application/msword"), "report.doc").unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(
+                Some("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+                "report.docx"
+            )
+            .unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(
+                Some("application/vnd.oasis.opendocument.text"),
+                "report.odt"
+            )
+            .unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+    }
+
+    #[test]
+    fn parse_content_type_handles_office_extension_fallbacks() {
+        assert_eq!(
+            parse_document_file_content_type(Some("application/octet-stream"), "report.doc")
+                .unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(Some("application/octet-stream"), "report.docx")
+                .unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(Some("text/plain"), "report.odt").unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+    }
+
+    #[tokio::test]
+    async fn plaintext_conversion_builds_expected_pandoc_command() {
+        let runner = FakeProcessRunner::new(FakeRunnerMode::SuccessNoOutput);
+
+        let pdf = convert_plaintext_to_pdf_with_runner("/tmp/input.txt", &runner)
+            .await
+            .expect("conversion should succeed");
+        assert_eq!(pdf, "/tmp/input.txt.pdf");
+
+        assert_single_process_call(
+            &runner,
+            "pandoc",
+            &[
+                "-f",
+                "markdown",
+                "/tmp/input.txt",
+                "-o",
+                "/tmp/input.txt.pdf",
+                "--pdf-engine=xelatex",
+            ],
+        );
+    }
+
+    #[tokio::test]
+    async fn markdown_conversion_builds_expected_pandoc_command() {
+        let runner = FakeProcessRunner::new(FakeRunnerMode::SuccessNoOutput);
+
+        let pdf = convert_markdown_to_pdf_with_runner("/tmp/input.md", &runner)
+            .await
+            .expect("conversion should succeed");
+        assert_eq!(pdf, "/tmp/input.md.pdf");
+
+        assert_single_process_call(
+            &runner,
+            "pandoc",
+            &[
+                "-f",
+                "markdown",
+                "/tmp/input.md",
+                "-o",
+                "/tmp/input.md.pdf",
+                "--pdf-engine=xelatex",
+            ],
+        );
+    }
+
+    #[tokio::test]
+    async fn csv_conversion_builds_expected_pandoc_command() {
+        let runner = FakeProcessRunner::new(FakeRunnerMode::SuccessNoOutput);
+
+        let pdf = convert_csv_to_pdf_with_runner("/tmp/input.csv", &runner)
+            .await
+            .expect("conversion should succeed");
+        assert_eq!(pdf, "/tmp/input.csv.pdf");
+
+        assert_single_process_call(
+            &runner,
+            "pandoc",
+            &[
+                "-f",
+                "csv",
+                "/tmp/input.csv",
+                "-o",
+                "/tmp/input.csv.pdf",
+                "--pdf-engine=xelatex",
+            ],
+        );
+    }
+
+    #[tokio::test]
+    async fn tsv_conversion_builds_expected_pandoc_command() {
+        let runner = FakeProcessRunner::new(FakeRunnerMode::SuccessNoOutput);
+
+        let pdf = convert_tsv_to_pdf_with_runner("/tmp/input.tsv", &runner)
+            .await
+            .expect("conversion should succeed");
+        assert_eq!(pdf, "/tmp/input.tsv.pdf");
+
+        assert_single_process_call(
+            &runner,
+            "pandoc",
+            &[
+                "-f",
+                "tsv",
+                "/tmp/input.tsv",
+                "-o",
+                "/tmp/input.tsv.pdf",
+                "--pdf-engine=xelatex",
+            ],
+        );
+    }
+
+    #[tokio::test]
+    async fn html_conversion_builds_expected_weasyprint_command() {
+        let runner = FakeProcessRunner::new(FakeRunnerMode::SuccessNoOutput);
+
+        let pdf = convert_html_to_pdf_with_runner("/tmp/input.html", &runner)
+            .await
+            .expect("conversion should succeed");
+        assert_eq!(pdf, "/tmp/input.html.pdf");
+
+        assert_single_process_call(
+            &runner,
+            "weasyprint",
+            &["/tmp/input.html", "/tmp/input.html.pdf"],
+        );
+    }
+
+    #[tokio::test]
+    async fn pandoc_and_weasyprint_conversion_include_stderr_on_failure() {
+        let pandoc_runner = FakeProcessRunner::new(FakeRunnerMode::Failure {
+            status: "2".to_string(),
+            stderr: "pandoc broke".to_string(),
+        });
+        let pandoc_err = convert_csv_to_pdf_with_runner("/tmp/input.csv", &pandoc_runner)
+            .await
+            .expect_err("conversion should fail");
+        assert!(
+            pandoc_err
+                .to_string()
+                .contains("pandoc failed with status 2")
+        );
+        assert!(pandoc_err.to_string().contains("pandoc broke"));
+
+        let weasy_runner = FakeProcessRunner::new(FakeRunnerMode::Failure {
+            status: "3".to_string(),
+            stderr: "weasy broke".to_string(),
+        });
+        let weasy_err = convert_html_to_pdf_with_runner("/tmp/input.html", &weasy_runner)
+            .await
+            .expect_err("conversion should fail");
+        assert!(
+            weasy_err
+                .to_string()
+                .contains("weasyprint failed with status 3")
+        );
+        assert!(weasy_err.to_string().contains("weasy broke"));
+    }
+
+    #[tokio::test]
+    async fn office_conversion_builds_soffice_command_and_moves_output() {
+        let (test_dir, source_path) = create_test_source_file().await;
+        let runner = FakeProcessRunner::new(FakeRunnerMode::SuccessCreatesOutput);
+
+        let result = convert_office_document_to_pdf_with_runner(
+            source_path.to_string_lossy().as_ref(),
+            "invoice.docx",
+            &runner,
+        )
+        .await
+        .expect("conversion should succeed");
+
+        assert_eq!(result, format!("{}.pdf", source_path.to_string_lossy()));
+        assert!(
+            tokio::fs::try_exists(Path::new(result.as_str()))
+                .await
+                .expect("try_exists failed")
+        );
+
+        let calls = runner.calls();
+        assert_eq!(calls.len(), 1);
+        let (program, args) = &calls[0];
+        assert_eq!(program, "soffice");
+        assert_eq!(args[0], "--headless");
+        assert_eq!(args[1], "--convert-to");
+        assert_eq!(args[2], "pdf");
+        assert_eq!(args[3], "--outdir");
+        assert!(args[4].contains("soffice-out-"));
+        assert!(args[5].ends_with("invoice.docx"));
+
+        let temp_outdir = Path::new(&args[4]);
+        assert!(
+            !tokio::fs::try_exists(temp_outdir)
+                .await
+                .expect("try_exists failed")
+        );
+        assert!(
+            !tokio::fs::try_exists(&test_dir.join("invoice.docx"))
+                .await
+                .expect("try_exists failed")
+        );
+
+        tokio::fs::remove_dir_all(&test_dir)
+            .await
+            .expect("failed to clean test dir");
+    }
+
+    #[tokio::test]
+    async fn office_conversion_includes_soffice_stderr_on_failure() {
+        let (test_dir, source_path) = create_test_source_file().await;
+        let runner = FakeProcessRunner::new(FakeRunnerMode::Failure {
+            status: "1".to_string(),
+            stderr: "conversion failed".to_string(),
+        });
+
+        let err = convert_office_document_to_pdf_with_runner(
+            source_path.to_string_lossy().as_ref(),
+            "invoice.docx",
+            &runner,
+        )
+        .await
+        .expect_err("conversion should fail");
+        let err_text = err.to_string();
+
+        assert!(err_text.contains("soffice failed with status 1"));
+        assert!(err_text.contains("conversion failed"));
+
+        let calls = runner.calls();
+        let outdir = arg_value(&calls[0].1, "--outdir").expect("missing --outdir value");
+        assert!(
+            !tokio::fs::try_exists(Path::new(outdir))
+                .await
+                .expect("try_exists failed")
+        );
+        assert!(
+            !tokio::fs::try_exists(&test_dir.join("invoice.docx"))
+                .await
+                .expect("try_exists failed")
+        );
+
+        tokio::fs::remove_dir_all(&test_dir)
+            .await
+            .expect("failed to clean test dir");
+    }
+
+    #[tokio::test]
+    async fn office_conversion_fails_when_soffice_does_not_create_output_file() {
+        let (test_dir, source_path) = create_test_source_file().await;
+        let runner = FakeProcessRunner::new(FakeRunnerMode::SuccessNoOutput);
+
+        let err = convert_office_document_to_pdf_with_runner(
+            source_path.to_string_lossy().as_ref(),
+            "invoice.docx",
+            &runner,
+        )
+        .await
+        .expect_err("conversion should fail");
+
+        assert!(
+            err.to_string()
+                .contains("soffice did not produce expected output")
+        );
+
+        tokio::fs::remove_dir_all(&test_dir)
+            .await
+            .expect("failed to clean test dir");
+    }
 }

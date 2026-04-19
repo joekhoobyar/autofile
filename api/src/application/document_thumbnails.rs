@@ -8,8 +8,8 @@ use tokio::process::Command;
 use crate::application::document_files::{
     DocumentFileContentType, convert_csv_to_pdf, convert_html_to_pdf, convert_image_to_png,
     convert_markdown_to_pdf, convert_office_document_to_pdf, convert_plaintext_to_pdf,
-    convert_tsv_to_pdf,
-    parse_document_file_content_type, stage_document_file_from_s3, upload_png_to_s3,
+    convert_tsv_to_pdf, parse_document_file_content_type, stage_document_file_from_s3,
+    upload_png_to_s3,
 };
 use crate::domain::document_files::DocumentFile;
 use crate::schema::document_files;
