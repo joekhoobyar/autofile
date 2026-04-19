@@ -8,12 +8,40 @@ REST API built with Axum and Diesel-async for document management with S3 storag
 cargo run
 ```
 
-## Testing
+## Running with Docker Compose
 
-Run the integration test suite:
+From the repository root:
 
 ```bash
-bash test_simple.sh
+docker compose -f api/docker-compose.yml up --build
+```
+
+This starts:
+
+- `api` (this service)
+- `redis`
+- `postgres`
+- `minio` (plus a one-shot `minio-init` job to create bucket `autofile`)
+
+### User Registration
+
+```bash
+curl -i -X POST "http://localhost:8000/api/v1/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "admin@example.com",
+    "email": "admin@example.com",
+    "display_name": "Admin",
+    "password": "changeme123"
+  }'
+```
+
+## Testing
+
+Run the test suite:
+
+```bash
+cargo test
 ```
 
 ## Tech Stack
