@@ -1,13 +1,13 @@
 import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query';
 import { apiFetchList, type ListParams, type ResourceList, type ResourceInput, HttpError, apiMutate, apiFetch } from '../api';
-import { type DocumentIndex } from '../models/documentIndex';
+import { type DocumentIndex, type DocumentIndexView } from '../models/documentIndex';
 
 export type DocumentIndexInput = ResourceInput<DocumentIndex>;
 
-export function useDocumentIndexes(params: ListParams): UseQueryResult<ResourceList<DocumentIndex>, HttpError> {
+export function useDocumentIndexes(params: ListParams): UseQueryResult<ResourceList<DocumentIndexView>, HttpError> {
   return useQuery({
     queryKey: ['documentIndex', 'list', params],
-    queryFn: () => apiFetchList<DocumentIndex>('api/v1/document-indexes', params),
+    queryFn: () => apiFetchList<DocumentIndexView>('api/v1/document-indexes', params),
   });
 }
 

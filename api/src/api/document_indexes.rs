@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::application::jobs::SlowJob;
-use crate::domain::document_indexes::DocumentIndex;
+use crate::domain::document_indexes::{DocumentIndex, DocumentIndexView};
 use crate::schema::{
     document_index_documents, document_index_templates, document_index_values, document_indexes,
 };
@@ -10,6 +11,7 @@ use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
 
+use diesel::dsl::count_distinct;
 use serde::Deserialize;
 
 use apalis::prelude::Storage;
@@ -244,7 +246,7 @@ pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
     Query(params): Query<ListDocumentIndexesQuery>,
-) -> Result<Json<ResourceList<DocumentIndex>>, ApiError> {
+) -> Result<Json<ResourceList<DocumentIndexView>>, ApiError> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
@@ -322,13 +324,50 @@ pub async fn list(
         _ => query.order(document_indexes::id.asc()),
     };
 
-    let items = query
+    let indexes = query
         .limit(per_page)
         .offset(offset)
         .select(DocumentIndex::as_select())
         .load::<DocumentIndex>(&mut db)
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_indexes"))?;
+    let index_ids: Vec<i64> = indexes.iter().map(|doc| doc.id).collect();
+
+    let mut document_counts_by_index: HashMap<i64, i64> = HashMap::new();
+    if !index_ids.is_empty() {
+        let document_count_rows: Vec<(i64, i64)> = document_index_documents::table
+            .inner_join(document_index_values::table.on(document_index_documents::document_index_value_id.eq(document_index_values::id)))
+            .filter(document_index_values::document_index_id.eq_any(&index_ids))
+            .group_by(document_index_values::document_index_id)
+            .select((
+                document_index_values::document_index_id,
+                count_distinct(document_index_documents::document_id),
+            ))
+            .load::<(i64, i64)>(&mut db)
+            .await
+            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count documents"))?;
+
+        for (index_id, document_count) in document_count_rows {
+            document_counts_by_index.insert(index_id, document_count);
+        }
+    }
+
+    // Construct the final list of document views, attaching metadata to each document.
+    let items = indexes
+        .into_iter()
+        .map(|doc| DocumentIndexView {
+            id: doc.id,
+            slug: doc.slug,
+            name: doc.name,
+            description: doc.description,
+            enabled: doc.enabled,
+            document_count: document_counts_by_index.get(&doc.id).cloned().unwrap_or(0),
+            created_by: doc.created_by,
+            created_at: doc.created_at,
+            updated_by: doc.updated_by,
+            updated_at: doc.updated_at,
+        })
+        .collect();
 
     Ok(Json(ResourceList {
         total,

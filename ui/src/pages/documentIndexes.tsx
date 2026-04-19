@@ -112,6 +112,7 @@ export function ListDocumentIndexes() {
         >
         <Column field="slug" header="Slug" body={slugTemplate} sortable></Column>
         <Column field="name" header="Name" body={nameTemplate} sortable></Column>
+        <Column field="document_count" header="Documents"></Column>
         <Column field="description" header="Description" sortable></Column>
         <Column field="enabled" header="Enabled" body={enabledTemplate} sortable></Column>
         <Column body={actionTemplate} headerClassName="w-13rem" />

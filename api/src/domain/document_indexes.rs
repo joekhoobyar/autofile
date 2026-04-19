@@ -19,6 +19,20 @@ pub struct DocumentIndex {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Serialize, PartialEq)]
+pub struct DocumentIndexView {
+    pub id: i64,
+    pub slug: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub enabled: bool,
+    pub document_count: i64,
+    pub created_by: i64,
+    pub created_at: DateTime<Utc>,
+    pub updated_by: i64,
+    pub updated_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
 #[diesel(table_name = document_index_templates)]
 #[diesel(check_for_backend(diesel::pg::Pg))]

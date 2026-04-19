@@ -6,6 +6,15 @@ export interface DocumentIndex {
   enabled: boolean
 }
 
+export interface DocumentIndexView {
+  id: number
+  slug: string
+  name: string
+  description?: string
+  enabled: boolean
+  document_count: number
+}
+
 export interface DocumentIndexTemplate {
     id: number
     template: string
