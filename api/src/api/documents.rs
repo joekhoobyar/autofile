@@ -22,6 +22,7 @@ use crate::shared::s3::serve_s3_file;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http, write_field_to_temp_file};
 
 use aws_sdk_s3::primitives::ByteStream;
+use axum::extract::DefaultBodyLimit;
 use diesel::dsl::{exists, sum};
 use serde::Deserialize;
 
@@ -890,6 +891,8 @@ pub async fn list_index_values(
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(list).post(create))
+        // Allow up to 100MB uploads for document creation.
+        .layer(DefaultBodyLimit::max(100 * 1024 * 1024 * 1024))
         .route("/{id}", get(get_by_id).patch(update).delete(delete))
         .route("/{id}/classify-document", post(classify_document))
         .route("/{id}/index-values", get(list_index_values))
