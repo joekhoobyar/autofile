@@ -53,7 +53,7 @@ services:
     build:
       context: ../..
       dockerfile: services/autofile-api/Dockerfile
-    image: autofile-api:trixie
+    image: autofile-api:latest
     depends_on:
       redis:
         condition: service_healthy

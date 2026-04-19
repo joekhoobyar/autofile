@@ -64,6 +64,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice \
     pandoc \
     poppler-utils \
+    tesseract-ocr \
     weasyprint \
     texlive-latex-base \
     texlive-xetex \
@@ -78,6 +79,7 @@ RUN command -v magick \
  && command -v pdftocairo \
  && command -v pdftotext \
  && command -v pdfinfo \
+ && command -v tesseract \
  && command -v weasyprint \
  && command -v pdflatex \
  && command -v xelatex
