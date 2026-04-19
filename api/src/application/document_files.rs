@@ -249,13 +249,22 @@ pub(crate) fn parse_document_file_content_type(
         || content_type == "application/vnd.ms-excel"
         || content_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         || content_type == "application/vnd.oasis.opendocument.spreadsheet"
+        || content_type == "application/vnd.ms-powerpoint"
+        || content_type
+            == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        || content_type == "application/vnd.oasis.opendocument.presentation"
+        || content_type == "application/mspowerpoint"
+        || content_type == "application/powerpoint"
         || ((content_type == "application/octet-stream" || content_type == "text/plain")
             && (filename.ends_with(".doc")
                 || filename.ends_with(".docx")
                 || filename.ends_with(".odt")
                 || filename.ends_with(".xls")
                 || filename.ends_with(".xlsx")
-                || filename.ends_with(".ods")))
+                || filename.ends_with(".ods")
+                || filename.ends_with(".ppt")
+                || filename.ends_with(".pptx")
+                || filename.ends_with(".odp")))
     {
         return Ok(DocumentFileContentType::OfficeDocument);
     }
@@ -1269,6 +1278,36 @@ mod tests {
             .unwrap(),
             DocumentFileContentType::OfficeDocument
         );
+        assert_eq!(
+            parse_document_file_content_type(Some("application/vnd.ms-powerpoint"), "slides.ppt")
+                .unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(
+                Some("application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+                "slides.pptx"
+            )
+            .unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(
+                Some("application/vnd.oasis.opendocument.presentation"),
+                "slides.odp"
+            )
+            .unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(Some("application/mspowerpoint"), "slides.ppt")
+                .unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(Some("application/powerpoint"), "slides.ppt").unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
     }
 
     #[test]
@@ -1299,6 +1338,20 @@ mod tests {
         );
         assert_eq!(
             parse_document_file_content_type(Some("text/plain"), "report.ods").unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(Some("application/octet-stream"), "slides.ppt")
+                .unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(Some("application/octet-stream"), "slides.pptx")
+                .unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(Some("text/plain"), "slides.odp").unwrap(),
             DocumentFileContentType::OfficeDocument
         );
     }
