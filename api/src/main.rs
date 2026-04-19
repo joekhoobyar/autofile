@@ -65,7 +65,7 @@ async fn main() {
     run_migrations(&database_url).await;
 
     // Initialize S3 client
-    let s3_endpoint = std::env::var("AWS_ENDPOINT_URL_S3").expect("AWS_ENDPOINT_URL_S3 not set");
+    let s3_endpoint = std::env::var("AWS_ENDPOINT_URL_S3").expect("AWS_ENDPOINT_URL_S3 must be set");
     let s3_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
         .endpoint_url(&s3_endpoint)
         .load()
@@ -81,7 +81,7 @@ async fn main() {
             .force_path_style(true) // Required for minio
             .build(),
     );
-    let s3_bucket = std::env::var("S3_BUCKET").expect("S3_BUCKET not set");
+    let s3_bucket = std::env::var("S3_BUCKET").expect("S3_BUCKET must be set");
 
     let allowed_origins = vec!["http://localhost:5173".to_string()];
 
