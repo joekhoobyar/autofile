@@ -56,6 +56,16 @@ async fn process_file_pages_inner(
             document_file.content_type.as_deref(),
             document_file.filename.as_str(),
         )? {
+            DocumentFileContentType::PlainText => {
+                process_file_pages_plaintext(
+                    document_file_id,
+                    &document_file,
+                    &temp_dir,
+                    &temp_file,
+                    state,
+                )
+                .await
+            }
             DocumentFileContentType::Markdown => {
                 process_file_pages_markdown(
                     document_file_id,
@@ -102,6 +112,7 @@ pub(crate) enum DocumentFileContentType {
     Pdf,
     Image,
     Markdown,
+    PlainText,
 }
 
 pub(crate) fn parse_document_file_content_type(
@@ -130,6 +141,10 @@ pub(crate) fn parse_document_file_content_type(
         return Ok(DocumentFileContentType::Markdown);
     }
 
+    if content_type == "text/plain" {
+        return Ok(DocumentFileContentType::PlainText);
+    }
+
     Err(std::io::Error::new(
         std::io::ErrorKind::InvalidInput,
         format!("Unsupported content_type for page processing: {content_type}"),
@@ -153,6 +168,57 @@ struct NewDocumentFileOcrPage {
     document_file_id: i64,
     page_number: i32,
     ocr_content: Option<String>,
+}
+
+/**
+ * Internal function to extract the images and text from a plain text document 
+ * by running `pandoc` on the file, converting to a PDF, then running process_file_pages_pdf().
+ */
+async fn process_file_pages_plaintext(
+    document_file_id: i64,
+    document_file: &DocumentFile,
+    temp_dir: &Path,
+    temp_file: &str,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
+    let pdf_file = convert_plaintext_to_pdf(temp_file).await?;
+
+    process_file_pages_pdf(
+        document_file_id,
+        document_file,
+        temp_dir,
+        pdf_file.as_str(),
+        state,
+    )
+    .await?;
+
+    Ok(())
+}
+
+/**
+ * Internal function to convert a text file to PDF by running `pandoc`.
+ */
+pub(crate) async fn convert_plaintext_to_pdf(text_file: &str) -> JobResult<String> {
+    let pdf_file = format!("{}.pdf", text_file);
+
+    let status = Command::new("pandoc")
+        .arg("-f")
+        .arg("markdown")
+        .arg(text_file)
+        .arg("-o")
+        .arg(pdf_file.as_str())
+        .arg("--pdf-engine=xelatex")
+        .status()
+        .await?;
+    if !status.success() {
+        let error = std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("pandoc failed with status {status}"),
+        );
+        return Err(error.into());
+    }
+
+    Ok(pdf_file)
 }
 
 /**

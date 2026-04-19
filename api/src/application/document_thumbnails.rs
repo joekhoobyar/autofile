@@ -6,8 +6,7 @@ use diesel_async::RunQueryDsl;
 use tokio::process::Command;
 
 use crate::application::document_files::{
-    DocumentFileContentType, convert_image_to_png, convert_markdown_to_pdf,
-    parse_document_file_content_type, stage_document_file_from_s3, upload_png_to_s3,
+    DocumentFileContentType, convert_image_to_png, convert_markdown_to_pdf, convert_plaintext_to_pdf, parse_document_file_content_type, stage_document_file_from_s3, upload_png_to_s3
 };
 use crate::domain::document_files::DocumentFile;
 use crate::schema::document_files;
@@ -56,6 +55,9 @@ async fn generate_thumbnail_inner(
             document_file.content_type.as_deref(),
             document_file.filename.as_str(),
         )? {
+            DocumentFileContentType::PlainText => {
+                generate_plaintext_thumbnail(&temp_file, page, width, &temp_dir).await?
+            }
             DocumentFileContentType::Markdown => {
                 generate_markdown_thumbnail(&temp_file, page, width, &temp_dir).await?
             }
@@ -91,6 +93,18 @@ async fn generate_thumbnail_inner(
     }
 
     result
+}
+
+async fn generate_plaintext_thumbnail(
+    temp_file: &str,
+    page: u32,
+    width: u32,
+    temp_dir: &std::path::Path,
+) -> JobResult<()> {
+    let pdf_file = convert_plaintext_to_pdf(temp_file).await?;
+
+    generate_pdf_thumbnail(pdf_file.as_str(), page, width, temp_dir).await?;
+    Ok(())
 }
 
 async fn generate_markdown_thumbnail(
