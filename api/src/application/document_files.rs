@@ -246,6 +246,19 @@ async fn cleanup_extra_pages(
     prev_pages: u32,
     state: Data<Arc<AppState>>,
 ) -> JobResult<()> {
+    cleanup_extra_page_rows(db, document_file_id, pages).await?;
+
+    let stale_keys = stale_page_image_keys(s3_prefix, prev_pages, pages);
+    delete_s3_keys_best_effort(document_file_id, &stale_keys, state).await;
+
+    Ok(())
+}
+
+pub async fn cleanup_extra_page_rows(
+    db: &mut diesel_async::AsyncPgConnection,
+    document_file_id: i64,
+    pages: u32,
+) -> JobResult<()> {
     let pages_i32 = i32::try_from(pages).unwrap_or(i32::MAX);
 
     diesel::delete(
@@ -264,24 +277,34 @@ async fn cleanup_extra_pages(
     .execute(db)
     .await?;
 
-    if prev_pages > pages {
-        for page in (pages + 1)..=prev_pages {
-            let key = format!("{}/pages/{}.png", s3_prefix, page);
-            if let Err(err) =
-                delete_from_s3(&state.s3_client, state.s3_bucket.as_str(), &key).await
-            {
-                tracing::warn!(
-                    document_file_id,
-                    page,
-                    s3_key = %key,
-                    error = %err,
-                    "failed to delete stale page image from S3"
-                );
-            }
-        }
+    Ok(())
+}
+
+pub fn stale_page_image_keys(s3_prefix: &str, prev_pages: u32, pages: u32) -> Vec<String> {
+    if prev_pages <= pages {
+        return Vec::new();
     }
 
-    Ok(())
+    ((pages + 1)..=prev_pages)
+        .map(|page| format!("{}/pages/{}.png", s3_prefix, page))
+        .collect()
+}
+
+async fn delete_s3_keys_best_effort(
+    document_file_id: i64,
+    keys: &[String],
+    state: Data<Arc<AppState>>,
+) {
+    for key in keys {
+        if let Err(err) = delete_from_s3(&state.s3_client, state.s3_bucket.as_str(), key).await {
+            tracing::warn!(
+                document_file_id,
+                s3_key = %key,
+                error = %err,
+                "failed to delete stale page image from S3"
+            );
+        }
+    }
 }
 
 async fn upsert_document_file_page(
