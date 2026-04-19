@@ -66,6 +66,26 @@ async fn process_file_pages_inner(
                 )
                 .await
             }
+            DocumentFileContentType::Csv => {
+                process_file_pages_csv(
+                    document_file_id,
+                    &document_file,
+                    &temp_dir,
+                    &temp_file,
+                    state,
+                )
+                .await
+            }
+            DocumentFileContentType::Tsv => {
+                process_file_pages_tsv(
+                    document_file_id,
+                    &document_file,
+                    &temp_dir,
+                    &temp_file,
+                    state,
+                )
+                .await
+            }
             DocumentFileContentType::Html => {
                 process_file_pages_html(
                     document_file_id,
@@ -123,6 +143,8 @@ pub(crate) enum DocumentFileContentType {
     Image,
     Markdown,
     PlainText,
+    Csv,
+    Tsv,
     Html,
 }
 
@@ -150,6 +172,17 @@ pub(crate) fn parse_document_file_content_type(
         || (content_type == "text/plain" && filename.ends_with(".md"))
     {
         return Ok(DocumentFileContentType::Markdown);
+    }
+
+    if content_type == "text/csv" || (content_type == "text/plain" && filename.ends_with(".csv"))
+    {
+        return Ok(DocumentFileContentType::Csv);
+    }
+
+    if content_type == "text/tab-separated-values"
+        || (content_type == "text/plain" && filename.ends_with(".tsv"))
+    {
+        return Ok(DocumentFileContentType::Tsv);
     }
 
     if content_type == "text/html"
@@ -263,6 +296,108 @@ async fn process_file_pages_markdown(
     .await?;
 
     Ok(())
+}
+
+/**
+ * Internal function to extract the images and text from a CSV document
+ * by running `pandoc` on the file, converting to a PDF, then running process_file_pages_pdf().
+ */
+async fn process_file_pages_csv(
+    document_file_id: i64,
+    document_file: &DocumentFile,
+    temp_dir: &Path,
+    temp_file: &str,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
+    let pdf_file = convert_csv_to_pdf(temp_file).await?;
+
+    process_file_pages_pdf(
+        document_file_id,
+        document_file,
+        temp_dir,
+        pdf_file.as_str(),
+        state,
+    )
+    .await?;
+
+    Ok(())
+}
+
+/**
+ * Internal function to convert a CSV file to PDF by running `pandoc`.
+ */
+pub(crate) async fn convert_csv_to_pdf(csv_file: &str) -> JobResult<String> {
+    let pdf_file = format!("{}.pdf", csv_file);
+
+    let status = Command::new("pandoc")
+        .arg("-f")
+        .arg("csv")
+        .arg(csv_file)
+        .arg("-o")
+        .arg(pdf_file.as_str())
+        .arg("--pdf-engine=xelatex")
+        .status()
+        .await?;
+    if !status.success() {
+        let error = std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("pandoc failed with status {status}"),
+        );
+        return Err(error.into());
+    }
+
+    Ok(pdf_file)
+}
+
+/**
+ * Internal function to extract the images and text from a TSV document
+ * by running `pandoc` on the file, converting to a PDF, then running process_file_pages_pdf().
+ */
+async fn process_file_pages_tsv(
+    document_file_id: i64,
+    document_file: &DocumentFile,
+    temp_dir: &Path,
+    temp_file: &str,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
+    let pdf_file = convert_tsv_to_pdf(temp_file).await?;
+
+    process_file_pages_pdf(
+        document_file_id,
+        document_file,
+        temp_dir,
+        pdf_file.as_str(),
+        state,
+    )
+    .await?;
+
+    Ok(())
+}
+
+/**
+ * Internal function to convert a TSV file to PDF by running `pandoc`.
+ */
+pub(crate) async fn convert_tsv_to_pdf(tsv_file: &str) -> JobResult<String> {
+    let pdf_file = format!("{}.pdf", tsv_file);
+
+    let status = Command::new("pandoc")
+        .arg("-f")
+        .arg("tsv")
+        .arg(tsv_file)
+        .arg("-o")
+        .arg(pdf_file.as_str())
+        .arg("--pdf-engine=xelatex")
+        .status()
+        .await?;
+    if !status.success() {
+        let error = std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("pandoc failed with status {status}"),
+        );
+        return Err(error.into());
+    }
+
+    Ok(pdf_file)
 }
 
 /**
