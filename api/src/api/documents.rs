@@ -626,14 +626,14 @@ pub async fn list(
         // Filter by metadata type and value
         if let Some(value) = params.metadata_value.as_deref().filter(|s| !s.is_empty()) {
             let pattern = format!("%{}%", value);
-            
+
             // When metadata_type_id is provided, filter by both value and type
             if let Some(metadata_type_id) = params.metadata_type_id {
                 let subquery = document_metadatas::table
                     .filter(document_metadatas::document_id.eq(documents::id))
                     .filter(document_metadatas::value.ilike(pattern))
                     .filter(document_metadatas::metadata_type_id.eq(metadata_type_id));
-                
+
                 if match_any {
                     query = query.or_filter(exists(subquery));
                 } else {
@@ -644,7 +644,7 @@ pub async fn list(
                 let subquery = document_metadatas::table
                     .filter(document_metadatas::document_id.eq(documents::id))
                     .filter(document_metadatas::value.ilike(pattern));
-                
+
                 if match_any {
                     query = query.or_filter(exists(subquery));
                 } else {
@@ -673,7 +673,9 @@ pub async fn list(
                 .filter(document_files::document_id.eq(documents::id));
 
             if match_any {
-                query = query.or_filter(exists(text_subquery)).or_filter(exists(ocr_subquery));
+                query = query
+                    .or_filter(exists(text_subquery))
+                    .or_filter(exists(ocr_subquery));
             } else {
                 query = query.filter(exists(text_subquery).or(exists(ocr_subquery)));
             }

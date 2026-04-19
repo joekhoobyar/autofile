@@ -336,7 +336,9 @@ pub async fn list(
     let mut document_counts_by_index: HashMap<i64, i64> = HashMap::new();
     if !index_ids.is_empty() {
         let document_count_rows: Vec<(i64, i64)> = document_index_documents::table
-            .inner_join(document_index_values::table.on(document_index_documents::document_index_value_id.eq(document_index_values::id)))
+            .inner_join(document_index_values::table.on(
+                document_index_documents::document_index_value_id.eq(document_index_values::id),
+            ))
             .filter(document_index_values::document_index_id.eq_any(&index_ids))
             .group_by(document_index_values::document_index_id)
             .select((

@@ -52,14 +52,27 @@ async fn process_file_pages_inner(
     drop(db);
 
     let result = async {
-        match parse_document_file_content_type(document_file.content_type.as_deref())? {
+        match parse_document_file_content_type(
+            document_file.content_type.as_deref(),
+            document_file.filename.as_str(),
+        )? {
+            DocumentFileContentType::Markdown => {
+                process_file_pages_markdown(
+                    document_file_id,
+                    &document_file,
+                    &temp_dir,
+                    &temp_file,
+                    state,
+                )
+                .await
+            }
             DocumentFileContentType::Pdf => {
                 process_file_pages_pdf(
                     document_file_id,
                     &document_file,
                     &temp_dir,
                     &temp_file,
-                    state.clone(),
+                    state,
                 )
                 .await
             }
@@ -88,10 +101,12 @@ async fn process_file_pages_inner(
 pub(crate) enum DocumentFileContentType {
     Pdf,
     Image,
+    Markdown,
 }
 
 pub(crate) fn parse_document_file_content_type(
     content_type: Option<&str>,
+    filename: &str,
 ) -> JobResult<DocumentFileContentType> {
     let content_type = content_type.ok_or_else(|| {
         std::io::Error::new(
@@ -106,6 +121,13 @@ pub(crate) fn parse_document_file_content_type(
 
     if content_type.starts_with("image/") {
         return Ok(DocumentFileContentType::Image);
+    }
+
+    if content_type == "text/markdown"
+        || content_type == "text/x-markdown"
+        || (content_type == "text/plain" && filename.ends_with(".md"))
+    {
+        return Ok(DocumentFileContentType::Markdown);
     }
 
     Err(std::io::Error::new(
@@ -134,7 +156,58 @@ struct NewDocumentFileOcrPage {
 }
 
 /**
- * Internal function to extract the text content of a specific page in a PDF document
+ * Internal function to extract the images and text from a markdown document
+ * by running `pandoc` on the file, converting to a PDF, then running process_file_pages_pdf().
+ */
+async fn process_file_pages_markdown(
+    document_file_id: i64,
+    document_file: &DocumentFile,
+    temp_dir: &Path,
+    temp_file: &str,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
+    let pdf_file = convert_markdown_to_pdf(temp_file).await?;
+
+    process_file_pages_pdf(
+        document_file_id,
+        document_file,
+        temp_dir,
+        pdf_file.as_str(),
+        state,
+    )
+    .await?;
+
+    Ok(())
+}
+
+/**
+ * Internal function to convert a markdown file to PDF by running `pandoc`.
+ */
+pub(crate) async fn convert_markdown_to_pdf(markdown_file: &str) -> JobResult<String> {
+    let pdf_file = format!("{}.pdf", markdown_file);
+
+    let status = Command::new("pandoc")
+        .arg("-f")
+        .arg("markdown")
+        .arg(markdown_file)
+        .arg("-o")
+        .arg(pdf_file.as_str())
+        .arg("--pdf-engine=xelatex")
+        .status()
+        .await?;
+    if !status.success() {
+        let error = std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("pandoc failed with status {status}"),
+        );
+        return Err(error.into());
+    }
+
+    Ok(pdf_file)
+}
+
+/**
+ * Internal function to extract the images and text from a PDF document
  * by running `pdftotext` on the file and capturing the output.
  */
 async fn process_file_pages_pdf(
