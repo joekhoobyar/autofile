@@ -86,6 +86,16 @@ async fn process_file_pages_inner(
                 )
                 .await
             }
+            DocumentFileContentType::OfficeDocument => {
+                process_file_pages_office_document(
+                    document_file_id,
+                    &document_file,
+                    &temp_dir,
+                    &temp_file,
+                    state,
+                )
+                .await
+            }
             DocumentFileContentType::Html => {
                 process_file_pages_html(
                     document_file_id,
@@ -145,6 +155,7 @@ pub(crate) enum DocumentFileContentType {
     PlainText,
     Csv,
     Tsv,
+    OfficeDocument,
     Html,
 }
 
@@ -183,6 +194,17 @@ pub(crate) fn parse_document_file_content_type(
         || (content_type == "text/plain" && filename.ends_with(".tsv"))
     {
         return Ok(DocumentFileContentType::Tsv);
+    }
+
+    if content_type == "application/msword"
+        || content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        || content_type == "application/vnd.oasis.opendocument.text"
+        || ((content_type == "application/octet-stream" || content_type == "text/plain")
+            && (filename.ends_with(".doc")
+                || filename.ends_with(".docx")
+                || filename.ends_with(".odt")))
+    {
+        return Ok(DocumentFileContentType::OfficeDocument);
     }
 
     if content_type == "text/html"
@@ -372,6 +394,131 @@ async fn process_file_pages_tsv(
     .await?;
 
     Ok(())
+}
+
+/**
+ * Internal function to extract the images and text from an office document
+ * by running `soffice` on the file, converting to a PDF, then running process_file_pages_pdf().
+ */
+async fn process_file_pages_office_document(
+    document_file_id: i64,
+    document_file: &DocumentFile,
+    temp_dir: &Path,
+    temp_file: &str,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
+    let pdf_file =
+        convert_office_document_to_pdf(temp_file, document_file.filename.as_str()).await?;
+
+    process_file_pages_pdf(
+        document_file_id,
+        document_file,
+        temp_dir,
+        pdf_file.as_str(),
+        state,
+    )
+    .await?;
+
+    Ok(())
+}
+
+/**
+ * Internal function to convert an office document file to PDF by running `soffice`.
+ */
+pub(crate) async fn convert_office_document_to_pdf(
+    source_file: &str,
+    original_filename: &str,
+) -> JobResult<String> {
+    let source_path = Path::new(source_file);
+    let source_dir = source_path.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("Cannot determine parent directory for {source_file}"),
+        )
+    })?;
+    let source_name = Path::new(original_filename)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("Invalid original filename: {original_filename}"),
+            )
+        })?;
+
+    let office_input = source_dir.join(source_name);
+    let copied_input = office_input != source_path;
+    if copied_input {
+        tokio::fs::copy(source_path, &office_input).await?;
+    }
+
+    let convert_dir = source_dir.join(format!("soffice-out-{}", Uuid::new_v4()));
+    tokio::fs::create_dir_all(&convert_dir).await?;
+
+    let conversion_result = async {
+        let soffice_input = if copied_input {
+            office_input.as_path()
+        } else {
+            source_path
+        };
+
+        let output = Command::new("soffice")
+            .arg("--headless")
+            .arg("--convert-to")
+            .arg("pdf")
+            .arg("--outdir")
+            .arg(&convert_dir)
+            .arg(soffice_input)
+            .output()
+            .await?;
+        if !output.status.success() {
+            let error = std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!(
+                    "soffice failed with status {}: {}",
+                    output.status,
+                    String::from_utf8_lossy(&output.stderr)
+                ),
+            );
+            return Err(error.into());
+        }
+
+        let output_stem = soffice_input.file_stem().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("Cannot derive output stem from {}", soffice_input.display()),
+            )
+        })?;
+
+        let converted_pdf = convert_dir.join(format!("{}.pdf", output_stem.to_string_lossy()));
+        if !tokio::fs::try_exists(&converted_pdf).await? {
+            let error = std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!(
+                    "soffice did not produce expected output at {}",
+                    converted_pdf.display()
+                ),
+            );
+            return Err(error.into());
+        }
+
+        let final_pdf = format!("{}.pdf", source_file);
+        tokio::fs::rename(&converted_pdf, final_pdf.as_str()).await?;
+        Ok(final_pdf)
+    }
+    .await;
+
+    if copied_input {
+        if let Err(err) = tokio::fs::remove_file(&office_input).await {
+            tracing::warn!(error = %err, path = %office_input.display(), "failed to remove soffice temp input");
+        }
+    }
+    if let Err(err) = tokio::fs::remove_dir_all(&convert_dir).await {
+        tracing::warn!(error = %err, path = %convert_dir.display(), "failed to remove soffice temp dir");
+    }
+
+    conversion_result
 }
 
 /**

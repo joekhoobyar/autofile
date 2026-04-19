@@ -7,7 +7,8 @@ use tokio::process::Command;
 
 use crate::application::document_files::{
     DocumentFileContentType, convert_csv_to_pdf, convert_html_to_pdf, convert_image_to_png,
-    convert_markdown_to_pdf, convert_plaintext_to_pdf, convert_tsv_to_pdf,
+    convert_markdown_to_pdf, convert_office_document_to_pdf, convert_plaintext_to_pdf,
+    convert_tsv_to_pdf,
     parse_document_file_content_type, stage_document_file_from_s3, upload_png_to_s3,
 };
 use crate::domain::document_files::DocumentFile;
@@ -68,6 +69,16 @@ async fn generate_thumbnail_inner(
             }
             DocumentFileContentType::Tsv => {
                 generate_tsv_thumbnail(&temp_file, page, width, &temp_dir).await?
+            }
+            DocumentFileContentType::OfficeDocument => {
+                generate_office_document_thumbnail(
+                    &temp_file,
+                    document_file.filename.as_str(),
+                    page,
+                    width,
+                    &temp_dir,
+                )
+                .await?
             }
             DocumentFileContentType::Html => {
                 generate_html_thumbnail(&temp_file, page, width, &temp_dir).await?
@@ -149,6 +160,19 @@ async fn generate_tsv_thumbnail(
     temp_dir: &std::path::Path,
 ) -> JobResult<()> {
     let pdf_file = convert_tsv_to_pdf(temp_file).await?;
+
+    generate_pdf_thumbnail(pdf_file.as_str(), page, width, temp_dir).await?;
+    Ok(())
+}
+
+async fn generate_office_document_thumbnail(
+    temp_file: &str,
+    original_filename: &str,
+    page: u32,
+    width: u32,
+    temp_dir: &std::path::Path,
+) -> JobResult<()> {
+    let pdf_file = convert_office_document_to_pdf(temp_file, original_filename).await?;
 
     generate_pdf_thumbnail(pdf_file.as_str(), page, width, temp_dir).await?;
     Ok(())
