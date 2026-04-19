@@ -65,22 +65,23 @@ async fn main() {
     run_migrations(&database_url).await;
 
     // Initialize S3 client
-    let s3_endpoint = std::env::var("AWS_ENDPOINT_URL_S3").expect("AWS_ENDPOINT_URL_S3 must be set");
-    let s3_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .endpoint_url(&s3_endpoint)
-        .load()
-        .await;
+    let s3_endpoint = std::env::var("AWS_ENDPOINT_URL_S3").ok();
+    let mut s3_defaults = aws_config::defaults(aws_config::BehaviorVersion::latest());
+    if let Some(endpoint) = s3_endpoint.as_deref() {
+        s3_defaults = s3_defaults.endpoint_url(endpoint);
+    }
+    let s3_config = s3_defaults.load().await;
 
-    // Configure S3 client for minio (path-style addressing)
-    let s3_client = aws_sdk_s3::Client::from_conf(
-        aws_sdk_s3::Config::builder()
-            .behavior_version(aws_sdk_s3::config::BehaviorVersion::latest())
-            .credentials_provider(s3_config.credentials_provider().unwrap())
-            .region(s3_config.region().cloned())
-            .endpoint_url(&s3_endpoint)
-            .force_path_style(true) // Required for minio
-            .build(),
-    );
+    let mut s3_client_config = aws_sdk_s3::Config::builder()
+        .behavior_version(aws_sdk_s3::config::BehaviorVersion::latest())
+        .credentials_provider(s3_config.credentials_provider().unwrap())
+        .region(s3_config.region().cloned());
+    if let Some(endpoint) = s3_endpoint.as_deref() {
+        s3_client_config = s3_client_config
+            .endpoint_url(endpoint)
+            .force_path_style(true); // Required for minio
+    }
+    let s3_client = aws_sdk_s3::Client::from_conf(s3_client_config.build());
     let s3_bucket = std::env::var("S3_BUCKET").expect("S3_BUCKET must be set");
 
     let allowed_origins = vec!["http://localhost:5173".to_string()];
