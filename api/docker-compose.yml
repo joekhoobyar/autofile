@@ -77,6 +77,18 @@ services:
     ports:
       - "8000:8000"
 
+  ui:
+    build:
+      context: ../..
+      dockerfile: services/autofile-ui/Dockerfile
+    image: autofile-ui:latest
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+    ports:
+      - "5173:8080"
+
 volumes:
   pgdata:
   minio-data:
