@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1.7
 
-FROM debian:trixie-slim AS builder
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+
+FROM debian:trixie-slim AS rust-base
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -18,14 +21,37 @@ ENV RUSTUP_HOME=/usr/local/rustup \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
     sh -s -- -y --profile minimal --default-toolchain stable
 
+RUN cargo install cargo-chef
+
+FROM rust-base AS planner
+
 WORKDIR /app
+COPY api/Cargo.toml api/Cargo.lock ./
+RUN mkdir -p src && printf 'fn main() {}\n' > src/main.rs
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM rust-base AS builder
+
+ARG TARGETPLATFORM
+
+WORKDIR /app
+COPY --from=planner /app/recipe.json ./recipe.json
+
+RUN --mount=type=cache,id=autofile-cargo-registry-${TARGETPLATFORM},target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=autofile-cargo-git-${TARGETPLATFORM},target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=autofile-target-${TARGETPLATFORM},target=/app/target,sharing=locked \
+    cargo chef cook --release --recipe-path recipe.json
 
 COPY api/Cargo.toml api/Cargo.lock ./
 COPY api/diesel.toml ./
 COPY api/src ./src
 COPY api/migrations ./migrations
 
-RUN cargo build --release
+RUN --mount=type=cache,id=autofile-cargo-registry-${TARGETPLATFORM},target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=autofile-cargo-git-${TARGETPLATFORM},target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=autofile-target-${TARGETPLATFORM},target=/app/target,sharing=locked \
+    cargo build --release \
+    && cp /app/target/release/autofile-api /app/autofile-api
 
 FROM debian:trixie-slim AS runtime
 
@@ -59,7 +85,7 @@ RUN command -v magick \
 RUN useradd -m -u 1000 -s /bin/bash appuser
 
 WORKDIR /app
-COPY --from=builder /app/target/release/autofile-api /usr/local/bin/autofile-api
+COPY --from=builder /app/autofile-api /usr/local/bin/autofile-api
 
 USER appuser
 EXPOSE 8000
