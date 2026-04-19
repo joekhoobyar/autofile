@@ -90,7 +90,7 @@ RUN useradd -m -u 1000 -s /bin/bash appuser
 WORKDIR /app
 COPY --from=builder /app/autofile-api /usr/local/bin/autofile-api
 
-USER appuser
+USER 1000
 EXPOSE 8000
 
 ENTRYPOINT ["tini", "--"]
