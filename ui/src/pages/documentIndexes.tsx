@@ -46,6 +46,17 @@ export function ListDocumentIndexes() {
         <i className="pi pi-times" style={{color: 'var(--red-600)'}} />;
   }, []);
 
+  const confirmRebuildDocumentIndex = (c: DocumentIndex) => {
+    confirmDialog({
+      message: `Are you sure you want to rebuild the document index "${c.name}"? This may take some time.`,
+      header: `Rebuild: ${c.name}`,
+      icon: 'pi pi-refresh',
+      defaultFocus: 'reject',
+      acceptClassName: 'p-button-warning',
+      accept: () => void doRebuildDocumentIndex(c),
+    });
+  };
+
   const doRebuildDocumentIndex = async (c: DocumentIndex) => {
     try {
       await rebuildDocumentIndex.mutateAsync(c.id);
@@ -65,7 +76,7 @@ export function ListDocumentIndexes() {
       documentIndex={c}
       navigate={navigate}
       onDelete={confirmDeleteDocumentIndex}
-      onRebuild={doRebuildDocumentIndex}
+      onRebuild={confirmRebuildDocumentIndex}
       rebuildPending={rebuildDocumentIndex.isPending && rebuildDocumentIndex.variables === c.id}
     />
   );
