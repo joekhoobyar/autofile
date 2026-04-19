@@ -36,6 +36,63 @@ curl -i -X POST "http://localhost:8000/api/v1/auth/register" \
   }'
 ```
 
+## Pushing docker images to Harbor
+
+Use these defaults:
+
+- API image: harbor.k8s.khoobyar.name/joekhoobyar/autofile-api
+- UI image: harbor.k8s.khoobyar.name/joekhoobyar/autofile-ui
+
+### 1) Login (use your Harbor user or robot account)
+
+```bash
+docker login harbor.k8s.khoobyar.name
+```
+
+### 2) Common tags
+
+```bash
+GIT_SHA="$(git rev-parse --short HEAD)"
+DATE_TAG="$(date +%Y%m%d)"
+API_REPO="harbor.k8s.khoobyar.name/joekhoobyar/autofile-api"
+UI_REPO="harbor.k8s.khoobyar.name/joekhoobyar/autofile-ui"
+```
+
+### 4) Build + push API (amd64 + arm64) with registry cache
+
+```bash
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -f api/Dockerfile \
+  -t "${API_REPO}:latest" \
+  -t "${API_REPO}:${DATE_TAG}-${GIT_SHA}" \
+  --cache-from type=registry,ref="${API_REPO}:buildcache" \
+  --cache-to type=registry,ref="${API_REPO}:buildcache",mode=max \
+  --push \
+  .
+```
+
+### 5) Build + push UI (amd64 + arm64) with registry cache
+
+```bash
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -f ui/Dockerfile \
+  -t "${UI_REPO}:latest" \
+  -t "${UI_REPO}:${DATE_TAG}-${GIT_SHA}" \
+  --cache-from type=registry,ref="${UI_REPO}:buildcache" \
+  --cache-to type=registry,ref="${UI_REPO}:buildcache",mode=max \
+  --push \
+  .
+```
+
+### 6) Verify multi-arch manifests were published
+
+```bash
+docker buildx imagetools inspect "${API_REPO}:${DATE_TAG}-${GIT_SHA}"
+docker buildx imagetools inspect "${UI_REPO}:${DATE_TAG}-${GIT_SHA}"
+```
+
 ## Testing
 
 Run the test suite:
