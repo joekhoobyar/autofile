@@ -51,8 +51,8 @@ services:
 
   api:
     build:
-      context: ../..
-      dockerfile: services/autofile-api/Dockerfile
+      context: .
+      dockerfile: api/Dockerfile
     image: autofile-api:latest
     depends_on:
       redis:
@@ -79,8 +79,8 @@ services:
 
   ui:
     build:
-      context: ../..
-      dockerfile: services/autofile-ui/Dockerfile
+      context: .
+      dockerfile: ui/Dockerfile
     image: autofile-ui:latest
     depends_on:
       api:

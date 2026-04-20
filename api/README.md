@@ -13,7 +13,7 @@ cargo run
 From the repository root:
 
 ```bash
-docker compose -f api/docker-compose.yml up --build
+docker compose up --build
 ```
 
 This starts:
