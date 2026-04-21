@@ -216,6 +216,7 @@ diesel::table! {
         email -> Varchar,
         password_hash -> Text,
         password_changed_at -> Timestamptz,
+        role -> Varchar,
     }
 }
 

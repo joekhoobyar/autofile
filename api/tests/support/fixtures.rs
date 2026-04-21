@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use autofile_api::domain::classifier_blocks::{
     ClassifierBlock, ClassifierPattern, ClassifierRules,
 };
+use autofile_api::domain::users::UserRole;
 use diesel::dsl::now;
 use diesel::prelude::*;
 use diesel::sql_query;
@@ -21,16 +22,30 @@ use autofile_api::schema::{
 pub async fn seed_classifier_document_scenario(
     db: &mut bb8::PooledConnection<'_, AsyncPgConnection>,
 ) -> i64 {
-    insert_user(db, 1, "tester", "tester@example.com").await;
-    insert_document_type(db, 1, "invoice", "Invoice", 1).await;
-    insert_metadata_type(db, 1, "category", "Category", 1).await;
-    insert_metadata_type(db, 2, "invoice_number", "Invoice Number", 1).await;
-    link_document_type_metadata(db, 1, 1).await;
-    link_document_type_metadata(db, 1, 2).await;
-    insert_document(db, 1, "Original Title", 1, 1).await;
-    insert_document_metadata(db, 1, 1, "fallback", 1).await;
-    insert_document_file(db, 1, 1, "invoice.pdf", 1).await;
-    insert_document_file_page(db, 1, 1, "Invoice #123").await;
+    const USER_ID: i64 = 1001;
+    const DOCUMENT_TYPE_ID: i64 = 1001;
+    const CATEGORY_METADATA_ID: i64 = 1001;
+    const INVOICE_NUMBER_METADATA_ID: i64 = 1002;
+    const DOCUMENT_ID: i64 = 1001;
+    const DOCUMENT_FILE_ID: i64 = 1001;
+
+    insert_user(db, USER_ID, "tester", "tester@example.com").await;
+    insert_document_type(db, DOCUMENT_TYPE_ID, "invoice", "Invoice", USER_ID).await;
+    insert_metadata_type(db, CATEGORY_METADATA_ID, "category", "Category", USER_ID).await;
+    insert_metadata_type(
+        db,
+        INVOICE_NUMBER_METADATA_ID,
+        "invoice_number",
+        "Invoice Number",
+        USER_ID,
+    )
+    .await;
+    link_document_type_metadata(db, DOCUMENT_TYPE_ID, CATEGORY_METADATA_ID).await;
+    link_document_type_metadata(db, DOCUMENT_TYPE_ID, INVOICE_NUMBER_METADATA_ID).await;
+    insert_document(db, DOCUMENT_ID, "Original Title", DOCUMENT_TYPE_ID, USER_ID).await;
+    insert_document_metadata(db, DOCUMENT_ID, CATEGORY_METADATA_ID, "fallback", USER_ID).await;
+    insert_document_file(db, DOCUMENT_FILE_ID, DOCUMENT_ID, "invoice.pdf", USER_ID).await;
+    insert_document_file_page(db, DOCUMENT_FILE_ID, 1, "Invoice #123").await;
 
     insert_classifier_block(
         db,
@@ -71,7 +86,7 @@ pub async fn seed_classifier_document_scenario(
     )
     .await;
 
-    1
+    DOCUMENT_ID
 }
 
 pub async fn seed_classifier_blocks(
@@ -134,7 +149,10 @@ pub async fn insert_user(
             users::email.eq(email),
             users::password_hash.eq("hash"),
             users::password_changed_at.eq(now),
+            users::role.eq(UserRole::Admin),
         ))
+        .on_conflict(users::id)
+        .do_nothing()
         .execute(db)
         .await
         .expect("user insert should succeed");

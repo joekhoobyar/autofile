@@ -6,7 +6,7 @@ use crate::application::users::{
 };
 use crate::domain::users::User;
 use crate::shared::app_state::AppState;
-use crate::shared::auth::AuthUser;
+use crate::shared::auth::AdminUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, ResourceList};
 
@@ -17,7 +17,7 @@ use axum::{
 };
 
 pub async fn get_by_id(
-    _user: AuthUser,
+    _admin: AdminUser,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
 ) -> Result<Json<User>, ApiError> {
@@ -25,7 +25,7 @@ pub async fn get_by_id(
 }
 
 pub async fn get_by_username(
-    _user: AuthUser,
+    _admin: AdminUser,
     DbConn(mut db): DbConn,
     Path(username): Path<String>,
 ) -> Result<Json<User>, ApiError> {
@@ -33,7 +33,7 @@ pub async fn get_by_username(
 }
 
 async fn update(
-    _user: AuthUser,
+    _admin: AdminUser,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
     Json(input): Json<UpdateUserInput>,
@@ -42,7 +42,7 @@ async fn update(
 }
 
 async fn delete(
-    _user: AuthUser,
+    _admin: AdminUser,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
 ) -> Result<Json<()>, ApiError> {
@@ -51,7 +51,7 @@ async fn delete(
 }
 
 pub async fn list(
-    _user: AuthUser,
+    _admin: AdminUser,
     DbConn(mut db): DbConn,
     Query(params): Query<ListUsersInput>,
 ) -> Result<Json<ResourceList<User>>, ApiError> {

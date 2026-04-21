@@ -11,7 +11,7 @@ import { Button } from "primereact/button";
 import { HttpError } from "../api";
 import type { LoginRequest } from "../models/auth";
 import { Card } from "primereact/card";
-import { login, logout, useAuth } from "../auth";
+import { canManageUsers, login, logout, useAuth } from "../auth";
 
 export function RequireAuth() {
   const auth = useAuth();
@@ -19,6 +19,17 @@ export function RequireAuth() {
 
   if (auth.status === "loading") return null; // or spinner
   if (auth.status === "anon") return <Navigate to="/login" replace state={{ from: loc }} />;
+
+  return <Outlet />;
+}
+
+export function RequireAdmin() {
+  const auth = useAuth();
+  const loc = useLocation();
+
+  if (auth.status === "loading") return null;
+  if (auth.status === "anon") return <Navigate to="/login" replace state={{ from: loc }} />;
+  if (!canManageUsers(auth)) return <Navigate to="/documents" replace />;
 
   return <Outlet />;
 }
@@ -39,13 +50,12 @@ export default function Login() {
 
   const submitter = async (data: LoginRequest) => {
     try {
-      await login(data);
+      const result = await login(data);
+      queryClient.setQueryData(["auth", "bootstrap"], result.role);
     } catch (err: unknown) {
       setLoginError(err as HttpError | null);
       return;
     }
-
-    queryClient.setQueryData(["auth", "bootstrap"], true);
     navigate(from, { replace: true });
   };
 

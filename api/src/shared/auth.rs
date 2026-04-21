@@ -13,6 +13,7 @@ use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 
+use crate::domain::users::UserRole;
 use crate::{shared::app_state::AppState, shared::util::ApiError};
 
 const ISS: &str = "autofile-api";
@@ -48,9 +49,15 @@ pub struct AuthUser {
     pub user_id: i64,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct AdminUser {
+    pub user_id: i64,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccessClaims {
-    pub uid: i64,    // your user id
+    pub uid: i64, // your user id
+    pub role: UserRole,
     pub exp: usize,  // unix timestamp
     pub iat: usize,  // unix timestamp
     pub iss: String, // issuer (optional but recommended)
@@ -60,7 +67,8 @@ pub struct AccessClaims {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RefreshClaims {
-    pub uid: i64,    // your user id
+    pub uid: i64, // your user id
+    pub role: UserRole,
     pub exp: usize,  // unix timestamp
     pub iat: usize,  // unix timestamp
     pub iss: String, // issuer (optional but recommended)
@@ -83,6 +91,7 @@ pub struct DownloadClaims {
 pub fn sign_access(
     secret: &[u8],
     uid: i64,
+    role: UserRole,
     ttl_seconds: i64,
 ) -> jsonwebtoken::errors::Result<String> {
     let now = Utc::now().timestamp() as usize;
@@ -90,6 +99,7 @@ pub fn sign_access(
 
     let claims = AccessClaims {
         uid,
+        role,
         iat: now,
         exp,
         iss: ISS.to_string(),
@@ -107,6 +117,7 @@ pub fn sign_access(
 pub fn sign_refresh(
     secret: &[u8],
     uid: i64,
+    role: UserRole,
     ttl_seconds: i64,
 ) -> jsonwebtoken::errors::Result<String> {
     let now = Utc::now().timestamp() as usize;
@@ -114,6 +125,7 @@ pub fn sign_refresh(
 
     let claims = RefreshClaims {
         uid,
+        role,
         iat: now,
         exp,
         iss: ISS.to_string(),
@@ -218,36 +230,83 @@ impl FromRequestParts<Arc<AppState>> for AuthUser {
         parts: &mut Parts,
         state: &Arc<AppState>,
     ) -> Result<Self, Self::Rejection> {
-        // Extract Authorization header
-        let auth_header = parts
-            .headers
-            .get("Authorization")
-            .and_then(|h| h.to_str().ok())
-            .ok_or_else(|| {
-                ApiError::new(StatusCode::UNAUTHORIZED, "Missing Authorization header")
-            })?;
+        let claims = extract_access_claims(parts, state)?;
+        Ok(AuthUser {
+            user_id: claims.uid,
+        })
+    }
+}
 
-        // Extract Bearer token
-        let token = auth_header.strip_prefix("Bearer ").ok_or_else(|| {
-            ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "Invalid Authorization header format",
-            )
-        })?;
+impl FromRequestParts<Arc<AppState>> for AdminUser {
+    type Rejection = ApiError;
 
-        if token.is_empty() {
-            return Err(ApiError::new(StatusCode::UNAUTHORIZED, "Empty token"));
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<AppState>,
+    ) -> Result<Self, Self::Rejection> {
+        let claims = extract_access_claims(parts, state)?;
+        if claims.role != UserRole::Admin {
+            return Err(ApiError::new(
+                StatusCode::FORBIDDEN,
+                "Admin role is required",
+            ));
         }
 
-        // Verify the JWT
-        match verify_access(&state.jwt_secret, token) {
-            Ok(claims) => Ok(AuthUser {
-                user_id: claims.uid,
-            }),
-            Err(_) => Err(ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "Invalid or expired token",
-            )),
-        }
+        Ok(AdminUser {
+            user_id: claims.uid,
+        })
+    }
+}
+
+fn extract_access_claims(parts: &Parts, state: &Arc<AppState>) -> Result<AccessClaims, ApiError> {
+    // Extract Authorization header
+    let auth_header = parts
+        .headers
+        .get("Authorization")
+        .and_then(|h| h.to_str().ok())
+        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "Missing Authorization header"))?;
+
+    // Extract Bearer token
+    let token = auth_header.strip_prefix("Bearer ").ok_or_else(|| {
+        ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "Invalid Authorization header format",
+        )
+    })?;
+
+    if token.is_empty() {
+        return Err(ApiError::new(StatusCode::UNAUTHORIZED, "Empty token"));
+    }
+
+    // Verify the JWT
+    verify_access(&state.jwt_secret, token)
+        .map_err(|_| ApiError::new(StatusCode::UNAUTHORIZED, "Invalid or expired token"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{sign_access, sign_refresh, verify_access, verify_refresh};
+    use crate::domain::users::UserRole;
+
+    #[test]
+    fn access_token_round_trips_role_claim() {
+        let secret = b"test-secret";
+        let token = sign_access(secret, 42, UserRole::Admin, 3600).expect("sign should succeed");
+
+        let claims = verify_access(secret, &token).expect("verify should succeed");
+        assert_eq!(claims.uid, 42);
+        assert_eq!(claims.role, UserRole::Admin);
+        assert_eq!(claims.typ, "access");
+    }
+
+    #[test]
+    fn refresh_token_round_trips_role_claim() {
+        let secret = b"test-secret";
+        let token = sign_refresh(secret, 7, UserRole::User, 3600).expect("sign should succeed");
+
+        let claims = verify_refresh(secret, &token).expect("verify should succeed");
+        assert_eq!(claims.uid, 7);
+        assert_eq!(claims.role, UserRole::User);
+        assert_eq!(claims.typ, "refresh");
     }
 }

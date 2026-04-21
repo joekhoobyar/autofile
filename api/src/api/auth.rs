@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::domain::users::User;
+use crate::domain::users::{User, UserRole};
 use crate::is_production;
 use crate::schema::users;
 use crate::shared::app_state::AppState;
@@ -53,6 +53,7 @@ pub async fn register(
             users::display_name.eq(&req.display_name),
             users::password_hash.eq(pw_hash),
             users::password_changed_at.eq(Utc::now()),
+            users::role.eq(UserRole::User),
         ))
         .returning(User::as_returning())
         .get_result(&mut db)
@@ -86,11 +87,11 @@ pub async fn login(
     }
 
     // 2) issue access jwt
-    let access_token = sign_access(&state.jwt_secret, user.id, ACCESS_TTL_SECONDS)
+    let access_token = sign_access(&state.jwt_secret, user.id, user.role, ACCESS_TTL_SECONDS)
         .map_err(|_| ApiError::internal_server_error("Token error"))?;
 
     // 3) issue refresh token + set cookie
-    let refresh_token = sign_refresh(&state.jwt_secret, user.id, REFRESH_TTL_SECONDS)
+    let refresh_token = sign_refresh(&state.jwt_secret, user.id, user.role, REFRESH_TTL_SECONDS)
         .map_err(|_| ApiError::internal_server_error("Token error"))?;
 
     let mut cookie = Cookie::new("refresh_token", refresh_token);
@@ -131,8 +132,13 @@ pub async fn refresh(
     let claims = verify_refresh(&state.jwt_secret, refresh_cookie.value())
         .map_err(|_| ApiError::unauthorized("Invalid refresh token"))?;
 
-    let access = sign_access(&state.jwt_secret, claims.uid, ACCESS_TTL_SECONDS)
-        .map_err(|_| ApiError::internal_server_error("Token error"))?;
+    let access = sign_access(
+        &state.jwt_secret,
+        claims.uid,
+        claims.role,
+        ACCESS_TTL_SECONDS,
+    )
+    .map_err(|_| ApiError::internal_server_error("Token error"))?;
 
     Ok(Json(AccessTokenResponse {
         access_token: access,

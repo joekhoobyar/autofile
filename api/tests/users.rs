@@ -1,8 +1,8 @@
 mod support;
 
 use autofile_api::application::users::{
-    ListUsersInput, UpdateUserInput, UserSortField, delete_user, get_user_by_id, get_user_by_username,
-    list_users, update_user,
+    ListUsersInput, UpdateUserInput, UserSortField, delete_user, get_user_by_id,
+    get_user_by_username, list_users, update_user,
 };
 use autofile_api::domain::users::User;
 use autofile_api::schema::users;
@@ -33,7 +33,13 @@ async fn get_user_by_id_returns_user() {
         .get()
         .await
         .expect("db connection should succeed");
-    insert_user(&mut db, 101, "users-test-alpha", "users-test-alpha@example.com").await;
+    insert_user(
+        &mut db,
+        101,
+        "users-test-alpha",
+        "users-test-alpha@example.com",
+    )
+    .await;
 
     let user = get_user_by_id(&mut db, 101)
         .await
@@ -68,7 +74,13 @@ async fn get_user_by_username_returns_user() {
         .get()
         .await
         .expect("db connection should succeed");
-    insert_user(&mut db, 102, "users-test-beta", "users-test-beta@example.com").await;
+    insert_user(
+        &mut db,
+        102,
+        "users-test-beta",
+        "users-test-beta@example.com",
+    )
+    .await;
 
     let user = get_user_by_username(&mut db, "users-test-beta".to_string())
         .await
@@ -131,7 +143,9 @@ async fn delete_user_removes_row_and_future_reads_fail() {
     )
     .await;
 
-    delete_user(&mut db, 104).await.expect("delete should succeed");
+    delete_user(&mut db, 104)
+        .await
+        .expect("delete should succeed");
 
     let err = get_user_by_id(&mut db, 104)
         .await
@@ -199,9 +213,27 @@ async fn list_users_applies_pagination_search_and_sort() {
         .get()
         .await
         .expect("db connection should succeed");
-    insert_user(&mut db, 210, "users-test-charlie", "users-test-charlie@example.com").await;
-    insert_user(&mut db, 220, "users-test-alpha", "users-test-alpha@example.com").await;
-    insert_user(&mut db, 230, "users-test-bravo", "users-test-bravo@example.com").await;
+    insert_user(
+        &mut db,
+        210,
+        "users-test-charlie",
+        "users-test-charlie@example.com",
+    )
+    .await;
+    insert_user(
+        &mut db,
+        220,
+        "users-test-alpha",
+        "users-test-alpha@example.com",
+    )
+    .await;
+    insert_user(
+        &mut db,
+        230,
+        "users-test-bravo",
+        "users-test-bravo@example.com",
+    )
+    .await;
 
     let page_one = list_users(
         &mut db,

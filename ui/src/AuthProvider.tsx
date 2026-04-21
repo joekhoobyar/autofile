@@ -2,26 +2,28 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { API_HOST, setAccessToken } from "./api";
-import { AuthContext, type AuthState } from "./auth";
+import { AuthContext, roleFromAccessToken, type AuthState, type UserRole } from "./auth";
 
 export function AuthProvider({ children }: Readonly<{ children: React.ReactNode }>) {
-  const { isLoading, isSuccess } = useQuery({
+  const { data: role, isLoading, isSuccess } = useQuery<UserRole>({
     queryKey: ["auth", "bootstrap"],
     queryFn: async () => {
       // call refresh to see if we have a session cookie
       const resp = await fetch(`${API_HOST}/api/v1/auth/refresh`, { method: "POST", credentials: "include" });
       if (!resp.ok) throw new Error("not logged in");
-      const data = await resp.json();
+      const data = (await resp.json()) as { access_token: string };
       setAccessToken(data.access_token);
-      return true;
+      const role = roleFromAccessToken(data.access_token);
+      if (!role) throw new Error("role missing from access token");
+      return role;
     },
     retry: false,
   });
 
-  const value: AuthState =
+  const resolvedValue: AuthState =
     isLoading ? { status: "loading" } :
-    isSuccess ? { status: "authed" } :
+    isSuccess && role ? { status: "authed", role } :
     { status: "anon" };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={resolvedValue}>{children}</AuthContext.Provider>;
 }
