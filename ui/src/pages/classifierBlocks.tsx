@@ -37,6 +37,7 @@ export function ListClassifierBlocks() {
   const deleteClassifierBlock = useDeleteClassifierBlock();
   const reorderClassifierBlock = useReorderClassifierBlock();
   const [listParams, setListParams] = useState<ListParams>({ sf: 'order' });
+  const [searchText, setSearchText] = useState(listParams.q ?? '');
   const [recentlyReorderedRowId, setRecentlyReorderedRowId] = useState<number | null>(null);
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useClassifierBlocks(listParams);
@@ -119,6 +120,19 @@ export function ListClassifierBlocks() {
     setListParams({ ...listParams, page: (event.page ?? 0) + 1, per_page: event.rows });
   };
 
+  const applySearch = () => {
+    setListParams((prev) => ({
+      ...prev,
+      q: searchText.trim() ? searchText.trim() : undefined,
+      page: 1,
+    }));
+  };
+
+  const clearSearch = () => {
+    setSearchText('');
+    setListParams((prev) => ({ ...prev, q: undefined, page: 1 }));
+  };
+
   const onRowReorder = async (event: DataTableRowReorderEvent<ClassifierBlock[]>) => {
     if (!canReorder || pendingReorderRowId !== null) {
       return;
@@ -168,6 +182,45 @@ export function ListClassifierBlocks() {
         {!canReorder && (
           <Message severity="info" text="Drag reordering is available only when sorted by order ascending." className="mb-3" />
         )}
+        <div className="mb-3 w-full md:w-30rem">
+          <div className="p-inputgroup w-full">
+            <InputText
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  applySearch();
+                }
+              }}
+              placeholder="Search name or description"
+              aria-label="Search classifiers"
+            />
+            {searchText && (
+              <span className="p-inputgroup-addon p-0">
+                <Button
+                  type="button"
+                  icon="pi pi-times"
+                  aria-label="Clear search"
+                  onClick={clearSearch}
+                  className="p-button-secondary h-full"
+                  style={{ borderRadius: 0 }}
+                />
+              </span>
+            )}
+            <span className="p-inputgroup-addon p-0">
+              <Button
+                type="button"
+                icon="pi pi-search"
+                aria-label="Search"
+                onClick={applySearch}
+                className="p-button-info h-full"
+                style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+              />
+            </span>
+          </div>
+        </div>
+
         <DataTable lazy value={tableItems}
           onPage={onPage}
           paginator={true}

@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -21,8 +21,40 @@ import { Toast } from 'primereact/toast';
 export function ListCabinets() {
   const toast = useRef(null);
   const deleteCabinet = useDeleteCabinet();
+  const [searchText, setSearchText] = useState('');
+  const [activeSearch, setActiveSearch] = useState('');
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useCabinetTree();
+
+  const filteredData = useMemo(() => {
+    const query = activeSearch.trim().toLowerCase();
+    if (!query) {
+      return data;
+    }
+
+    const filterNodes = (nodes: TreeNode[]): TreeNode[] => {
+      return nodes
+        .map((node) => {
+          const children = node.children ? filterNodes(node.children) : [];
+          const text = `${node.data.slug} ${node.data.name} ${node.data.description ?? ''}`.toLowerCase();
+          const matchesSelf = text.includes(query);
+
+          if (!matchesSelf && children.length === 0) {
+            return null;
+          }
+
+          return {
+            ...node,
+            expanded: true,
+            children,
+            leaf: children.length === 0,
+          };
+        })
+        .filter((node): node is TreeNode => node !== null);
+    };
+
+    return filterNodes(data ?? []);
+  }, [activeSearch, data]);
 
   const slugTemplate = (c: TreeNode) => {
     return (
@@ -68,11 +100,59 @@ export function ListCabinets() {
     });
   };
 
+  const clearSearch = () => {
+    setSearchText('');
+    setActiveSearch('');
+  };
+
+  const applySearch = () => {
+    setActiveSearch(searchText);
+  };
+
   return (
     <>
     <Link to="new" style={{float: 'right', padding: '1.5rem'}}>New Cabinet &raquo;</Link>
     <Card title="Cabinets">
-      <TreeTable value={data}
+      <div className="mb-3 w-full md:w-30rem">
+        <div className="p-inputgroup w-full">
+          <InputText
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                applySearch();
+              }
+            }}
+            placeholder="Search slug, name, or description"
+            aria-label="Search cabinets"
+          />
+          {searchText && (
+            <span className="p-inputgroup-addon p-0">
+              <Button
+                type="button"
+                icon="pi pi-times"
+                aria-label="Clear search"
+                onClick={clearSearch}
+                className="p-button-secondary h-full"
+                style={{ borderRadius: 0 }}
+              />
+            </span>
+          )}
+          <span className="p-inputgroup-addon p-0">
+            <Button
+              type="button"
+              icon="pi pi-search"
+              aria-label="Search"
+              onClick={applySearch}
+              className="p-button-info h-full"
+              style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+            />
+          </span>
+        </div>
+      </div>
+
+      <TreeTable value={filteredData}
           loading={isPending || isFetching}
         >
         <Column field="slug" header="Slug" body={slugTemplate} sortable expander></Column>

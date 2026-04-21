@@ -23,6 +23,7 @@ export function ListMetadataTypes() {
   const toast = useRef(null);
   const deleteMetadataType = useDeleteMetadataType();
   const [listParams, setListParams] = useState<ListParams>({sf: 'name'});
+  const [searchText, setSearchText] = useState(listParams.q ?? '');
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useMetadataTypes(listParams);
 
@@ -78,10 +79,62 @@ export function ListMetadataTypes() {
     setListParams({ ...listParams, page: (event.page ?? 0) + 1, per_page: event.rows });
   };
 
+  const applySearch = () => {
+    setListParams((prev) => ({
+      ...prev,
+      q: searchText.trim() ? searchText.trim() : undefined,
+      page: 1,
+    }));
+  };
+
+  const clearSearch = () => {
+    setSearchText('');
+    setListParams((prev) => ({ ...prev, q: undefined, page: 1 }));
+  };
+
   return (
     <>
     <Link to="new" style={{float: 'right', padding: '1.5rem'}}>New Metadata Type &raquo;</Link>
     <Card title="Metadata Types">
+      <div className="mb-3 w-full md:w-30rem">
+        <div className="p-inputgroup w-full">
+          <InputText
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                applySearch();
+              }
+            }}
+            placeholder="Search slug, name, data type, or description"
+            aria-label="Search metadata types"
+          />
+          {searchText && (
+            <span className="p-inputgroup-addon p-0">
+              <Button
+                type="button"
+                icon="pi pi-times"
+                aria-label="Clear search"
+                onClick={clearSearch}
+                className="p-button-secondary h-full"
+                style={{ borderRadius: 0 }}
+              />
+            </span>
+          )}
+          <span className="p-inputgroup-addon p-0">
+            <Button
+              type="button"
+              icon="pi pi-search"
+              aria-label="Search"
+              onClick={applySearch}
+              className="p-button-info h-full"
+              style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+            />
+          </span>
+        </div>
+      </div>
+
       <DataTable lazy value={data?.items}
           onPage={onPage}
           paginator={true}
