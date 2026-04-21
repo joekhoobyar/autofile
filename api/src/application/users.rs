@@ -7,6 +7,8 @@ use diesel::prelude::*;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
+const SYSTEM_USER_ID: i64 = 1;
+
 #[derive(Debug, Clone, Copy, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UserSortField {
@@ -72,6 +74,10 @@ pub async fn update_user(
     id: i64,
     input: UpdateUserInput,
 ) -> Result<User, ApiError> {
+    if id == SYSTEM_USER_ID {
+        return Err(ApiError::bad_request("Cannot update system user"));
+    }
+
     let changes = UserChangeset {
         email: input.email,
         display_name: input.display_name,
@@ -89,6 +95,10 @@ pub async fn delete_user(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
     id: i64,
 ) -> Result<(), ApiError> {
+    if id == SYSTEM_USER_ID {
+        return Err(ApiError::bad_request("Cannot delete system user"));
+    }
+
     let affected = diesel::delete(users::table.filter(users::id.eq(id)))
         .execute(db)
         .await

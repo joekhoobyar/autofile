@@ -26,3 +26,7 @@ export type AuthState =
 
 export const AuthContext = React.createContext<AuthState>({ status: "loading" });
 export const useAuth = () => React.useContext(AuthContext);
+
+export function canManageUsers(auth: AuthState): boolean {
+  return auth.status === "authed";
+}

@@ -19,6 +19,7 @@ import { NAV, useBreadcrumbs } from './nav.ts';
 import { Button } from 'primereact/button';
 import Login, { Logout, RequireAuth } from './pages/auth.tsx';
 import { AuthProvider } from './AuthProvider.tsx';
+import { canManageUsers, useAuth } from './auth.ts';
 import { EditDocumentMetadata } from './pages/documentMetadata.tsx';
 import { DocumentFilePagePreview, ListDocumentFilePageOcrContent, ListDocumentFilePageTextContent, ListDocumentFiles } from './pages/documentFiles.tsx';
 import { ListDocumentIndexMembership } from './pages/documentIndexMembership.tsx';
@@ -26,13 +27,16 @@ import { EditDocumentIndex, ListDocumentIndexes, NewDocumentIndex } from './page
 import { EditDocumentIndexTemplate, ListDocumentIndexTemplates, NewDocumentIndexTemplate } from './pages/documentIndexTemplates.tsx';
 import { ListDocumentIndexValues } from './pages/documentIndexValues.tsx';
 import { EditClassifierBlock, ListClassifierBlocks, NewClassifierBlock } from './pages/classifierBlocks.tsx';
+import { EditUser, ListUsers, ViewUser } from './pages/users.tsx';
 
 export function SideNav() {
+  const auth = useAuth();
   const location = useLocation();
+  const navItems = NAV.filter((item) => item.key !== 'users' || canManageUsers(auth));
 
   return (
     <nav className="side-nav">
-      {NAV.map(item => {
+      {navItems.map(item => {
         const isSectionActive = item.matchPrefix
           ? location.pathname === item.to || location.pathname.startsWith(item.to + "/")
           : location.pathname === item.to;
@@ -182,6 +186,13 @@ const router = createBrowserRouter([
           { path: 'new', element: <NewTag/> },
           { path: ':id/edit', element: <EditTag/> },
           { path: ':tagId/documents', element: <ListDocuments/> },
+        ]
+      },
+      { path: 'users',
+        children: [
+          { index: true, element: <ListUsers/> },
+          { path: ':id', element: <ViewUser/> },
+          { path: ':id/edit', element: <EditUser/> },
         ]
       }
     ],

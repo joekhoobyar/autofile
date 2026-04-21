@@ -140,6 +140,58 @@ async fn delete_user_removes_row_and_future_reads_fail() {
 }
 
 #[tokio::test]
+async fn update_user_rejects_system_user() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+
+    let before = get_user_by_id(&mut db, 1)
+        .await
+        .expect("system user should exist");
+
+    let err = update_user(
+        &mut db,
+        1,
+        UpdateUserInput {
+            email: Some("new-system-email@example.com".to_string()),
+            display_name: Some("Should Not Change".to_string()),
+        },
+    )
+    .await
+    .expect_err("system user update should fail");
+    assert_eq!(err.status, StatusCode::BAD_REQUEST);
+
+    let after = get_user_by_id(&mut db, 1)
+        .await
+        .expect("system user should still exist");
+    assert_eq!(before.email, after.email);
+    assert_eq!(before.display_name, after.display_name);
+}
+
+#[tokio::test]
+async fn delete_user_rejects_system_user() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+
+    let err = delete_user(&mut db, 1)
+        .await
+        .expect_err("system user delete should fail");
+    assert_eq!(err.status, StatusCode::BAD_REQUEST);
+
+    let system_user = get_user_by_id(&mut db, 1)
+        .await
+        .expect("system user should still exist");
+    assert_eq!(system_user.id, 1);
+}
+
+#[tokio::test]
 async fn list_users_applies_pagination_search_and_sort() {
     let test_db = TestDatabase::new().await;
     let mut db = test_db

@@ -10,6 +10,7 @@ import { useTag } from "./queries/useTags";
 import { useDocumentIndex } from "./queries/useDocumentIndexes";
 import { useDocumentIndexTemplate } from "./queries/useDocumentIndexTemplates";
 import { useClassifierBlock } from "./queries/useClassifierBlocks";
+import { useUser } from "./queries/useUsers";
 
 export type NavItem = {
   key: string;
@@ -27,6 +28,7 @@ export const NAV: NavItem[] = [
   { key: "document-types", label: "Document Types", icon: "pi pi-file", to: "/document-types", matchPrefix: true },
   { key: "metadata-types", label: "Metadata Types", icon: "pi pi-database", to: "/metadata-types", matchPrefix: true },
   { key: "tags", label: "Tags", icon: "pi pi-tags", to: "/tags", matchPrefix: true },
+  { key: "users", label: "Users", icon: "pi pi-users", to: "/users", matchPrefix: true },
 ];
 
 // useRouteResourceLabel.ts
@@ -56,6 +58,7 @@ export function useRouteResourceLabel(): LabelState {
   const inDocTypes = pathname.startsWith("/document-types/");
   const inMetaTypes = pathname.startsWith("/metadata-types/");
   const inTags = pathname.startsWith("/tags/");
+  const inUsers = pathname.startsWith("/users/");
 
   // Call *one* query hook based on route; keep others disabled
   const docQ = useDocument(id!, { enabled: !!id && inDocuments });
@@ -68,6 +71,7 @@ export function useRouteResourceLabel(): LabelState {
   const docTypeQ = useDocumentType(id!, { enabled: !!id && inDocTypes });
   const metaTypeQ = useMetadataType(id!, { enabled: !!id && inMetaTypes });
   const tagQ = useTag(id!, { enabled: !!id && inTags });
+  const userQ = useUser(id!, { enabled: !!id && inUsers });
 
   if (!id) return {};
 
@@ -79,6 +83,7 @@ export function useRouteResourceLabel(): LabelState {
   if (inDocTypes) return { label: docTypeQ.data?.name, loading: docTypeQ.isLoading };
   if (inMetaTypes) return { label: metaTypeQ.data?.name, loading: metaTypeQ.isLoading };
   if (inTags) return { label: tagQ.data?.name, loading: tagQ.isLoading };
+  if (inUsers) return { label: userQ.data?.username, loading: userQ.isLoading };
 
   return {};
 }
@@ -155,6 +160,13 @@ export function useBreadcrumbs(): { home: MenuItem; model: MenuItem[] } {
       const label = resource.loading ? 'Loading…' : (resource.label ?? documentDetailId);
       items.push({ label, command: () => navigate(`/documents/${documentDetailId}/preview`) });
       items.push({ label: DOCUMENT_VIEW_ROUTE_LABELS[documentDetailSection] });
+      return items;
+    }
+
+    const userDetailMatch = pathname.match(/^\/users\/([^/]+)$/);
+    if (userDetailMatch && id) {
+      const label = resource.loading ? 'Loading…' : (resource.label ?? id);
+      items.push({ label });
       return items;
     }
 
