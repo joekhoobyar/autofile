@@ -33,24 +33,28 @@ export function ListCabinets() {
     }
 
     const filterNodes = (nodes: TreeNode[]): TreeNode[] => {
-      return nodes
-        .map((node) => {
-          const children = node.children ? filterNodes(node.children) : [];
-          const text = `${node.data.slug} ${node.data.name} ${node.data.description ?? ''}`.toLowerCase();
-          const matchesSelf = text.includes(query);
+      const result: TreeNode[] = [];
 
-          if (!matchesSelf && children.length === 0) {
-            return null;
-          }
+      for (const node of nodes) {
+        const children = node.children ? filterNodes(node.children) : [];
+        const text = `${node.data.slug} ${node.data.name} ${node.data.description ?? ''}`.toLowerCase();
+        const matchesSelf = text.includes(query);
 
-          return {
-            ...node,
-            expanded: true,
-            children,
-            leaf: children.length === 0,
-          };
-        })
-        .filter((node): node is TreeNode => node !== null);
+        if (!matchesSelf && children.length === 0) {
+          continue;
+        }
+
+        const filteredNode: TreeNode = {
+          ...node,
+          expanded: true,
+          children,
+          leaf: children.length === 0,
+        };
+
+        result.push(filteredNode);
+      }
+
+      return result;
     };
 
     return filterNodes(data ?? []);
