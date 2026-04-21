@@ -30,6 +30,7 @@ pub mod application {
     pub mod document_thumbnails;
     pub mod documents;
     pub mod jobs;
+    pub mod users;
 }
 pub mod domain {
     pub mod cabinet_documents;
