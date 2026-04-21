@@ -65,6 +65,11 @@ export function ListUsers() {
     }));
   };
 
+  const clearSearch = () => {
+    setSearch("");
+    setListParams((prev) => ({ ...prev, q: undefined, page: 1 }));
+  };
+
   const confirmDeleteUser = (user: User) => {
     if (isSystemUser(user.id)) {
       return;
@@ -122,28 +127,43 @@ export function ListUsers() {
   return (
     <>
       <Card title="Users">
-        <div className="flex gap-2 mb-3">
-          <InputText
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search username, display name, or email"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                applySearch();
-              }
-            }}
-          />
-          <Button type="button" label="Search" icon="pi pi-search" onClick={applySearch} />
-          <Button
-            type="button"
-            label="Clear"
-            severity="secondary"
-            icon="pi pi-times"
-            onClick={() => {
-              setSearch("");
-              setListParams((prev) => ({ ...prev, q: undefined, page: 1 }));
-            }}
-          />
+        <div className="mb-3 w-full md:w-30rem">
+          <div className="p-inputgroup w-full">
+            <InputText
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search username, display name, or email"
+              aria-label="Search users"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applySearch();
+                }
+              }}
+            />
+            {search && (
+              <span className="p-inputgroup-addon p-0">
+                <Button
+                  type="button"
+                  icon="pi pi-times"
+                  aria-label="Clear search"
+                  onClick={clearSearch}
+                  className="p-button-secondary h-full"
+                  style={{ borderRadius: 0 }}
+                />
+              </span>
+            )}
+            <span className="p-inputgroup-addon p-0">
+              <Button
+                type="button"
+                icon="pi pi-search"
+                aria-label="Search"
+                onClick={applySearch}
+                className="p-button-info h-full"
+                style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+              />
+            </span>
+          </div>
         </div>
 
         <DataTable
