@@ -1,6 +1,6 @@
 // framework
 import { useEffect, useRef, useState } from 'react';
-import { createBrowserRouter, RouterProvider, NavLink, useLocation } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider, NavLink, useLocation } from 'react-router-dom';
 import { PrimeReactProvider } from 'primereact/api';
 import 'primereact/resources/primereact.min.css';
 import 'primereact/resources/themes/lara-dark-indigo/theme.css';
@@ -118,6 +118,7 @@ const router = createBrowserRouter([
     path: '/',
     element: <Layout />,
     children: [
+      { index: true, element: <Navigate to="/documents" replace /> },
       { path: 'documents', 
         children: [
           { index: true, element: <ListDocuments/> },
