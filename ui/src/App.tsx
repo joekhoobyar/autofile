@@ -33,27 +33,36 @@ export function SideNav() {
   const auth = useAuth();
   const location = useLocation();
   const navItems = NAV.filter((item) => item.key !== 'users' || canManageUsers(auth));
+  const isLogoutActive = location.pathname === '/logout';
 
   return (
     <nav className="side-nav">
-      {navItems.map(item => {
-        const isSectionActive = item.matchPrefix
-          ? location.pathname === item.to || location.pathname.startsWith(item.to + "/")
-          : location.pathname === item.to;
+      <div className="side-nav-main">
+        {navItems.map(item => {
+          const isSectionActive = item.matchPrefix
+            ? location.pathname === item.to || location.pathname.startsWith(item.to + "/")
+            : location.pathname === item.to;
 
-        return (
-          <NavLink
-            key={item.key}
-            to={item.to}
-            className={({ isActive }) =>
-              "side-nav-item " + ((isActive || isSectionActive) ? "is-active" : "")
-            }
-          >
-            {item.icon && <i className={`${item.icon} mr-2`} />}
-            <span>{item.label}</span>
-          </NavLink>
-        );
-      })}
+          return (
+            <NavLink
+              key={item.key}
+              to={item.to}
+              className={({ isActive }) =>
+                "side-nav-item " + ((isActive || isSectionActive) ? "is-active" : "")
+              }
+            >
+              {item.icon && <i className={`${item.icon} mr-2`} />}
+              <span>{item.label}</span>
+            </NavLink>
+          );
+        })}
+      </div>
+      <NavLink
+        to="/logout"
+        className={`side-nav-item side-nav-logout ${isLogoutActive ? 'is-active' : ''}`}
+      >
+        Logout
+      </NavLink>
     </nav>
   );
 }

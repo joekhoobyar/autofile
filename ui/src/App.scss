@@ -145,7 +145,8 @@ body {
 
 
 /* side-nav.css */
-.side-nav { display: flex; flex-direction: column; gap: .25rem; }
+.side-nav { display: flex; flex-direction: column; gap: .25rem; min-height: 100%; }
+.side-nav-main { display: flex; flex-direction: column; gap: .25rem; }
 .side-nav-item {
   display: flex; align-items: center;
   padding: .6rem .75rem; border-radius: 10px;
@@ -153,6 +154,13 @@ body {
 }
 .side-nav-item:hover { background: var(--surface-hover); }
 .side-nav-item.is-active { background: var(--highlight-bg); font-weight: 600; }
+.side-nav-logout {
+  margin-top: auto;
+  font-size: 0.82rem;
+  color: var(--text-color-secondary);
+  justify-content: center;
+  text-align: center;
+}
 
 
 /*
