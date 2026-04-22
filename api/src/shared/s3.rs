@@ -1,4 +1,5 @@
 use aws_sdk_s3::error::SdkError;
+use aws_sdk_s3::operation::get_object::GetObjectError;
 use axum::{
     body::Body,
     http::{HeaderMap, StatusCode, header},
@@ -6,10 +7,14 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use httpdate::{fmt_http_date, parse_http_date};
+use tokio::time::{Duration, sleep};
 use tokio_util::io::ReaderStream;
 
 use crate::shared::app_state::AppState;
 use crate::shared::util::ApiError;
+
+const S3_GET_MAX_ATTEMPTS: u8 = 3;
+type GetObjectSdkError = SdkError<GetObjectError>;
 
 pub async fn serve_s3_file(
     state: &AppState,
@@ -19,28 +24,51 @@ pub async fn serve_s3_file(
     missing_message: &str,
     fallback_content_type: Option<&str>,
 ) -> Result<Response, ApiError> {
-    let object = state
-        .s3_client
-        .get_object()
-        .bucket(state.s3_bucket.as_str())
-        .key(s3_key)
-        .send()
-        .await
-        .map_err(|e| match e {
+    let mut attempt = 1_u8;
+    let object = loop {
+        match state
+            .s3_client
+            .get_object()
+            .bucket(state.s3_bucket.as_str())
+            .key(s3_key)
+            .send()
+            .await
+        {
+            Ok(object) => break Ok(object),
+            Err(err)
+                if attempt < S3_GET_MAX_ATTEMPTS
+                    && is_retryable_s3_get_error(&err) =>
+            {
+                let retry_in_ms = 100_u64 * (1_u64 << (attempt - 1));
+                let status = s3_get_error_status_code(&err);
+                tracing::warn!(
+                    attempt,
+                    max_attempts = S3_GET_MAX_ATTEMPTS,
+                    bucket = %state.s3_bucket,
+                    key = s3_key,
+                    status,
+                    error = %err,
+                    retry_in_ms,
+                    "S3 get_object failed with retryable error; retrying"
+                );
+                sleep(Duration::from_millis(retry_in_ms)).await;
+                attempt += 1;
+            }
+            Err(err) => break Err(err),
+        }
+    }
+    .map_err(|e| match e {
             SdkError::ServiceError(service_error) if service_error.err().is_no_such_key() => {
                 ApiError::not_found(missing_message)
             }
             _ => ApiError::internal_server_error(&format!("S3 download failed: {e}")),
         })?;
 
-    let last_modified = fallback_last_modified
-        .map(std::time::SystemTime::from)
-        .or_else(|| {
-            object
-                .last_modified()
-                .copied()
-                .and_then(|value| std::time::SystemTime::try_from(value).ok())
-        });
+    let last_modified = object
+        .last_modified()
+        .copied()
+        .and_then(|value| std::time::SystemTime::try_from(value).ok())
+        .or_else(|| fallback_last_modified.map(std::time::SystemTime::from));
 
     if let (Some(last_modified), Some(if_modified_since)) = (
         last_modified,
@@ -97,4 +125,21 @@ pub async fn serve_s3_file(
     }
 
     Ok(response)
+}
+
+fn is_retryable_s3_get_error(err: &GetObjectSdkError) -> bool {
+    match err {
+        SdkError::DispatchFailure(_) | SdkError::TimeoutError(_) => true,
+        SdkError::ServiceError(service_error) => {
+            matches!(service_error.raw().status().as_u16(), 429 | 500 | 502 | 503 | 504)
+        }
+        _ => false,
+    }
+}
+
+fn s3_get_error_status_code(err: &GetObjectSdkError) -> Option<u16> {
+    match err {
+        SdkError::ServiceError(service_error) => Some(service_error.raw().status().as_u16()),
+        _ => None,
+    }
 }
