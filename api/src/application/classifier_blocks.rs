@@ -148,6 +148,7 @@ pub fn compute_classification_actions(
             );
             apply_match_actions(&mut computed_actions, &rules.match_actions);
             apply_child_rules(
+                classifier_block.id,
                 document_view,
                 document_text,
                 &mut computed_actions,
@@ -735,6 +736,7 @@ fn apply_match_actions(
 }
 
 fn apply_child_rules(
+    classifier_block_id: i64,
     document: &DocumentView,
     document_text: &str,
     computed_actions: &mut HashMap<String, String>,
@@ -764,7 +766,22 @@ fn apply_child_rules(
             // - For each modifier in the rule, apply the modifier to the snippets.
             if let Some(modifiers) = &rule.modifiers {
                 for modifier in modifiers {
-                    apply_modifier(&mut snippets, &modifier, computed_actions);
+                    match apply_modifier(&snippets, modifier, computed_actions) {
+                        Ok(Some((to, value))) => {
+                            snippets.insert(to, value);
+                        }
+                        Ok(None) => {}
+                        Err(error) => {
+                            tracing::warn!(
+                                document_id = document.id,
+                                classifier_block_id,
+                                modifier_type = modifier_kind(modifier),
+                                ?modifier,
+                                error,
+                                "classification: modifier failed"
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -875,114 +892,131 @@ fn does_document_match_pattern<'a>(
     Ok(PatternMatch::Metadata)
 }
 
+fn modifier_kind(modifier: &ClassifierModifier) -> &'static str {
+    match modifier {
+        ClassifierModifier::Metadata { .. } => "metadata",
+        ClassifierModifier::MonthNumber { .. } => "month_number",
+        ClassifierModifier::MonthEnd { .. } => "month_end",
+        ClassifierModifier::MonthStart { .. } => "month_start",
+        ClassifierModifier::NextDay { .. } => "next_day",
+        ClassifierModifier::PrevDay { .. } => "prev_day",
+        ClassifierModifier::NextMonth { .. } => "next_month",
+        ClassifierModifier::PrevMonth { .. } => "prev_month",
+        ClassifierModifier::TaxYear { .. } => "tax_year",
+        ClassifierModifier::Currency { .. } => "currency",
+        ClassifierModifier::Sprintf { .. } => "sprintf",
+        ClassifierModifier::Replace { .. } => "replace",
+        ClassifierModifier::AlnumSanitize { .. } => "alnum_sanitize",
+        ClassifierModifier::DateFormat { .. } => "date_format",
+        ClassifierModifier::Add { .. } => "add",
+        ClassifierModifier::Sub { .. } => "sub",
+        ClassifierModifier::Mul { .. } => "mul",
+        ClassifierModifier::Div { .. } => "div",
+    }
+}
+
 fn apply_modifier(
-    snippets: &mut HashMap<u32, String>,
+    snippets: &HashMap<u32, String>,
     modifier: &ClassifierModifier,
-    computed_actions: &mut HashMap<String, String>,
-) {
+    computed_actions: &HashMap<String, String>,
+) -> Result<Option<(u32, String)>, String> {
     match modifier {
         ClassifierModifier::Metadata { to, slug } => {
-            if let Some(value) = computed_actions.get(slug) {
-                snippets.insert(*to, value.clone());
-            }
+            let value = computed_actions
+                .get(slug)
+                .cloned()
+                .ok_or_else(|| format!("computed action not found for slug '{slug}'"))?;
+            Ok(Some((*to, value)))
         }
         ClassifierModifier::MonthNumber { from, to } => {
             let value = apply_replacements(from, snippets);
-            if let Some(value) = mod_month_number(&value) {
-                snippets.insert(*to, value.clone());
-            }
+            let transformed = mod_month_number(&value)
+                .ok_or_else(|| format!("invalid month value '{value}'"))?;
+            Ok(Some((*to, transformed)))
         }
         ClassifierModifier::MonthEnd { from, to } => {
             let value = apply_replacements(from, snippets);
-            if let Some(value) = mod_month_end(&value, None).ok() {
-                snippets.insert(*to, value.clone());
-            }
+            let transformed = mod_month_end(&value, None).map_err(|e| e.to_string())?;
+            Ok(Some((*to, transformed)))
         }
         ClassifierModifier::MonthStart { from, to } => {
             let value = apply_replacements(from, snippets);
-            if let Some(value) = mod_month_start(&value, None).ok() {
-                snippets.insert(*to, value.clone());
-            }
+            let transformed = mod_month_start(&value, None).map_err(|e| e.to_string())?;
+            Ok(Some((*to, transformed)))
         }
         ClassifierModifier::NextDay { from, to } => {
             let value = apply_replacements(from, snippets);
-            if let Some(value) = mod_next_day(&value, None).ok() {
-                snippets.insert(*to, value.clone());
-            }
+            let transformed = mod_next_day(&value, None).map_err(|e| e.to_string())?;
+            Ok(Some((*to, transformed)))
         }
         ClassifierModifier::PrevDay { from, to } => {
             let value = apply_replacements(from, snippets);
-            if let Some(value) = mod_prev_day(&value, None).ok() {
-                snippets.insert(*to, value.clone());
-            }
+            let transformed = mod_prev_day(&value, None).map_err(|e| e.to_string())?;
+            Ok(Some((*to, transformed)))
         }
         ClassifierModifier::NextMonth { from, to } => {
             let value = apply_replacements(from, snippets);
-            if let Some(value) = mod_next_month(&value, None).ok() {
-                snippets.insert(*to, value.clone());
-            }
+            let transformed = mod_next_month(&value, None).map_err(|e| e.to_string())?;
+            Ok(Some((*to, transformed)))
         }
         ClassifierModifier::PrevMonth { from, to } => {
             let value = apply_replacements(from, snippets);
-            if let Some(value) = mod_prev_month(&value, None).ok() {
-                snippets.insert(*to, value.clone());
-            }
+            let transformed = mod_prev_month(&value, None).map_err(|e| e.to_string())?;
+            Ok(Some((*to, transformed)))
         }
         ClassifierModifier::TaxYear { from, to } => {
             let value = apply_replacements(from, snippets);
-            if let Some(value) = mod_tax_year(&value).ok() {
-                snippets.insert(*to, value.clone());
-            }
+            let transformed = mod_tax_year(&value).map_err(|e| e.to_string())?;
+            Ok(Some((*to, transformed)))
         }
         ClassifierModifier::Currency { from, to } => {
             let value = apply_replacements(from, snippets);
-            snippets.insert(*to, mod_currency(&value));
+            Ok(Some((*to, mod_currency(&value))))
         }
         ClassifierModifier::Sprintf { from, to, format } => {
             let value = apply_replacements(from, snippets);
-            snippets.insert(*to, mod_sprintf(&value, format));
+            Ok(Some((*to, mod_sprintf(&value, format))))
         }
         ClassifierModifier::Replace { from, to } => {
             let value = apply_replacements(from, snippets);
-            snippets.insert(*to, value);
+            Ok(Some((*to, value)))
         }
         ClassifierModifier::AlnumSanitize { from, to } => {
             let value = apply_replacements(from, snippets);
-            snippets.insert(*to, mod_alnum_sanitize(&value));
+            Ok(Some((*to, mod_alnum_sanitize(&value))))
         }
         ClassifierModifier::DateFormat { from, to, format } => {
             let value = apply_replacements(from, snippets);
-            if let Some(value) = mod_date_format(&value, Some(format)).ok() {
-                snippets.insert(*to, value.clone());
-            }
+            let transformed = mod_date_format(&value, Some(format)).map_err(|e| e.to_string())?;
+            Ok(Some((*to, transformed)))
         }
         ClassifierModifier::Add { from, to } => {
-            if let Some(value) = mod_add(snippets, *from, *to) {
-                snippets.insert(*to, value);
-            }
+            let transformed = mod_add(snippets, *from, *to)?;
+            Ok(Some((*to, transformed)))
         }
         ClassifierModifier::Sub { from, to } => {
-            if let Some(value) = mod_sub(snippets, *from, *to) {
-                snippets.insert(*to, value);
-            }
+            let transformed = mod_sub(snippets, *from, *to)?;
+            Ok(Some((*to, transformed)))
         }
         ClassifierModifier::Mul { from, to } => {
-            if let Some(value) = mod_mul(snippets, *from, *to) {
-                snippets.insert(*to, value);
-            }
+            let transformed = mod_mul(snippets, *from, *to)?;
+            Ok(Some((*to, transformed)))
         }
         ClassifierModifier::Div { from, to } => {
-            if let Some(value) = mod_div(snippets, *from, *to) {
-                snippets.insert(*to, value);
-            }
+            let transformed = mod_div(snippets, *from, *to)?;
+            Ok(Some((*to, transformed)))
         }
     }
 }
 
-fn snippet_number(snippets: &HashMap<u32, String>, index: u32) -> Option<f64> {
-    let value = snippets.get(&index)?;
+fn snippet_number(snippets: &HashMap<u32, String>, index: u32) -> Result<f64, String> {
+    let value = snippets
+        .get(&index)
+        .ok_or_else(|| format!("missing snippet at index {index}"))?;
     let normalized = value.trim().replace([',', '$'], "");
-    normalized.parse::<f64>().ok()
+    normalized
+        .parse::<f64>()
+        .map_err(|_| format!("snippet at index {index} is not numeric: {value}"))
 }
 
 fn format_number(value: f64) -> String {
@@ -1000,31 +1034,31 @@ fn format_number(value: f64) -> String {
     formatted
 }
 
-fn mod_add(snippets: &HashMap<u32, String>, from: u32, to: u32) -> Option<String> {
-    Some(format_number(
+fn mod_add(snippets: &HashMap<u32, String>, from: u32, to: u32) -> Result<String, String> {
+    Ok(format_number(
         snippet_number(snippets, to)? + snippet_number(snippets, from)?,
     ))
 }
 
-fn mod_sub(snippets: &HashMap<u32, String>, from: u32, to: u32) -> Option<String> {
-    Some(format_number(
+fn mod_sub(snippets: &HashMap<u32, String>, from: u32, to: u32) -> Result<String, String> {
+    Ok(format_number(
         snippet_number(snippets, to)? - snippet_number(snippets, from)?,
     ))
 }
 
-fn mod_mul(snippets: &HashMap<u32, String>, from: u32, to: u32) -> Option<String> {
-    Some(format_number(
+fn mod_mul(snippets: &HashMap<u32, String>, from: u32, to: u32) -> Result<String, String> {
+    Ok(format_number(
         snippet_number(snippets, to)? * snippet_number(snippets, from)?,
     ))
 }
 
-fn mod_div(snippets: &HashMap<u32, String>, from: u32, to: u32) -> Option<String> {
+fn mod_div(snippets: &HashMap<u32, String>, from: u32, to: u32) -> Result<String, String> {
     let denominator = snippet_number(snippets, from)?;
     if denominator.abs() < f64::EPSILON {
-        return None;
+        return Err(format!("division by zero from snippet index {from}"));
     }
 
-    Some(format_number(snippet_number(snippets, to)? / denominator))
+    Ok(format_number(snippet_number(snippets, to)? / denominator))
 }
 
 fn mod_month_number(value: &str) -> Option<String> {
@@ -1322,12 +1356,14 @@ mod tests {
             .iter()
             .map(|(index, value)| (*index, (*value).to_string()))
             .collect();
-        let mut computed_actions: HashMap<String, String> = computed_actions
+        let computed_actions: HashMap<String, String> = computed_actions
             .iter()
             .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
             .collect();
 
-        apply_modifier(&mut snippets, &modifier, &mut computed_actions);
+        if let Ok(Some((to, value))) = apply_modifier(&snippets, &modifier, &computed_actions) {
+            snippets.insert(to, value);
+        }
         snippets
     }
 
