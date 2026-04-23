@@ -19,7 +19,7 @@ export function DocumentViewLayout({ documentId, children }: Readonly<DocumentVi
 
   const menuItems = useMemo<MenuItem[]>(
     () => {
-      const items = [
+      const items: Array<{ label: string; icon: string; path: string } | { separator: true }> = [
         {
           label: 'Properties',
           icon: 'pi pi-info',
@@ -65,12 +65,18 @@ export function DocumentViewLayout({ documentId, children }: Readonly<DocumentVi
         },
       ];
 
-      return items.map((item) => ({
-        label: item.label,
-        icon: item.icon,
-        command: () => navigate(item.path),
-        className: location.pathname === item.path ? 'aut-document-view-menu-active' : undefined,
-      }));
+      return items.map((item) => {
+        if ('separator' in item) {
+          return { separator: true };
+        }
+
+        return {
+          label: item.label,
+          icon: item.icon,
+          command: () => navigate(item.path),
+          className: location.pathname === item.path ? 'aut-document-view-menu-active' : undefined,
+        };
+      });
     },
     [documentId, location.pathname, navigate]
   );

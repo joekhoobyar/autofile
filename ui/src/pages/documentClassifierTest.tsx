@@ -22,7 +22,9 @@ export function DocumentClassifierTest() {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
 
   const classifierOptions = useMemo(
-    () => (classifierBlocks?.items ?? []).map((block) => ({ label: block.name, value: block.id })),
+    () => (classifierBlocks?.items ?? [])
+      .map((block) => ({ label: block.name, value: block.id }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })),
     [classifierBlocks?.items]
   );
 
@@ -84,6 +86,10 @@ export function DocumentClassifierTest() {
                 options={classifierOptions}
                 optionLabel="label"
                 optionValue="value"
+                filter
+                filterBy="label"
+                filterPlaceholder="Search classifier blocks"
+                showClear
                 placeholder={isBlocksLoading ? 'Loading classifier blocks...' : 'Select a classifier block'}
                 loading={isBlocksLoading || isBlocksFetching}
                 className="w-full"
