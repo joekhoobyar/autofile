@@ -2,16 +2,18 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use crate::application::classifier_blocks::{compute_classification_actions, load_document_text};
 use crate::application::document_index_documents::delete_document_index_document;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::documents::{get_document_view, update_document};
 use crate::application::jobs::{FastJob, MediumJob};
+use crate::domain::classifier_blocks::ClassifierBlock;
 use crate::domain::document_files::DocumentFile;
 use crate::domain::document_indexes::DocumentIndexValue;
 use crate::domain::documents::{Document, DocumentChangeset, DocumentView};
 use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_to_s3};
 use crate::schema::{
-    cabinet_documents, document_file_ocr_pages, document_file_pages, document_files,
+    cabinet_documents, classifier_blocks, document_file_ocr_pages, document_file_pages, document_files,
     document_index_documents, document_index_values, document_metadatas, documents, metadata_types,
     tag_documents,
 };
@@ -103,6 +105,16 @@ struct ParsedMultipart {
     title: Option<String>,
     document_type_id: Option<i64>,
     file_temp: Option<(std::path::PathBuf, String, Option<String>, i64)>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TestClassifierBlockInput {
+    classifier_block_id: i64,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct TestClassifierBlockResponse {
+    computed_actions: HashMap<String, String>,
 }
 
 async fn parse_create_multipart(multipart: &mut Multipart) -> Result<ParsedMultipart, ApiError> {
@@ -376,6 +388,43 @@ pub async fn classify_document(
     }
 
     Ok(Json(()))
+}
+
+async fn test_classifier_block(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+    Json(input): Json<TestClassifierBlockInput>,
+) -> Result<Json<TestClassifierBlockResponse>, ApiError> {
+    let classifier_block = classifier_blocks::table
+        .find(input.classifier_block_id)
+        .select(ClassifierBlock::as_select())
+        .first::<ClassifierBlock>(&mut db)
+        .await
+        .map_err(|e| {
+            if matches!(e, diesel::result::Error::NotFound) {
+                ApiError::not_found("Classifier block not found")
+            } else {
+                ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block")
+            }
+        })?;
+
+    let document_view = get_document_view(&mut db, id).await?;
+    let document_text = load_document_text(&mut db, id).await.map_err(|e| {
+        ApiError::internal_server_error(&format!("Failed to load document text: {}", e))
+    })?;
+
+    let computed_actions = compute_classification_actions(
+        id,
+        &document_view,
+        &document_text,
+        std::slice::from_ref(&classifier_block),
+    )
+    .map_err(|e| {
+        ApiError::internal_server_error(&format!("Failed to compute classification actions: {}", e))
+    })?;
+
+    Ok(Json(TestClassifierBlockResponse { computed_actions }))
 }
 
 /**
@@ -897,6 +946,7 @@ pub fn routes() -> Router<Arc<AppState>> {
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024 * 1024))
         .route("/{id}", get(get_by_id).patch(update).delete(delete))
         .route("/{id}/classify-document", post(classify_document))
+        .route("/{id}/test-classifier-block", post(test_classifier_block))
         .route("/{id}/index-values", get(list_index_values))
         .route("/{id}/thumbnail", get(thumbnail_get))
         .route("/{id}/process-file-pages", post(process_file_pages))
