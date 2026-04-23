@@ -20,6 +20,15 @@ export interface CabinetDocumentInput {
   documents: NewCabinetDocument[];
 }
 
+export interface TestClassifierBlockInput {
+  document_id: number;
+  classifier_block_id: number;
+}
+
+export interface TestClassifierBlockResponse {
+  computed_actions: Record<string, string>;
+}
+
 export interface RemoveCabinetDocumentInput {
   cabinet_id: number;
   documents: number[];
@@ -154,6 +163,20 @@ export function useClassifyDocument(): UseMutationResult<void, HttpError, number
       return apiMutate<void, void>(`api/v1/documents/${input}/classify-document`, {
         method: "POST",
       });
+    },
+  });
+}
+
+export function useTestClassifierBlock(): UseMutationResult<TestClassifierBlockResponse, HttpError, TestClassifierBlockInput> {
+  return useMutation<TestClassifierBlockResponse, HttpError, TestClassifierBlockInput>({
+    mutationFn: async (input) => {
+      return apiMutate<TestClassifierBlockResponse, { classifier_block_id: number }>(
+        `api/v1/documents/${input.document_id}/test-classifier-block`,
+        {
+          method: 'POST',
+          body: { classifier_block_id: input.classifier_block_id },
+        }
+      );
     },
   });
 }

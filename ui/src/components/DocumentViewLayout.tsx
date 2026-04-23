@@ -55,6 +55,14 @@ export function DocumentViewLayout({ documentId, children }: Readonly<DocumentVi
           icon: 'pi pi-search',
           path: `/documents/${documentId}/ocr-content`,
         },
+        {
+          separator: true,
+        },
+        {
+          label: 'Classifier Test',
+          icon: 'pi pi-sitemap',
+          path: `/documents/${documentId}/classifier-test`,
+        },
       ];
 
       return items.map((item) => ({
