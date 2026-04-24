@@ -502,6 +502,7 @@ async fn apply_document_index_value(
         ))
         .on_conflict((
             document_index_values::document_index_template_id,
+            document_index_values::parent_id,
             document_index_values::value,
         ))
         .do_update()
@@ -509,8 +510,6 @@ async fn apply_document_index_value(
             document_index_values::document_index_id.eq(diesel::upsert::excluded(
                 document_index_values::document_index_id,
             )),
-            document_index_values::parent_id
-                .eq(diesel::upsert::excluded(document_index_values::parent_id)),
             document_index_values::is_leaf
                 .eq(diesel::upsert::excluded(document_index_values::is_leaf)),
         ))
