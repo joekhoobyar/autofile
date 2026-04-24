@@ -11,7 +11,7 @@ use diesel_async::AsyncConnection;
 use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
-use regex::{Captures, Regex};
+use regex::{Captures, Regex, RegexBuilder};
 use sprintf::sprintf;
 
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
@@ -876,7 +876,9 @@ fn does_document_match_pattern<'a>(
         );
         // Convert the pattern text to a regex pattern.
         // Test if the document text matches the regex pattern.
-        let reg = Regex::new(pattern_text)?;
+        let reg = RegexBuilder::new(pattern_text)
+            .case_insensitive(true)
+            .build()?;
         let cap = reg.captures(document_text);
         return match cap {
             None => Ok(PatternMatch::None),
@@ -1401,6 +1403,24 @@ mod tests {
             .expect("pattern match should succeed");
 
         assert!(matches!(matched, PatternMatch::None));
+    }
+
+    #[test]
+    fn text_matching_is_case_insensitive() {
+        let document = build_document_view(&[]);
+        let computed_actions = HashMap::new();
+        let pattern = ClassifierPattern {
+            text: Some("invoice #([0-9]+)".to_string()),
+            metadata: None,
+        };
+
+        let matched = does_document_match_pattern(&document, "INVOICE #123", &computed_actions, &pattern)
+            .expect("pattern match should succeed");
+
+        match matched {
+            PatternMatch::Text(captures) => assert_eq!(&captures[1], "123"),
+            _ => panic!("expected text match"),
+        }
     }
 
     #[test]
