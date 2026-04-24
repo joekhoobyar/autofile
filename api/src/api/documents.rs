@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::application::classifier_blocks::{compute_classification_actions, load_document_text};
+use crate::application::document_index_documents::build_template_document_view;
 use crate::application::document_index_documents::delete_document_index_document;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::documents::{get_document_view, update_document};
@@ -112,9 +113,20 @@ struct TestClassifierBlockInput {
     classifier_block_id: i64,
 }
 
+#[derive(Debug, Deserialize)]
+struct TestTemplateInput {
+    template: String,
+}
+
 #[derive(Debug, serde::Serialize)]
 struct TestClassifierBlockResponse {
     computed_actions: HashMap<String, String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct TestTemplateResponse {
+    rendered: Option<String>,
+    error: Option<String>,
 }
 
 async fn parse_create_multipart(multipart: &mut Multipart) -> Result<ParsedMultipart, ApiError> {
@@ -425,6 +437,35 @@ async fn test_classifier_block(
     })?;
 
     Ok(Json(TestClassifierBlockResponse { computed_actions }))
+}
+
+async fn test_template(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+    Json(input): Json<TestTemplateInput>,
+) -> Result<Json<TestTemplateResponse>, ApiError> {
+    let document_view = get_document_view(&mut db, id).await?;
+    let template_document_view = build_template_document_view(&mut db, document_view)
+        .await
+        .map_err(|e| {
+            ApiError::internal_server_error(&format!(
+                "Failed to build template document view: {}",
+                e
+            ))
+        })?;
+
+    let env = minijinja::Environment::new();
+    match env.render_str(&input.template, minijinja::context! { doc => &template_document_view }) {
+        Ok(rendered) => Ok(Json(TestTemplateResponse {
+            rendered: Some(rendered),
+            error: None,
+        })),
+        Err(err) => Ok(Json(TestTemplateResponse {
+            rendered: None,
+            error: Some(err.to_string()),
+        })),
+    }
 }
 
 /**
@@ -947,6 +988,7 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/{id}", get(get_by_id).patch(update).delete(delete))
         .route("/{id}/classify-document", post(classify_document))
         .route("/{id}/test-classifier-block", post(test_classifier_block))
+        .route("/{id}/test-template", post(test_template))
         .route("/{id}/index-values", get(list_index_values))
         .route("/{id}/thumbnail", get(thumbnail_get))
         .route("/{id}/process-file-pages", post(process_file_pages))

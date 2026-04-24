@@ -29,6 +29,16 @@ export interface TestClassifierBlockResponse {
   computed_actions: Record<string, string>;
 }
 
+export interface TestTemplateInput {
+  document_id: number;
+  template: string;
+}
+
+export interface TestTemplateResponse {
+  rendered: string | null;
+  error: string | null;
+}
+
 export interface RemoveCabinetDocumentInput {
   cabinet_id: number;
   documents: number[];
@@ -175,6 +185,20 @@ export function useTestClassifierBlock(): UseMutationResult<TestClassifierBlockR
         {
           method: 'POST',
           body: { classifier_block_id: input.classifier_block_id },
+        }
+      );
+    },
+  });
+}
+
+export function useTestTemplate(): UseMutationResult<TestTemplateResponse, HttpError, TestTemplateInput> {
+  return useMutation<TestTemplateResponse, HttpError, TestTemplateInput>({
+    mutationFn: async (input) => {
+      return apiMutate<TestTemplateResponse, { template: string }>(
+        `api/v1/documents/${input.document_id}/test-template`,
+        {
+          method: 'POST',
+          body: { template: input.template },
         }
       );
     },

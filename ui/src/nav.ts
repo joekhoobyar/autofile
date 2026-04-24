@@ -44,6 +44,7 @@ const DOCUMENT_VIEW_ROUTE_LABELS: Record<string, string> = {
   'text-content': 'Document Text',
   'ocr-content': 'Document OCR',
   'classifier-test': 'Classifier Test',
+  'template-test': 'Template Test',
 };
 
 export function useRouteResourceLabel(): LabelState {

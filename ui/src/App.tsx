@@ -28,6 +28,7 @@ import { EditDocumentIndexTemplate, ListDocumentIndexTemplates, NewDocumentIndex
 import { ListDocumentIndexValues } from './pages/documentIndexValues.tsx';
 import { EditClassifierBlock, ListClassifierBlocks, NewClassifierBlock } from './pages/classifierBlocks.tsx';
 import { DocumentClassifierTest } from './pages/documentClassifierTest.tsx';
+import { DocumentTemplateTest } from './pages/documentTemplateTest.tsx';
 import { EditUser, ListUsers, ViewUser } from './pages/users.tsx';
 
 export function SideNav() {
@@ -132,6 +133,7 @@ const router = createBrowserRouter([
           { path: ':id/ocr-content', element: <ListDocumentFilePageOcrContent/> },
           { path: ':id/preview', element: <DocumentFilePagePreview/> },
           { path: ':id/classifier-test', element: <DocumentClassifierTest/> },
+          { path: ':id/template-test', element: <DocumentTemplateTest/> },
         ]
       },
       { path: 'cabinets', 

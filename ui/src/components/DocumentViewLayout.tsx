@@ -63,6 +63,11 @@ export function DocumentViewLayout({ documentId, children }: Readonly<DocumentVi
           icon: 'pi pi-sitemap',
           path: `/documents/${documentId}/classifier-test`,
         },
+        {
+          label: 'Template Test',
+          icon: 'pi pi-code',
+          path: `/documents/${documentId}/template-test`,
+        },
       ];
 
       return items.map((item) => {

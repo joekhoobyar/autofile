@@ -365,7 +365,7 @@ pub async fn delete_document_index_document(
  *
  * This is needed to evaluate the document index templates, which may reference these fields.
  */
-async fn build_template_document_view(
+pub(crate) async fn build_template_document_view(
     db: &mut bb8::PooledConnection<'_, AsyncPgConnection>,
     document_view: DocumentView,
 ) -> JobResult<TemplateDocumentView> {
