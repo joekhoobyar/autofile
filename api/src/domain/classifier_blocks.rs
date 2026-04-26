@@ -76,6 +76,12 @@ pub enum ClassifierModifier {
         to: u32,
         format: String,
     },
+    #[serde(rename = "zero_pad")]
+    ZeroPad {
+        from: String,
+        to: u32,
+        length: usize,
+    },
     #[serde(rename = "replace")]
     Replace { from: String, to: u32 },
     #[serde(rename = "alnum_sanitize")]

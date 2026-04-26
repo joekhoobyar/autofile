@@ -15,6 +15,7 @@ export type ClassifierModifier =
   | { type: 'tax_year'; from: string; to: number }
   | { type: 'currency'; from: number; to: number }
   | { type: 'sprintf'; from: number; to: number; format: string }
+  | { type: 'zero_pad'; from: string; to: number; length: number }
   | { type: 'replace'; from: string; to: number }
   | { type: 'alnum_sanitize'; from: string; to: number }
   | { type: 'date_format'; from: string; to: number; format: string }

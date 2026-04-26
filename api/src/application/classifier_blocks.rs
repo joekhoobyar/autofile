@@ -907,6 +907,7 @@ fn modifier_kind(modifier: &ClassifierModifier) -> &'static str {
         ClassifierModifier::TaxYear { .. } => "tax_year",
         ClassifierModifier::Currency { .. } => "currency",
         ClassifierModifier::Sprintf { .. } => "sprintf",
+        ClassifierModifier::ZeroPad { .. } => "zero_pad",
         ClassifierModifier::Replace { .. } => "replace",
         ClassifierModifier::AlnumSanitize { .. } => "alnum_sanitize",
         ClassifierModifier::DateFormat { .. } => "date_format",
@@ -978,6 +979,10 @@ fn apply_modifier(
         ClassifierModifier::Sprintf { from, to, format } => {
             let value = apply_replacements(from, snippets);
             Ok(Some((*to, mod_sprintf(&value, format))))
+        }
+        ClassifierModifier::ZeroPad { from, to, length } => {
+            let value = apply_replacements(from, snippets);
+            Ok(Some((*to, mod_zeropad(&value, *length))))
         }
         ClassifierModifier::Replace { from, to } => {
             let value = apply_replacements(from, snippets);
@@ -1114,6 +1119,18 @@ fn mod_sprintf(value: &str, fmt: &str) -> String {
     }
 
     sprintf!(fmt, v).unwrap().replace(" ", "0")
+}
+
+fn mod_zeropad(value: &str, length: usize) -> String {
+    tracing::debug!(value, length, "classification: modifier: zero_pad");
+    if value.len() >= length {
+        return value.to_string();
+    }
+
+    let mut out = String::with_capacity(length);
+    out.push_str(&"0".repeat(length - value.len()));
+    out.push_str(value);
+    out
 }
 
 fn mod_month_end(value: &str, fmt: Option<&str>) -> Result<String, chrono::ParseError> {
@@ -1682,6 +1699,61 @@ mod tests {
         );
 
         assert_eq!(snippets.get(&2), Some(&"0007".to_string()));
+    }
+
+    #[test]
+    fn modifier_zero_pad_left_pads_to_requested_length() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::ZeroPad {
+                from: "\\1".to_string(),
+                to: 2,
+                length: 4,
+            },
+            &[(1, "7")],
+            &[],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"0007".to_string()));
+    }
+
+    #[test]
+    fn modifier_zero_pad_keeps_equal_or_longer_values() {
+        let equal = apply_modifier_for_test(
+            ClassifierModifier::ZeroPad {
+                from: "\\1".to_string(),
+                to: 2,
+                length: 4,
+            },
+            &[(1, "1234")],
+            &[],
+        );
+        let longer = apply_modifier_for_test(
+            ClassifierModifier::ZeroPad {
+                from: "\\1".to_string(),
+                to: 2,
+                length: 4,
+            },
+            &[(1, "12345")],
+            &[],
+        );
+
+        assert_eq!(equal.get(&2), Some(&"1234".to_string()));
+        assert_eq!(longer.get(&2), Some(&"12345".to_string()));
+    }
+
+    #[test]
+    fn modifier_zero_pad_supports_empty_values() {
+        let snippets = apply_modifier_for_test(
+            ClassifierModifier::ZeroPad {
+                from: "\\1".to_string(),
+                to: 2,
+                length: 3,
+            },
+            &[(1, "")],
+            &[],
+        );
+
+        assert_eq!(snippets.get(&2), Some(&"000".to_string()));
     }
 
     #[test]

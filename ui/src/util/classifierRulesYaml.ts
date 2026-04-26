@@ -28,6 +28,7 @@ const modifierTypes = new Set<ModifierType>([
   'tax_year',
   'currency',
   'sprintf',
+  'zero_pad',
   'replace',
   'alnum_sanitize',
   'date_format',
@@ -106,6 +107,8 @@ function validateModifier(value: unknown, path: string): string | null {
     case 'sprintf':
     case 'date_format':
       return validateNumber(value.to, `${path}.to`) ?? validateString(value.from, `${path}.from`) ?? validateString(value.format, `${path}.format`);
+    case 'zero_pad':
+      return validateNumber(value.to, `${path}.to`) ?? validateString(value.from, `${path}.from`) ?? validateNumber(value.length, `${path}.length`);
     case 'month_end':
     case 'month_start':
     case 'next_day':
