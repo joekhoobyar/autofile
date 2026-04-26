@@ -878,6 +878,7 @@ fn does_document_match_pattern<'a>(
         // Test if the document text matches the regex pattern.
         let reg = RegexBuilder::new(pattern_text)
             .case_insensitive(true)
+            .multi_line(true)
             .build()?;
         let cap = reg.captures(document_text);
         return match cap {
