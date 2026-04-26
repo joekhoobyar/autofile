@@ -119,7 +119,7 @@ async fn main() {
             WorkerBuilder::new("fast-job-worker")
                 .retry(RetryPolicy::retries(7))
                 .enable_tracing()
-                .concurrency(4) // Adjust concurrency as needed
+                .concurrency(6) // Adjust concurrency as needed
                 .data(app_state.clone())
                 .backend(app_state.fast_jobs.as_ref().clone())
                 .build_fn(handle_fast_job)
@@ -128,7 +128,7 @@ async fn main() {
             WorkerBuilder::new("medium-job-worker")
                 .retry(RetryPolicy::retries(7))
                 .enable_tracing()
-                .concurrency(2)
+                .concurrency(4)
                 .data(app_state.clone())
                 .backend(app_state.medium_jobs.as_ref().clone())
                 .build_fn(handle_medium_job)
