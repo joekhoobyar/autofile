@@ -10,7 +10,7 @@ import { Dialog } from 'primereact/dialog';
 import { classNames } from 'primereact/utils';
 import { format } from "date-fns";
 
-import { apiFetchRaw } from '../api';
+import { apiUrl, getAccessToken } from '../api';
 import { useDocuments, useDocumentThumbnail } from '../queries/useDocuments';
 import { useDocumentIndex } from '../queries/useDocumentIndexes';
 import { useDocumentIndexValueAncestors } from '../queries/useDocumentIndexValues';
@@ -859,6 +859,9 @@ export default function UploadDocument() {
     const fileUploadRef = useRef<FileUpload>(null);
     const [title, setTitle] = useState('');
     const [documentTypeId, setDocumentTypeId] = useState<number | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+    const [uploadStatus, setUploadStatus] = useState('');
     const { data: documentTypes, isPending: isDocumentTypesPending, isFetching: isDocumentTypesFetching } = useDocumentTypes({ page: 1, per_page: 200, sf: 'name' });
     const defaultDocumentTypeId = documentTypes?.items?.find((item) => item.name === 'Unspecified' || item.slug === 'unspecified')?.id ?? null;
     const effectiveDocumentTypeId = documentTypeId ?? defaultDocumentTypeId;
@@ -931,6 +934,48 @@ export default function UploadDocument() {
         );
     };
 
+    const uploadFile = (
+        formData: FormData,
+        file: File,
+        onProgress: (loaded: number) => void,
+        onUploadComplete: () => void,
+    ) => {
+        return new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', apiUrl('api/v1/documents'));
+            xhr.withCredentials = true;
+            const token = getAccessToken();
+            if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+            xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable) {
+                    onProgress(event.loaded);
+                }
+            };
+            xhr.upload.onload = onUploadComplete;
+
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve();
+                    return;
+                }
+
+                let detail = `Upload failed (${xhr.status})`;
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    if (typeof data?.message === 'string') detail = data.message;
+                } catch {
+                    if (xhr.responseText) detail = xhr.responseText;
+                }
+                reject(new Error(detail));
+            };
+
+            xhr.onerror = () => reject(new Error(`Upload failed for ${file.name}`));
+            xhr.onabort = () => reject(new Error(`Upload cancelled for ${file.name}`));
+            xhr.send(formData);
+        });
+    };
+
     const uploadHandler = async (event: FileUploadHandlerEvent) => {
         if (!effectiveDocumentTypeId) {
             toast.current?.show({ severity: 'warn', summary: 'Missing type', detail: 'Select a document type before uploading.' });
@@ -940,6 +985,19 @@ export default function UploadDocument() {
         const files = event.files ?? [];
         if (!files.length) return;
 
+        setIsUploading(true);
+        setUploadProgress(0);
+        setUploadStatus(files.length === 1 ? `Uploading ${files[0].name}...` : `Uploading 1 of ${files.length}: ${files[0].name}`);
+
+        const uploadedBytesByFile = new Map<File, number>();
+        const totalBytes = files.reduce((sum, file) => sum + (file.size || 0), 0);
+
+        const updateProgress = (file: File, loaded: number) => {
+            uploadedBytesByFile.set(file, loaded);
+            const loadedBytes = Array.from(uploadedBytesByFile.values()).reduce((sum, value) => sum + value, 0);
+            setUploadProgress(totalBytes > 0 ? Math.min(100, Math.round((loadedBytes / totalBytes) * 100)) : null);
+        };
+
         const uploadOne = async (file: File) => {
             const formData = new FormData();
             const trimmedTitle = title.trim();
@@ -948,42 +1006,40 @@ export default function UploadDocument() {
             formData.append('document_type_id', String(effectiveDocumentTypeId));
             formData.append('file', file);
 
-            const res = await apiFetchRaw('api/v1/documents', {
-                method: 'POST',
-                body: formData,
-            });
-
-            if (!res.ok) {
-                let detail = `Upload failed (${res.status})`;
-                try {
-                    const data = await res.json();
-                    if (typeof data?.message === 'string') {
-                        detail = data.message;
-                    }
-                } catch {
-                    try {
-                        const text = await res.text();
-                        if (text) detail = text;
-                    } catch {
-                        // ignore
-                    }
-                }
-                throw new Error(detail);
-            }
+            await uploadFile(
+                formData,
+                file,
+                (loaded) => updateProgress(file, loaded),
+                () => {
+                    updateProgress(file, file.size || 0);
+                    setUploadStatus(`Processing ${file.name}...`);
+                },
+            );
+            uploadedBytesByFile.set(file, file.size || 0);
         };
 
-        const results = await Promise.allSettled(files.map((file) => uploadOne(file)));
-        const failures = results.filter((result) => result.status === 'rejected');
+        const failures: unknown[] = [];
+        for (const [index, file] of files.entries()) {
+            setUploadStatus(files.length === 1 ? `Uploading ${file.name}...` : `Uploading ${index + 1} of ${files.length}: ${file.name}`);
+            try {
+                await uploadOne(file);
+            } catch (error) {
+                failures.push(error);
+            }
+        }
 
         if (failures.length) {
-            const message = failures[0].status === 'rejected' && failures[0].reason instanceof Error
-                ? failures[0].reason.message
+            const message = failures[0] instanceof Error
+                ? failures[0].message
                 : 'Some files failed to upload.';
             toast.current?.show({
                 severity: 'error',
                 summary: 'Upload incomplete',
                 detail: message,
             });
+            setIsUploading(false);
+            setUploadProgress(null);
+            setUploadStatus('');
             return;
         }
 
@@ -991,6 +1047,9 @@ export default function UploadDocument() {
         setTotalSize(0);
         setTitle('');
         setDocumentTypeId(null);
+        setIsUploading(false);
+        setUploadProgress(null);
+        setUploadStatus('');
         const label = files.length === 1 ? 'File uploaded.' : `${files.length} files uploaded.`;
         toast.current?.show({ severity: 'success', summary: 'Success', detail: label });
     };
@@ -1023,6 +1082,7 @@ export default function UploadDocument() {
                         onChange={(event) => setTitle(event.target.value)}
                         placeholder="Enter document title"
                         className="w-full"
+                        disabled={isUploading}
                     />
                 </div>
                 <div className="col-12 md:col-6">
@@ -1037,6 +1097,7 @@ export default function UploadDocument() {
                         options={documentTypes?.items ?? []}
                         loading={isDocumentTypesPending || isDocumentTypesFetching}
                         className="w-full"
+                        disabled={isUploading}
                     />
                 </div>
             </div>
@@ -1049,7 +1110,26 @@ export default function UploadDocument() {
                 onUpload={onTemplateUpload} onSelect={onTemplateSelect} onError={onTemplateClear} onClear={onTemplateClear}
                 headerTemplate={headerTemplate} emptyTemplate={emptyTemplate}
                 itemTemplate={itemTemplate as (file: object, options: ItemTemplateOptions) => React.ReactNode}
-                chooseOptions={chooseOptions} uploadOptions={uploadOptions} cancelOptions={cancelOptions} />
+                chooseOptions={chooseOptions} uploadOptions={uploadOptions} cancelOptions={cancelOptions}
+                disabled={isUploading} />
+
+            {isUploading && (
+                <div className="mt-4">
+                    <Message severity="info" className="w-full" content={(
+                        <div className="flex flex-column gap-2 w-full">
+                            <div className="flex align-items-center gap-2">
+                                <span className="pi pi-spin pi-spinner" aria-hidden="true" />
+                                <span>{uploadStatus}</span>
+                            </div>
+                            {uploadProgress === null ? (
+                                <ProgressBar mode="indeterminate" style={{ height: '8px' }} />
+                            ) : (
+                                <ProgressBar value={uploadProgress} style={{ height: '8px' }} />
+                            )}
+                        </div>
+                    )} />
+                </div>
+            )}
         </div>
     )
 }

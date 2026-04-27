@@ -1,7 +1,7 @@
 const apiHostFromEnv = import.meta.env.VITE_API_HOST?.trim();
 export const API_HOST = apiHostFromEnv ? apiHostFromEnv.replace(/\/+$/, "") : "";
 
-function apiUrl(path: string): string {
+export function apiUrl(path: string): string {
   return `${API_HOST}/${path.replace(/^\/+/, "")}`;
 }
 
@@ -93,6 +93,10 @@ let accessToken: string | null = null;
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
+}
+
+export function getAccessToken(): string | null {
+  return accessToken;
 }
 
 export async function apiFetch<T>(url: string, init: FetchOptions = {}): Promise<T> {
