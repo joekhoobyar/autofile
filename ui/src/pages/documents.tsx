@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Controller, useForm } from 'react-hook-form';
 
 import { Card } from 'primereact/card';
@@ -56,6 +56,73 @@ type DocumentThumbnailProps = {
   placeholderClassName: string;
   buttonStyle?: React.CSSProperties;
 };
+
+const DOCUMENT_LIST_PAGE_SIZES = [6, 12, 24, 48, 96];
+
+const DEFAULT_DOCUMENT_LIST_PARAMS: DocumentListParams = {
+  per_page: 12,
+  page: 1,
+  sf: 'created_at',
+  sd: true,
+};
+
+function parsePositiveIntParam(value: string | null): number | undefined {
+  if (!value) return undefined;
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function parseBooleanParam(value: string | null): boolean | undefined {
+  if (!value) return undefined;
+  if (value === 'true' || value === 'desc') return true;
+  if (value === 'false' || value === 'asc') return false;
+  return undefined;
+}
+
+function parseDocumentListHash(hash: string): DocumentListParams {
+  const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+  const page = parsePositiveIntParam(params.get('page'));
+  const perPage = parsePositiveIntParam(params.get('per_page'));
+  const searchText = params.get('q')?.trim() || undefined;
+
+  return {
+    ...DEFAULT_DOCUMENT_LIST_PARAMS,
+    ...(page ? { page } : {}),
+    ...(perPage && DOCUMENT_LIST_PAGE_SIZES.includes(perPage) ? { per_page: perPage } : {}),
+    ...(params.has('sf') ? { sf: params.get('sf') || undefined } : {}),
+    ...(params.has('sd') ? { sd: parseBooleanParam(params.get('sd')) } : {}),
+    ...(searchText ? {
+      match_any: true,
+      q: searchText,
+      text: searchText,
+      metadata_value: searchText,
+    } : {}),
+  };
+}
+
+function serializeDocumentListHash(params: DocumentListParams): string {
+  const urlParams = new URLSearchParams();
+  const searchText = params.q?.trim() || params.text?.trim() || params.metadata_value?.trim();
+
+  if (params.page && params.page !== DEFAULT_DOCUMENT_LIST_PARAMS.page) {
+    urlParams.set('page', String(params.page));
+  }
+  if (params.per_page && params.per_page !== DEFAULT_DOCUMENT_LIST_PARAMS.per_page) {
+    urlParams.set('per_page', String(params.per_page));
+  }
+  if (params.sf !== DEFAULT_DOCUMENT_LIST_PARAMS.sf) {
+    urlParams.set('sf', params.sf ?? '');
+  }
+  if (params.sd !== DEFAULT_DOCUMENT_LIST_PARAMS.sd) {
+    urlParams.set('sd', params.sd ? 'desc' : 'asc');
+  }
+  if (searchText) {
+    urlParams.set('q', searchText);
+  }
+
+  return urlParams.toString();
+}
 
 function DocumentThumbnail({
   src,
@@ -296,14 +363,9 @@ function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange, cabi
  */
 export function ListDocuments() {
   const navigate = useNavigate();
+  const location = useLocation();
   const params = useParams();
-  const initialListParams: DocumentListParams = {
-    per_page: 12,
-    page: 1,
-    sf: 'created_at',
-    sd: true,
-  };
-  const [listParams, setListParams] = useState<DocumentListParams>(initialListParams);
+  const listParams = useMemo(() => parseDocumentListHash(location.hash), [location.hash]);
   const tagId = params.tagId ? Number.parseInt(params.tagId) : undefined;
   const cabinetId = params.cabinetId ? Number.parseInt(params.cabinetId) : undefined;
   const documentIndexValueId = params.documentIndexValueId ? Number.parseInt(params.documentIndexValueId) : undefined;
@@ -322,7 +384,10 @@ export function ListDocuments() {
   const [previewSrc, setPreviewSrc] = useState<string | undefined>(undefined);
   const [previewTitle, setPreviewTitle] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [searchText, setSearchText] = useState(listParams.q ?? '');
+  const appliedSearchText = listParams.q ?? '';
+  const [searchDraft, setSearchDraft] = useState({ appliedSearchText, value: appliedSearchText });
+  const searchText = searchDraft.appliedSearchText === appliedSearchText ? searchDraft.value : appliedSearchText;
+  const setSearchText = (value: string) => setSearchDraft({ appliedSearchText, value });
   const { isPending, data, isFetching } = useDocuments(effectiveListParams);
   const { data: cabinetOptions } = useCabinets({ page: 1, per_page: MAX_CABINETS });
   const { data: tagOptions } = useTags({ page: 1, per_page: 200 });
@@ -365,18 +430,26 @@ export function ListDocuments() {
   const sortDir = listParams.sd ? 'desc' : 'asc';
   const sortValue = listParams.sf ? `${listParams.sf}:${sortDir}` : undefined;
 
+  const updateListParams = (nextParams: DocumentListParams) => {
+    navigate({
+      pathname: location.pathname,
+      search: location.search,
+      hash: serializeDocumentListHash(nextParams),
+    });
+  };
+
   const onPage = (event: DataViewPageEvent) => {
-    setListParams({ ...listParams, page: event.page + 1, per_page: event.rows });
+    updateListParams({ ...listParams, page: event.page + 1, per_page: event.rows });
   };
 
   const onSortChange = (value: string | undefined) => {
     if (!value) {
-      setListParams({ ...listParams, sf: undefined, sd: undefined, page: 1 });
+      updateListParams({ ...listParams, sf: undefined, sd: undefined, page: 1 });
       return;
     }
 
     const [field, direction] = value.split(':');
-    setListParams({
+    updateListParams({
       ...listParams,
       sf: field,
       sd: direction === 'desc',
@@ -387,7 +460,7 @@ export function ListDocuments() {
   const applySearch = () => {
     const value = searchText.trim();
 
-    setListParams({
+    updateListParams({
       ...listParams,
       match_any: true,
       q: value || undefined,
@@ -399,7 +472,7 @@ export function ListDocuments() {
 
   const clearSearch = () => {
     setSearchText('');
-    setListParams({
+    updateListParams({
       ...listParams,
       match_any: true,
       q: undefined,
