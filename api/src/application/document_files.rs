@@ -2,7 +2,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use apalis::prelude::*;
-use aws_sdk_s3::primitives::ByteStream;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use tokio::process::Command;
@@ -10,7 +9,7 @@ use uuid::Uuid;
 
 use crate::domain::document_files::DocumentFile;
 use crate::infrastructure::s3::delete_from_s3;
-use crate::infrastructure::s3::upload_to_s3;
+use crate::infrastructure::s3::upload_file_to_s3;
 use crate::schema::{document_file_ocr_pages, document_file_pages, document_files};
 use crate::shared::app_state::AppState;
 use crate::shared::util::JobResult;
@@ -1023,12 +1022,13 @@ pub(crate) async fn upload_png_to_s3(
     s3_key: &str,
     state: Data<Arc<AppState>>,
 ) -> JobResult<()> {
-    let body = ByteStream::from_path(output_path).await?;
-    upload_to_s3(
+    let size = tokio::fs::metadata(output_path).await?.len();
+    upload_file_to_s3(
         &state.s3_client,
         state.s3_bucket.as_str(),
         s3_key,
-        body,
+        output_path,
+        i64::try_from(size)?,
         Some("image/png"),
     )
     .await?;

@@ -12,7 +12,7 @@ use crate::domain::classifier_blocks::ClassifierBlock;
 use crate::domain::document_files::DocumentFile;
 use crate::domain::document_indexes::DocumentIndexValue;
 use crate::domain::documents::{Document, DocumentChangeset, DocumentView};
-use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_to_s3};
+use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_file_to_s3};
 use crate::schema::{
     cabinet_documents, classifier_blocks, document_file_ocr_pages, document_file_pages, document_files,
     document_index_documents, document_index_values, document_metadatas, documents, metadata_types,
@@ -24,7 +24,6 @@ use crate::shared::extractors::DbConn;
 use crate::shared::s3::serve_s3_file;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http, write_field_to_temp_file};
 
-use aws_sdk_s3::primitives::ByteStream;
 use axum::extract::DefaultBodyLimit;
 use diesel::dsl::{exists, sum};
 use serde::Deserialize;
@@ -201,21 +200,12 @@ async fn upload_temp_file_to_s3(
 ) -> Result<(String, String, Option<String>, i64), ApiError> {
     let s3_prefix = Uuid::new_v4().to_string();
     let s3_key = format!("{}/{}", s3_prefix, filename);
-    let upload_body = match ByteStream::from_path(&temp_path).await {
-        Ok(body) => body,
-        Err(e) => {
-            let _ = tokio::fs::remove_file(&temp_path).await;
-            return Err(ApiError::internal_server_error(&format!(
-                "Failed to read temp file: {}",
-                e
-            )));
-        }
-    };
-    let upload_result = upload_to_s3(
+    let upload_result = upload_file_to_s3(
         &state.s3_client,
         &state.s3_bucket,
         &s3_key,
-        upload_body,
+        &temp_path,
+        size,
         content_type.as_deref(),
     )
     .await;
