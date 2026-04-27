@@ -266,6 +266,44 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.aut-upload-progress-panel {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  background: var(--surface-card);
+  box-shadow: inset 4px 0 0 var(--primary-color);
+}
+
+.aut-upload-progress-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+  min-width: 0;
+}
+
+.aut-upload-progress-status span:nth-child(2) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.aut-upload-progress-percent {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.aut-upload-progress-bar {
+  width: 100%;
+  height: 1.1rem;
+}
+
+.aut-upload-progress-bar .p-progressbar-value {
+  transition: width 120ms ease-out;
+}
+
 // Prevent jumping vertically when entering edit mode in the datatable.
 .p-editable-column {
   padding: 0 1rem;

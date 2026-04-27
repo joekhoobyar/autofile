@@ -899,7 +899,6 @@ export default function UploadDocument() {
 
     const headerTemplate = (options: { className: string; chooseButton: ReactNode; uploadButton: ReactNode; cancelButton: ReactNode }) => {
         const { className, chooseButton, uploadButton, cancelButton } = options;
-        const value = totalSize / 10000;
         const formatedValue = fileUploadRef?.current ? fileUploadRef.current.formatSize(totalSize) : '0 B';
 
         return (
@@ -908,8 +907,7 @@ export default function UploadDocument() {
                 {uploadButton}
                 {cancelButton}
                 <div className="flex align-items-center gap-3 ml-auto">
-                    <span>{formatedValue} / 1 MB</span>
-                    <ProgressBar value={value} showValue={false} style={{ width: '10rem', height: '12px' }}></ProgressBar>
+                    <span>{formatedValue} selected</span>
                 </div>
             </div>
         );
@@ -1114,20 +1112,17 @@ export default function UploadDocument() {
                 disabled={isUploading} />
 
             {isUploading && (
-                <div className="mt-4">
-                    <Message severity="info" className="w-full" content={(
-                        <div className="flex flex-column gap-2 w-full">
-                            <div className="flex align-items-center gap-2">
-                                <span className="pi pi-spin pi-spinner" aria-hidden="true" />
-                                <span>{uploadStatus}</span>
-                            </div>
-                            {uploadProgress === null ? (
-                                <ProgressBar mode="indeterminate" style={{ height: '8px' }} />
-                            ) : (
-                                <ProgressBar value={uploadProgress} style={{ height: '8px' }} />
-                            )}
-                        </div>
-                    )} />
+                <div className="aut-upload-progress-panel mt-4" role="status" aria-live="polite">
+                    <div className="aut-upload-progress-status">
+                        <span className="pi pi-spin pi-spinner" aria-hidden="true" />
+                        <span>{uploadStatus}</span>
+                        {uploadProgress !== null && <span className="aut-upload-progress-percent">{uploadProgress}%</span>}
+                    </div>
+                    {uploadProgress === null ? (
+                        <ProgressBar mode="indeterminate" showValue={false} className="aut-upload-progress-bar" />
+                    ) : (
+                        <ProgressBar value={uploadProgress} showValue={false} className="aut-upload-progress-bar" />
+                    )}
                 </div>
             )}
         </div>
