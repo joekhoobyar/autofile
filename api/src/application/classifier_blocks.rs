@@ -141,7 +141,7 @@ pub fn compute_classification_actions(
         // If any of the match_patterns match, then we can apply the match_actions to the document,
         // and then move on to the child_rules application.
         if pattern_match.is_some() {
-            tracing::debug!(
+            tracing::info!(
                 document_id,
                 classifier_block_id = classifier_block.id,
                 "classification: block matched"
@@ -171,7 +171,7 @@ pub async fn persist_computed_actions(
     computed_actions: HashMap<String, String>,
 ) -> JobResult<()> {
     // Iterate over all of the computed actions.
-    tracing::debug!(
+    tracing::info!(
         document_id,
         ?computed_actions,
         "classification: computed actions"
