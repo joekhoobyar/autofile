@@ -39,18 +39,26 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use diesel_full_text_search::TsVector;
+
     document_file_ocr_pages (document_file_id, page_number) {
         document_file_id -> Int8,
         page_number -> Int4,
         ocr_content -> Nullable<Text>,
+        ocr_ts -> Nullable<TsVector>,
     }
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use diesel_full_text_search::TsVector;
+
     document_file_pages (document_file_id, page_number) {
         document_file_id -> Int8,
         page_number -> Int4,
         text_content -> Nullable<Text>,
+        text_ts -> Nullable<TsVector>,
     }
 }
 

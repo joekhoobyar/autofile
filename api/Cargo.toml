@@ -23,11 +23,12 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 async-trait = "0.1"
 anyhow = "1"
 
-diesel = { version = "2", features = ["postgres", "chrono", "serde_json"] }
-diesel-async = { version = "0.4.1", features = ["postgres", "async-connection-wrapper", "bb8"] }
+diesel = { version = "2.2", features = ["postgres", "chrono", "serde_json"] }
+diesel-async = { version = "0.7.4", features = ["postgres", "async-connection-wrapper", "bb8"] }
 diesel_migrations = "2"
 diesel_json = "0.3.0"
-bb8 = "0.8"
+diesel_full_text_search = "2.3.0"
+bb8 = "0.9.1"
 
 aws-config = "1.1"
 aws-sdk-s3 = "1.15"

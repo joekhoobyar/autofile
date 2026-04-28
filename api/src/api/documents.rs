@@ -26,6 +26,7 @@ use crate::shared::util::{ApiError, ResourceList, diesel_to_http, write_field_to
 
 use axum::extract::DefaultBodyLimit;
 use diesel::dsl::{exists, sum};
+use diesel_full_text_search::*;
 use serde::Deserialize;
 
 use axum::{
@@ -735,13 +736,16 @@ pub async fn list(
 
         // Filter by document text
         if let Some(text) = params.text.as_deref().filter(|s| !s.is_empty()) {
-            let pattern = format!("%{}%", text);
             let text_subquery = document_file_pages::table
                 .inner_join(
                     document_files::table
                         .on(document_files::id.eq(document_file_pages::document_file_id)),
                 )
-                .filter(document_file_pages::text_content.ilike(pattern.clone()))
+                .filter(
+                    document_file_pages::text_ts
+                        .assume_not_null()
+                        .matches(phraseto_tsquery(text)),
+                )
                 .filter(document_files::document_id.eq(documents::id));
 
             let ocr_subquery = document_file_ocr_pages::table
@@ -749,7 +753,11 @@ pub async fn list(
                     document_files::table
                         .on(document_files::id.eq(document_file_ocr_pages::document_file_id)),
                 )
-                .filter(document_file_ocr_pages::ocr_content.ilike(pattern))
+                .filter(
+                    document_file_ocr_pages::ocr_ts
+                        .assume_not_null()
+                        .matches(phraseto_tsquery(text)),
+                )
                 .filter(document_files::document_id.eq(documents::id));
 
             if match_any {
