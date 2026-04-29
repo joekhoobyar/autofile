@@ -11,7 +11,6 @@ use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
 
-use diesel::dsl::count_distinct;
 use serde::Deserialize;
 
 use apalis::prelude::Storage;
@@ -343,7 +342,7 @@ pub async fn list(
             .group_by(document_index_values::document_index_id)
             .select((
                 document_index_values::document_index_id,
-                count_distinct(document_index_documents::document_id),
+                diesel::dsl::count(document_index_documents::document_id).aggregate_distinct(),
             ))
             .load::<(i64, i64)>(&mut db)
             .await
