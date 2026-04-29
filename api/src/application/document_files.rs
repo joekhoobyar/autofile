@@ -210,12 +210,14 @@ pub(crate) fn parse_document_file_content_type(
     content_type: Option<&str>,
     filename: &str,
 ) -> JobResult<DocumentFileContentType> {
-    let content_type = content_type.ok_or_else(|| {
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "Document file is missing content_type",
-        )
-    })?;
+    let content_type = content_type
+        .or_else(|| fallback_document_file_content_type(filename))
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Document file is missing content_type",
+            )
+        })?;
 
     if content_type == "application/pdf" {
         return Ok(DocumentFileContentType::Pdf);
@@ -285,6 +287,44 @@ pub(crate) fn parse_document_file_content_type(
         format!("Unsupported content_type for page processing: {content_type}"),
     )
     .into())
+}
+
+fn fallback_document_file_content_type(filename: &str) -> Option<&'static str> {
+    let extension = Path::new(filename)
+        .extension()
+        .and_then(|extension| extension.to_str())?
+        .to_ascii_lowercase();
+
+    match extension.as_str() {
+        "pdf" => Some("application/pdf"),
+        "jpg" | "jpeg" | "jfif" => Some("image/jpeg"),
+        "png" => Some("image/png"),
+        "tif" | "tiff" => Some("image/tiff"),
+        "svg" => Some("image/svg+xml"),
+        "gif" => Some("image/gif"),
+        "webp" => Some("image/webp"),
+        "bmp" => Some("image/bmp"),
+        "heic" => Some("image/heic"),
+        "heif" => Some("image/heif"),
+        "avif" => Some("image/avif"),
+        "ico" => Some("image/x-icon"),
+        "md" | "markdown" => Some("text/markdown"),
+        "csv" => Some("text/csv"),
+        "tsv" => Some("text/tab-separated-values"),
+        "doc" => Some("application/msword"),
+        "docx" => Some("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+        "odt" => Some("application/vnd.oasis.opendocument.text"),
+        "xls" => Some("application/vnd.ms-excel"),
+        "xlsx" => Some("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        "ods" => Some("application/vnd.oasis.opendocument.spreadsheet"),
+        "ppt" => Some("application/vnd.ms-powerpoint"),
+        "pptx" => Some("application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+        "odp" => Some("application/vnd.oasis.opendocument.presentation"),
+        "html" | "htm" => Some("text/html"),
+        "xhtml" => Some("application/xhtml+xml"),
+        "txt" | "text" => Some("text/plain"),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Insertable)]
@@ -1233,6 +1273,73 @@ mod tests {
             .expect("failed to write source file");
 
         (test_dir, source_path)
+    }
+
+    #[test]
+    fn parse_content_type_uses_extension_when_content_type_is_missing() {
+        assert_eq!(
+            parse_document_file_content_type(None, "report.pdf").unwrap(),
+            DocumentFileContentType::Pdf
+        );
+        assert_eq!(
+            parse_document_file_content_type(None, "notes.md").unwrap(),
+            DocumentFileContentType::Markdown
+        );
+        assert_eq!(
+            parse_document_file_content_type(None, "data.csv").unwrap(),
+            DocumentFileContentType::Csv
+        );
+        assert_eq!(
+            parse_document_file_content_type(None, "data.tsv").unwrap(),
+            DocumentFileContentType::Tsv
+        );
+        assert_eq!(
+            parse_document_file_content_type(None, "report.docx").unwrap(),
+            DocumentFileContentType::OfficeDocument
+        );
+        assert_eq!(
+            parse_document_file_content_type(None, "page.html").unwrap(),
+            DocumentFileContentType::Html
+        );
+        assert_eq!(
+            parse_document_file_content_type(None, "notes.txt").unwrap(),
+            DocumentFileContentType::PlainText
+        );
+    }
+
+    #[test]
+    fn parse_content_type_uses_common_image_extension_fallbacks() {
+        for extension in [
+            "jpg", "jpeg", "png", "tif", "tiff", "svg", "gif", "webp", "bmp", "heic", "heif",
+            "avif", "ico", "jfif",
+        ] {
+            assert_eq!(
+                parse_document_file_content_type(None, &format!("image.{extension}")).unwrap(),
+                DocumentFileContentType::Image
+            );
+        }
+    }
+
+    #[test]
+    fn parse_content_type_extension_fallback_is_case_insensitive() {
+        assert_eq!(
+            parse_document_file_content_type(None, "REPORT.PDF").unwrap(),
+            DocumentFileContentType::Pdf
+        );
+        assert_eq!(
+            parse_document_file_content_type(None, "IMAGE.PNG").unwrap(),
+            DocumentFileContentType::Image
+        );
+    }
+
+    #[test]
+    fn parse_content_type_rejects_missing_content_type_with_unsupported_extension() {
+        let err = parse_document_file_content_type(None, "archive.zip").unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("Document file is missing content_type")
+        );
     }
 
     #[test]
