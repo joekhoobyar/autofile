@@ -10,7 +10,7 @@ import { Toast } from 'primereact/toast';
 
 import { useCabinets } from '../queries/useCabinets';
 import { useTags } from '../queries/useTags';
-import { useClassifyDocument, useDeleteDocument, useProcessDocumentFilePages, useRemoveCabinetDocument, useRemoveTagDocument, useSaveCabinetDocument, useSaveTagDocument } from '../queries/useDocuments';
+import { useClassifyDocument, useDeleteDocument, useGenerateThumbnail, useProcessDocumentFilePages, useRemoveCabinetDocument, useRemoveTagDocument, useSaveCabinetDocument, useSaveTagDocument } from '../queries/useDocuments';
 import { MAX_CABINETS } from '../models/cabinet';
 
 type DocumentActionsProps = {
@@ -39,6 +39,7 @@ export function DocumentActions({
   const hasSelection = documentIds.length > 0;
   const deleteDocument = useDeleteDocument();
   const processDocumentFilePages = useProcessDocumentFilePages();
+  const generateThumbnail = useGenerateThumbnail();
   const classifyDocument = useClassifyDocument();
   const saveCabinetDocument = useSaveCabinetDocument();
   const removeCabinetDocument = useRemoveCabinetDocument();
@@ -197,6 +198,19 @@ export function DocumentActions({
     }
   };
 
+  const generateThumbnailsForSelectedDocuments = async () => {
+    const currentDocumentIds = documentIdsRef.current;
+    const currentSelectionCount = currentDocumentIds.length;
+    if (currentSelectionCount === 0) return;
+    try {
+      await Promise.all(currentDocumentIds.map((id) => generateThumbnail.mutateAsync(id)));
+      onAfterAction?.();
+      showSuccess('Thumbnail queued', `Queued thumbnail generation for ${documentCountLabel(currentSelectionCount, 'document')}.`);
+    } catch (error) {
+      showError('Generate thumbnail failed', error);
+    }
+  };
+
   const classifySelectedDocuments = async () => {
     const currentDocumentIds = documentIdsRef.current;
     const currentSelectionCount = currentDocumentIds.length;
@@ -240,6 +254,22 @@ export function DocumentActions({
     });
   };
 
+  const confirmGenerateThumbnailsForSelectedDocuments = () => {
+    if (!hasSelection) return;
+    const count = documentIds.length;
+    const message = count === 1
+      ? 'Are you sure you want to generate a thumbnail for this document?'
+      : 'Are you sure you want to generate thumbnails for these documents?';
+
+    confirmDialog({
+      message,
+      header: 'Generate Thumbnail',
+      icon: 'pi pi-image',
+      defaultFocus: 'reject',
+      accept: () => void generateThumbnailsForSelectedDocuments(),
+    });
+  };
+
   const confirmClassifySelectedDocuments = () => {
     if (!hasSelection) return;
     const count = documentIds.length;
@@ -270,6 +300,7 @@ export function DocumentActions({
     { icon: 'pi pi-plus-circle', label: 'Add Tag', command: () => { openAddTagDialog(); }, disabled: !hasSelection },
     { icon: 'pi pi-minus-circle', label: 'Remove Tag', command: () => { openRemoveTagDialog(); }, disabled: !hasSelection },
     { separator: true },
+    { icon: 'pi pi-image', label: 'Generate Thumbnail', command: () => { confirmGenerateThumbnailsForSelectedDocuments(); }, disabled: !hasSelection || generateThumbnail.isPending },
     { icon: 'pi pi-refresh', label: 'Reprocess Pages', command: () => { confirmReprocessSelectedDocuments(); }, disabled: !hasSelection || processDocumentFilePages.isPending },
     { icon: 'pi pi-bolt', label: 'Classify Document', command: () => { confirmClassifySelectedDocuments(); }, disabled: !hasSelection || classifyDocument.isPending },
     { separator: true },

@@ -167,6 +167,22 @@ export function useProcessDocumentFilePages(): UseMutationResult<void, HttpError
   });
 }
 
+export function useGenerateThumbnail(): UseMutationResult<void, HttpError, number> {
+  const qc = useQueryClient();
+
+  return useMutation<void, HttpError, number>({
+    mutationFn: async (input) => {
+      return apiMutate<void, void>(`api/v1/documents/${input}/generate-thumbnail`, {
+        method: "POST",
+      });
+    },
+
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ['document', 'get', { id }, 'thumbnail'] });
+    },
+  });
+}
+
 export function useClassifyDocument(): UseMutationResult<void, HttpError, number> {
   return useMutation<void, HttpError, number>({
     mutationFn: async (input) => {

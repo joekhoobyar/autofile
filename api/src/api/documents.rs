@@ -358,6 +358,42 @@ pub async fn process_file_pages(
     Ok(Json(()))
 }
 
+pub async fn generate_thumbnail(
+    _user: AuthUser,
+    State(state): State<Arc<AppState>>,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+) -> Result<Json<()>, ApiError> {
+    let document_file_id = document_files::table
+        .filter(document_files::document_id.eq(id))
+        .select(document_files::id)
+        .order(document_files::id.asc())
+        .first::<i64>(&mut db)
+        .await
+        .optional()
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document file"))?;
+
+    let Some(document_file_id) = document_file_id else {
+        return Ok(Json(()));
+    };
+
+    let mut fast_jobs = state.fast_jobs.as_ref().clone();
+    if let Err(_) = fast_jobs
+        .push(FastJob::GenerateThumbnail {
+            document_file_id,
+            page: 1,
+            width: 800,
+        })
+        .await
+    {
+        return Err(ApiError::internal_server_error(
+            "Failed to enqueue thumbnail job",
+        ));
+    }
+
+    Ok(Json(()))
+}
+
 pub async fn classify_document(
     user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -989,5 +1025,6 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/{id}/test-template", post(test_template))
         .route("/{id}/index-values", get(list_index_values))
         .route("/{id}/thumbnail", get(thumbnail_get))
+        .route("/{id}/generate-thumbnail", post(generate_thumbnail))
         .route("/{id}/process-file-pages", post(process_file_pages))
 }
