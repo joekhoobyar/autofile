@@ -934,8 +934,8 @@ fn apply_modifier(
         }
         ClassifierModifier::MonthNumber { from, to } => {
             let value = apply_replacements(from, snippets);
-            let transformed = mod_month_number(&value)
-                .ok_or_else(|| format!("invalid month value '{value}'"))?;
+            let transformed =
+                mod_month_number(&value).ok_or_else(|| format!("invalid month value '{value}'"))?;
             Ok(Some((*to, transformed)))
         }
         ClassifierModifier::MonthEnd { from, to } => {
@@ -1432,8 +1432,9 @@ mod tests {
             metadata: None,
         };
 
-        let matched = does_document_match_pattern(&document, "INVOICE #123", &computed_actions, &pattern)
-            .expect("pattern match should succeed");
+        let matched =
+            does_document_match_pattern(&document, "INVOICE #123", &computed_actions, &pattern)
+                .expect("pattern match should succeed");
 
         match matched {
             PatternMatch::Text(captures) => assert_eq!(&captures[1], "123"),

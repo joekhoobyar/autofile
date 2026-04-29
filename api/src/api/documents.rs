@@ -14,9 +14,9 @@ use crate::domain::document_indexes::DocumentIndexValue;
 use crate::domain::documents::{Document, DocumentChangeset, DocumentView};
 use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_file_to_s3};
 use crate::schema::{
-    cabinet_documents, classifier_blocks, document_file_ocr_pages, document_file_pages, document_files,
-    document_index_documents, document_index_values, document_metadatas, documents, metadata_types,
-    tag_documents,
+    cabinet_documents, classifier_blocks, document_file_ocr_pages, document_file_pages,
+    document_files, document_index_documents, document_index_values, document_metadatas, documents,
+    metadata_types, tag_documents,
 };
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
@@ -483,7 +483,10 @@ async fn test_template(
         })?;
 
     let env = minijinja::Environment::new();
-    match env.render_str(&input.template, minijinja::context! { doc => &template_document_view }) {
+    match env.render_str(
+        &input.template,
+        minijinja::context! { doc => &template_document_view },
+    ) {
         Ok(rendered) => Ok(Json(TestTemplateResponse {
             rendered: Some(rendered),
             error: None,

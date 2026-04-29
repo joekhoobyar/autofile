@@ -35,10 +35,7 @@ pub async fn serve_s3_file(
             .await
         {
             Ok(object) => break Ok(object),
-            Err(err)
-                if attempt < S3_GET_MAX_ATTEMPTS
-                    && is_retryable_s3_get_error(&err) =>
-            {
+            Err(err) if attempt < S3_GET_MAX_ATTEMPTS && is_retryable_s3_get_error(&err) => {
                 let retry_in_ms = 100_u64 * (1_u64 << (attempt - 1));
                 let status = s3_get_error_status_code(&err);
                 tracing::warn!(
@@ -58,11 +55,11 @@ pub async fn serve_s3_file(
         }
     }
     .map_err(|e| match e {
-            SdkError::ServiceError(service_error) if service_error.err().is_no_such_key() => {
-                ApiError::not_found(missing_message)
-            }
-            _ => ApiError::internal_server_error(&format!("S3 download failed: {e}")),
-        })?;
+        SdkError::ServiceError(service_error) if service_error.err().is_no_such_key() => {
+            ApiError::not_found(missing_message)
+        }
+        _ => ApiError::internal_server_error(&format!("S3 download failed: {e}")),
+    })?;
 
     let last_modified = object
         .last_modified()
@@ -131,7 +128,10 @@ fn is_retryable_s3_get_error(err: &GetObjectSdkError) -> bool {
     match err {
         SdkError::DispatchFailure(_) | SdkError::TimeoutError(_) => true,
         SdkError::ServiceError(service_error) => {
-            matches!(service_error.raw().status().as_u16(), 429 | 500 | 502 | 503 | 504)
+            matches!(
+                service_error.raw().status().as_u16(),
+                429 | 500 | 502 | 503 | 504
+            )
         }
         _ => false,
     }
