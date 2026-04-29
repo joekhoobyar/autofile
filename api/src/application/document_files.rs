@@ -86,11 +86,12 @@ async fn process_file_pages_inner(
 
     // Load the document file from the database.
     let mut db = state.db_pool.get().await?;
-    let document_file = document_files::table
+    let mut document_file = document_files::table
         .find(document_file_id)
         .select(DocumentFile::as_select())
         .first::<DocumentFile>(&mut db)
         .await?;
+    persist_document_file_content_type_fallback(&mut db, &mut document_file).await?;
 
     // Download the file from S3 into a temp file.
     let (temp_dir, temp_file) =
@@ -210,14 +211,12 @@ pub(crate) fn parse_document_file_content_type(
     content_type: Option<&str>,
     filename: &str,
 ) -> JobResult<DocumentFileContentType> {
-    let content_type = content_type
-        .or_else(|| fallback_document_file_content_type(filename))
-        .ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "Document file is missing content_type",
-            )
-        })?;
+    let content_type = content_type.ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Document file is missing content_type",
+        )
+    })?;
 
     if content_type == "application/pdf" {
         return Ok(DocumentFileContentType::Pdf);
@@ -287,6 +286,45 @@ pub(crate) fn parse_document_file_content_type(
         format!("Unsupported content_type for page processing: {content_type}"),
     )
     .into())
+}
+
+pub(crate) async fn persist_document_file_content_type_fallback(
+    db: &mut diesel_async::AsyncPgConnection,
+    document_file: &mut DocumentFile,
+) -> JobResult<()> {
+    let fallback_content_type = match fallback_document_file_content_type(&document_file.filename) {
+        Some(fallback_content_type) => fallback_content_type,
+        None => return Ok(()),
+    };
+
+    match document_file.content_type.as_deref() {
+        None => {
+            diesel::update(
+                document_files::table
+                    .find(document_file.id)
+                    .filter(document_files::content_type.is_null()),
+            )
+            .set(document_files::content_type.eq(Some(fallback_content_type)))
+            .execute(db)
+            .await?;
+        }
+        Some("application/octet-stream" | "text/plain")
+            if document_file.content_type.as_deref() != Some(fallback_content_type) =>
+        {
+            diesel::update(
+                document_files::table
+                    .find(document_file.id)
+                    .filter(document_files::content_type.eq(document_file.content_type.as_deref())),
+            )
+            .set(document_files::content_type.eq(Some(fallback_content_type)))
+            .execute(db)
+            .await?;
+        }
+        _ => return Ok(()),
+    }
+
+    document_file.content_type = Some(fallback_content_type.to_string());
+    Ok(())
 }
 
 fn fallback_document_file_content_type(filename: &str) -> Option<&'static str> {
@@ -1276,64 +1314,76 @@ mod tests {
     }
 
     #[test]
-    fn parse_content_type_uses_extension_when_content_type_is_missing() {
+    fn fallback_content_type_maps_supported_extensions() {
         assert_eq!(
-            parse_document_file_content_type(None, "report.pdf").unwrap(),
-            DocumentFileContentType::Pdf
+            fallback_document_file_content_type("report.pdf"),
+            Some("application/pdf")
         );
         assert_eq!(
-            parse_document_file_content_type(None, "notes.md").unwrap(),
-            DocumentFileContentType::Markdown
+            fallback_document_file_content_type("notes.md"),
+            Some("text/markdown")
         );
         assert_eq!(
-            parse_document_file_content_type(None, "data.csv").unwrap(),
-            DocumentFileContentType::Csv
+            fallback_document_file_content_type("data.csv"),
+            Some("text/csv")
         );
         assert_eq!(
-            parse_document_file_content_type(None, "data.tsv").unwrap(),
-            DocumentFileContentType::Tsv
+            fallback_document_file_content_type("data.tsv"),
+            Some("text/tab-separated-values")
         );
         assert_eq!(
-            parse_document_file_content_type(None, "report.docx").unwrap(),
-            DocumentFileContentType::OfficeDocument
+            fallback_document_file_content_type("report.docx"),
+            Some("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
         );
         assert_eq!(
-            parse_document_file_content_type(None, "page.html").unwrap(),
-            DocumentFileContentType::Html
+            fallback_document_file_content_type("page.html"),
+            Some("text/html")
         );
         assert_eq!(
-            parse_document_file_content_type(None, "notes.txt").unwrap(),
-            DocumentFileContentType::PlainText
+            fallback_document_file_content_type("notes.txt"),
+            Some("text/plain")
         );
     }
 
     #[test]
-    fn parse_content_type_uses_common_image_extension_fallbacks() {
-        for extension in [
-            "jpg", "jpeg", "png", "tif", "tiff", "svg", "gif", "webp", "bmp", "heic", "heif",
-            "avif", "ico", "jfif",
+    fn fallback_content_type_maps_common_image_extensions() {
+        for (extension, expected_content_type) in [
+            ("jpg", "image/jpeg"),
+            ("jpeg", "image/jpeg"),
+            ("png", "image/png"),
+            ("tif", "image/tiff"),
+            ("tiff", "image/tiff"),
+            ("svg", "image/svg+xml"),
+            ("gif", "image/gif"),
+            ("webp", "image/webp"),
+            ("bmp", "image/bmp"),
+            ("heic", "image/heic"),
+            ("heif", "image/heif"),
+            ("avif", "image/avif"),
+            ("ico", "image/x-icon"),
+            ("jfif", "image/jpeg"),
         ] {
             assert_eq!(
-                parse_document_file_content_type(None, &format!("image.{extension}")).unwrap(),
-                DocumentFileContentType::Image
+                fallback_document_file_content_type(&format!("image.{extension}")),
+                Some(expected_content_type)
             );
         }
     }
 
     #[test]
-    fn parse_content_type_extension_fallback_is_case_insensitive() {
+    fn fallback_content_type_is_case_insensitive() {
         assert_eq!(
-            parse_document_file_content_type(None, "REPORT.PDF").unwrap(),
-            DocumentFileContentType::Pdf
+            fallback_document_file_content_type("REPORT.PDF"),
+            Some("application/pdf")
         );
         assert_eq!(
-            parse_document_file_content_type(None, "IMAGE.PNG").unwrap(),
-            DocumentFileContentType::Image
+            fallback_document_file_content_type("IMAGE.PNG"),
+            Some("image/png")
         );
     }
 
     #[test]
-    fn parse_content_type_rejects_missing_content_type_with_unsupported_extension() {
+    fn parse_content_type_rejects_missing_content_type() {
         let err = parse_document_file_content_type(None, "archive.zip").unwrap_err();
 
         assert!(

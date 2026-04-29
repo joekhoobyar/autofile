@@ -8,8 +8,8 @@ use tokio::process::Command;
 use crate::application::document_files::{
     DocumentFileContentType, convert_csv_to_pdf, convert_html_to_pdf, convert_image_to_png,
     convert_markdown_to_pdf, convert_office_document_to_pdf, convert_plaintext_to_pdf,
-    convert_tsv_to_pdf, parse_document_file_content_type, stage_document_file_from_s3,
-    upload_png_to_s3,
+    convert_tsv_to_pdf, parse_document_file_content_type,
+    persist_document_file_content_type_fallback, stage_document_file_from_s3, upload_png_to_s3,
 };
 use crate::domain::document_files::DocumentFile;
 use crate::schema::document_files;
@@ -42,11 +42,12 @@ async fn generate_thumbnail_inner(
 
     // Load the document file from the database to get the S3 location.
     let mut db = state.db_pool.get().await?;
-    let document_file = document_files::table
+    let mut document_file = document_files::table
         .find(document_file_id)
         .select(DocumentFile::as_select())
         .first::<DocumentFile>(&mut db)
         .await?;
+    persist_document_file_content_type_fallback(&mut db, &mut document_file).await?;
 
     // Download the file from S3 into a temp file.
     let (temp_dir, temp_file) =
