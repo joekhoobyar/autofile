@@ -95,15 +95,22 @@ async fn generate_thumbnail_inner(
         let thumb_key = format!("{}/_thumb.png", document_file.s3_prefix);
         upload_png_to_s3(&thumb_path, &thumb_key, state.clone()).await?;
 
-        let updated: usize =
-            diesel::update(documents::table.filter(documents::id.eq(document_file.document_id)))
-                .set((documents::s3_thumbnail.eq(thumb_key),))
-                .execute(&mut db)
-                .await?;
+        let updated: usize = diesel::update(
+            documents::table
+                .filter(documents::id.eq(document_file.document_id))
+                .filter(
+                    documents::s3_thumbnail
+                        .is_null()
+                        .or(documents::s3_thumbnail.eq("")),
+                ),
+        )
+        .set((documents::s3_thumbnail.eq(thumb_key),))
+        .execute(&mut db)
+        .await?;
         if updated == 0 {
-            tracing::warn!(
-                "Document {} not found when updating thumbnail",
-                document_file.document_id
+            tracing::info!(
+                document_id = document_file.document_id,
+                "document thumbnail already set or document not found"
             );
         }
 

@@ -128,12 +128,6 @@ pub async fn create(
                     .first::<i64>(conn)
                     .await?;
 
-                let existing_file_count = document_files::table
-                    .filter(document_files::document_id.eq(document_id))
-                    .count()
-                    .get_result::<i64>(conn)
-                    .await?;
-
                 let inserted_file =
                     insert_document_file(conn, document_id, file_info, user.user_id).await?;
 
@@ -147,19 +141,17 @@ pub async fn create(
                     return Err(diesel::result::Error::RollbackTransaction);
                 }
 
-                if existing_file_count == 0 {
-                    if let Err(_) = fast_jobs
-                        .push(FastJob::GenerateThumbnail {
-                            document_file_id: inserted_file.id,
-                            page: 1,
-                            width: 800,
-                        })
-                        .await
-                    {
-                        thumbnail_enqueue_failed_for_tx
-                            .store(true, std::sync::atomic::Ordering::Relaxed);
-                        return Err(diesel::result::Error::RollbackTransaction);
-                    }
+                if let Err(_) = fast_jobs
+                    .push(FastJob::GenerateThumbnail {
+                        document_file_id: inserted_file.id,
+                        page: 1,
+                        width: 800,
+                    })
+                    .await
+                {
+                    thumbnail_enqueue_failed_for_tx
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                    return Err(diesel::result::Error::RollbackTransaction);
                 }
 
                 Ok(DocumentFileView {
