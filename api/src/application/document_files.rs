@@ -7,10 +7,13 @@ use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use tokio::process::Command;
 use uuid::Uuid;
 
+use crate::application::jobs::MediumJob;
 use crate::domain::document_files::DocumentFile;
+use crate::domain::document_types::UNSPECIFIED_DOCUMENT_TYPE_ID;
+use crate::domain::users::SYSTEM_USER_ID;
 use crate::infrastructure::s3::delete_from_s3;
 use crate::infrastructure::s3::upload_file_to_s3;
-use crate::schema::{document_file_ocr_pages, document_file_pages, document_files};
+use crate::schema::{document_file_ocr_pages, document_file_pages, document_files, documents};
 use crate::shared::app_state::AppState;
 use crate::shared::util::{ApiError, JobResult, write_field_to_temp_file};
 
@@ -221,7 +224,7 @@ async fn process_file_pages_inner(
                     &document_file,
                     &temp_dir,
                     &temp_file,
-                    state,
+                    state.clone(),
                 )
                 .await
             }
@@ -231,7 +234,7 @@ async fn process_file_pages_inner(
                     &document_file,
                     &temp_dir,
                     &temp_file,
-                    state,
+                    state.clone(),
                 )
                 .await
             }
@@ -241,7 +244,7 @@ async fn process_file_pages_inner(
                     &document_file,
                     &temp_dir,
                     &temp_file,
-                    state,
+                    state.clone(),
                 )
                 .await
             }
@@ -251,7 +254,7 @@ async fn process_file_pages_inner(
                     &document_file,
                     &temp_dir,
                     &temp_file,
-                    state,
+                    state.clone(),
                 )
                 .await
             }
@@ -261,7 +264,7 @@ async fn process_file_pages_inner(
                     &document_file,
                     &temp_dir,
                     &temp_file,
-                    state,
+                    state.clone(),
                 )
                 .await
             }
@@ -271,7 +274,7 @@ async fn process_file_pages_inner(
                     &document_file,
                     &temp_dir,
                     &temp_file,
-                    state,
+                    state.clone(),
                 )
                 .await
             }
@@ -281,7 +284,7 @@ async fn process_file_pages_inner(
                     &document_file,
                     &temp_dir,
                     &temp_file,
-                    state,
+                    state.clone(),
                 )
                 .await
             }
@@ -291,7 +294,7 @@ async fn process_file_pages_inner(
                     &document_file,
                     &temp_dir,
                     &temp_file,
-                    state,
+                    state.clone(),
                 )
                 .await
             }
@@ -303,7 +306,42 @@ async fn process_file_pages_inner(
         tracing::warn!(error = %err, path = %temp_file, "failed to remove temp dir");
     }
 
-    result
+    result?;
+
+    enqueue_classify_document_if_needed(&document_file, state).await?;
+
+    Ok(())
+}
+
+async fn enqueue_classify_document_if_needed(
+    document_file: &DocumentFile,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
+    let mut db = state.db_pool.get().await?;
+    let document_type_id = documents::table
+        .find(document_file.document_id)
+        .select(documents::document_type_id)
+        .first::<i64>(&mut db)
+        .await?;
+
+    if !should_classify_processed_document(document_type_id) {
+        return Ok(());
+    }
+    drop(db);
+
+    let mut medium_jobs = state.medium_jobs.as_ref().clone();
+    medium_jobs
+        .push(MediumJob::ClassifyDocument {
+            document_id: document_file.document_id,
+            user_id: SYSTEM_USER_ID,
+        })
+        .await?;
+
+    Ok(())
+}
+
+fn should_classify_processed_document(document_type_id: i64) -> bool {
+    document_type_id == UNSPECIFIED_DOCUMENT_TYPE_ID
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1422,6 +1460,12 @@ mod tests {
             .expect("failed to write source file");
 
         (test_dir, source_path)
+    }
+
+    #[test]
+    fn should_classify_processed_document_only_for_unclassified_type() {
+        assert!(should_classify_processed_document(1));
+        assert!(!should_classify_processed_document(2));
     }
 
     #[test]

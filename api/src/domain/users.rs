@@ -10,6 +10,8 @@ use std::io::Write;
 
 use crate::schema::users;
 
+pub const SYSTEM_USER_ID: i64 = 1;
+
 #[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
 #[diesel(table_name = users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
