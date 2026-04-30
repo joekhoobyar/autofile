@@ -20,7 +20,7 @@ import { Toast } from 'primereact/toast';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { useDocumentTypeMetadataTypes, useDocumentTypeSaveMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { type DocumentTypeNewMetadataType } from '../models/documentTypeMetadataType';
-import { normalizeSlug, slugRules } from '../util/slugValidation';
+import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 
 export function ListDocumentTypes() {
   const toast = useRef(null);
@@ -236,6 +236,10 @@ function DocumentTypeForm({ data }: Readonly<{ data?: Partial<DocumentType> }>) 
       metadata_type_required: {},
     },
   });
+  const slugRules = useMemo(
+    () => createSlugRules('api/v1/document-types/by-slug', !data?.id),
+    [data?.id],
+  );
 
   const watchedMetadataTypeIds = useWatch({
     control,

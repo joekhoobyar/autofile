@@ -76,7 +76,6 @@ impl std::error::Error for ApiError {}
 
 // Map a Diesel error to an appropriate HTTP status code.
 pub fn diesel_to_http(e: DieselError) -> StatusCode {
-    eprintln!("Diesel error: {:?}", e);
     match e {
         DieselError::NotFound => StatusCode::NOT_FOUND,
         DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => StatusCode::CONFLICT,

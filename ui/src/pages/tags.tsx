@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -18,7 +18,7 @@ import { useId } from '../util';
 import { Toast } from 'primereact/toast';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import { ColorPicker } from 'primereact/colorpicker';
-import { normalizeSlug, slugRules } from '../util/slugValidation';
+import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 
 export function ListTags() {
   const toast = useRef(null);
@@ -205,6 +205,10 @@ function TagForm({ data }: Readonly<{ data?: Partial<Tag> }>) {
     defaultValues: {},
     values: data ?? {},
   });
+  const slugRules = useMemo(
+    () => createSlugRules('api/v1/tags/by-slug', !data?.id),
+    [data?.id],
+  );
 
   const submitter = async (data: Partial<Tag>) => {
     await saveTag.mutateAsync(data, {

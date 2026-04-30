@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -18,7 +18,7 @@ import { Message } from 'primereact/message';
 import { useId } from '../util';
 import { Toast } from 'primereact/toast';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
-import { normalizeSlug, slugRules } from '../util/slugValidation';
+import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 
 export function ListMetadataTypes() {
   const toast = useRef(null);
@@ -198,6 +198,10 @@ function MetadataTypeForm({ data }: Readonly<{ data?: Partial<MetadataType> }>) 
     },
     values: data ?? {},
   });
+  const slugRules = useMemo(
+    () => createSlugRules('api/v1/metadata-types/by-slug', !data?.id),
+    [data?.id],
+  );
 
   const dataType = useWatch({ control, name: 'data_type' });
   const initialChoicesText = data?.options?.choices?.join('\n') ?? '';

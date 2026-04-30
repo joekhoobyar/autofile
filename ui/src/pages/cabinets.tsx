@@ -17,7 +17,7 @@ import { Dropdown } from 'primereact/dropdown';
 import type { TreeNode } from 'primereact/treenode';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { Toast } from 'primereact/toast';
-import { normalizeSlug, slugRules } from '../util/slugValidation';
+import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 
 export function ListCabinets() {
   const toast = useRef(null);
@@ -212,6 +212,10 @@ function CabinetForm({ data }: Readonly<{ data?: Partial<Cabinet> }>) {
     },
     values: data ?? {},
   });
+  const slugRules = useMemo(
+    () => createSlugRules('api/v1/cabinets/by-slug', !data?.id),
+    [data?.id],
+  );
 
   const submitter = async (data: Partial<Cabinet>) => {
     await saveCabinet.mutateAsync(data, {

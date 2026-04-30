@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -19,7 +19,7 @@ import { Message } from 'primereact/message';
 import { useId } from '../util';
 import { Toast } from 'primereact/toast';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
-import { normalizeSlug, slugRules } from '../util/slugValidation';
+import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 
 export function ListDocumentIndexes() {
   const toast = useRef<Toast>(null);
@@ -274,6 +274,10 @@ function DocumentIndexForm({ data }: Readonly<{ data?: Partial<DocumentIndex> }>
     },
     values: data ?? {},
   });
+  const slugRules = useMemo(
+    () => createSlugRules('api/v1/document-indexes/by-slug', !data?.id),
+    [data?.id],
+  );
 
   const submitter = async (data: Partial<DocumentIndex>) => {
     await saveDocumentIndex.mutateAsync(data, {
