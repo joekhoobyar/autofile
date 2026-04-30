@@ -9,7 +9,7 @@ use crate::schema::{
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
+use crate::shared::util::{ApiError, ResourceList, diesel_to_http, validate_slug};
 
 use serde::Deserialize;
 
@@ -101,6 +101,8 @@ async fn create(
     DbConn(mut db): DbConn,
     Json(input): Json<NewDocumentIndex>,
 ) -> Result<Json<DocumentIndex>, ApiError> {
+    validate_slug(&input.slug)?;
+
     let inserted: DocumentIndex = diesel::insert_into(document_indexes::table)
         .values((
             &input,

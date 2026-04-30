@@ -5,7 +5,7 @@ use crate::schema::{document_types_metadata_types, metadata_types};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
+use crate::shared::util::{ApiError, ResourceList, diesel_to_http, validate_slug};
 
 use serde::Deserialize;
 
@@ -100,6 +100,8 @@ async fn create(
     DbConn(mut db): DbConn,
     Json(input): Json<NewMetadataType>,
 ) -> Result<Json<MetadataType>, ApiError> {
+    validate_slug(&input.slug)?;
+
     let inserted: MetadataType = diesel::insert_into(metadata_types::table)
         .values((
             &input,

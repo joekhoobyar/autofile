@@ -20,6 +20,7 @@ import { Toast } from 'primereact/toast';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { useDocumentTypeMetadataTypes, useDocumentTypeSaveMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { type DocumentTypeNewMetadataType } from '../models/documentTypeMetadataType';
+import { normalizeSlug, slugRules } from '../util/slugValidation';
 
 export function ListDocumentTypes() {
   const toast = useRef(null);
@@ -303,12 +304,10 @@ function DocumentTypeForm({ data }: Readonly<{ data?: Partial<DocumentType> }>) 
         <div className="col-12 md:col-6 lg:col-4">
           <label htmlFor="slug" className="font-medium mb-2 block">Slug</label>
           <Controller name="slug" control={control}
-            rules={{
-              required: 'Slug is required',
-              minLength: { value: 2, message: 'Slug must be at least 2 characters' },
-            }}
+            rules={slugRules}
             render={({ field }) => (
               <InputText id="slug" {...field}
+                onChange={(event) => field.onChange(normalizeSlug(event.target.value))}
                 disabled={!!data?.id}
                 className={classNames({ 'p-invalid': !!errors.slug })}
                 placeholder="identifier" autoComplete="slug"

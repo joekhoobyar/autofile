@@ -18,6 +18,7 @@ import { useId } from '../util';
 import { Toast } from 'primereact/toast';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import { ColorPicker } from 'primereact/colorpicker';
+import { normalizeSlug, slugRules } from '../util/slugValidation';
 
 export function ListTags() {
   const toast = useRef(null);
@@ -225,12 +226,10 @@ function TagForm({ data }: Readonly<{ data?: Partial<Tag> }>) {
         <div className="col-12 md:col-6 lg:col-4">
           <label htmlFor="slug" className="font-medium mb-2 block">Slug</label>
           <Controller name="slug" control={control}
-            rules={{
-              required: 'Slug is required',
-              minLength: { value: 2, message: 'Slug must be at least 2 characters' },
-            }}
+            rules={slugRules}
             render={({ field }) => (
               <InputText id="slug" {...field}
+                onChange={(event) => field.onChange(normalizeSlug(event.target.value))}
                 disabled={!!data?.id}
                 className={classNames({ 'p-invalid': !!errors.slug })}
                 placeholder="identifier" autoComplete="slug"

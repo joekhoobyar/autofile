@@ -5,7 +5,7 @@ use crate::schema::{document_types, document_types_metadata_types, documents};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
+use crate::shared::util::{ApiError, ResourceList, diesel_to_http, validate_slug};
 
 use serde::Deserialize;
 
@@ -94,6 +94,8 @@ async fn create(
     DbConn(mut db): DbConn,
     Json(input): Json<NewDocumentType>,
 ) -> Result<Json<DocumentType>, ApiError> {
+    validate_slug(&input.slug)?;
+
     let inserted: DocumentType = diesel::insert_into(document_types::table)
         .values((
             &input,

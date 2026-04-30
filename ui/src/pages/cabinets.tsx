@@ -17,6 +17,7 @@ import { Dropdown } from 'primereact/dropdown';
 import type { TreeNode } from 'primereact/treenode';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { Toast } from 'primereact/toast';
+import { normalizeSlug, slugRules } from '../util/slugValidation';
 
 export function ListCabinets() {
   const toast = useRef(null);
@@ -243,12 +244,10 @@ function CabinetForm({ data }: Readonly<{ data?: Partial<Cabinet> }>) {
         <div className="col-12 md:col-6 lg:col-4">
           <label htmlFor="slug" className="font-medium mb-2 block">Slug</label>
           <Controller name="slug" control={control}
-            rules={{
-              required: 'Slug is required',
-              minLength: { value: 2, message: 'Slug must be at least 2 characters' },
-            }}
+            rules={slugRules}
             render={({ field }) => (
               <InputText id="slug" {...field}
+                onChange={(event) => field.onChange(normalizeSlug(event.target.value))}
                 disabled={!!data?.id}
                 className={classNames({ 'p-invalid': !!errors.slug })}
                 placeholder="identifier" autoComplete="slug"
