@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { Button } from 'primereact/button';
 import { Card } from 'primereact/card';
+import { confirmDialog } from 'primereact/confirmdialog';
 import { DataView, DataViewLayoutOptions } from 'primereact/dataview';
 import { Divider } from 'primereact/divider';
 import { Dropdown } from 'primereact/dropdown';
@@ -27,6 +28,7 @@ import {
   useDocumentFilePageImage,
   useDocumentFilePages,
   useDocumentFileThumbnail,
+  useDeleteDocumentFile,
 } from '../queries/useDocumentFiles';
 import { useId } from '../util';
 
@@ -41,7 +43,10 @@ type DocumentFileListItemProps = {
   index: number;
   onOpenPreview: (fileId: number) => void;
   onDownload: (event: React.MouseEvent, file: DocumentFile) => void;
+  onDelete: (event: React.MouseEvent, file: DocumentFile) => void;
   isDownloading: boolean;
+  isDeleting: boolean;
+  canDelete: boolean;
 };
 
 type DocumentFileGridItemProps = {
@@ -49,7 +54,10 @@ type DocumentFileGridItemProps = {
   file: DocumentFile;
   onOpenPreview: (fileId: number) => void;
   onDownload: (event: React.MouseEvent, file: DocumentFile) => void;
+  onDelete: (event: React.MouseEvent, file: DocumentFile) => void;
   isDownloading: boolean;
+  isDeleting: boolean;
+  canDelete: boolean;
 };
 
 function formatBytes(size: number) {
@@ -151,7 +159,44 @@ function DownloadButton({ file, onDownload, isDownloading }: Readonly<{
   );
 }
 
-function DocumentFileListItem({ documentId, file, index, onOpenPreview, onDownload, isDownloading }: Readonly<DocumentFileListItemProps>) {
+function DeleteButton({ file, onDelete, isDeleting, canDelete }: Readonly<{
+  file: DocumentFile;
+  onDelete: (event: React.MouseEvent, file: DocumentFile) => void;
+  isDeleting: boolean;
+  canDelete: boolean;
+}>) {
+  return (
+    <Button
+      type="button"
+      icon={isDeleting ? 'pi pi-spin pi-spinner' : 'pi pi-trash'}
+      severity="danger"
+      outlined
+      size="small"
+      className="aut-document-file-delete-button"
+      aria-label={`Delete ${file.filename}`}
+      onClick={(event) => onDelete(event, file)}
+      disabled={isDeleting || !canDelete}
+    />
+  );
+}
+
+function DocumentFileActions({ file, onDownload, onDelete, isDownloading, isDeleting, canDelete }: Readonly<{
+  file: DocumentFile;
+  onDownload: (event: React.MouseEvent, file: DocumentFile) => void;
+  onDelete: (event: React.MouseEvent, file: DocumentFile) => void;
+  isDownloading: boolean;
+  isDeleting: boolean;
+  canDelete: boolean;
+}>) {
+  return (
+    <div className="flex align-items-center gap-2 aut-document-file-actions">
+      <DownloadButton file={file} onDownload={onDownload} isDownloading={isDownloading} />
+      <DeleteButton file={file} onDelete={onDelete} isDeleting={isDeleting} canDelete={canDelete} />
+    </div>
+  );
+}
+
+function DocumentFileListItem({ documentId, file, index, onOpenPreview, onDownload, onDelete, isDownloading, isDeleting, canDelete }: Readonly<DocumentFileListItemProps>) {
   return (
     <div className="col-12 aut-document-list aut-document-file-list" key={file.id}>
       <div
@@ -173,7 +218,7 @@ function DocumentFileListItem({ documentId, file, index, onOpenPreview, onDownlo
           <div className="flex flex-column align-items-center sm:align-items-start gap-3 aut-document-header">
             <header className="flex align-items-center justify-content-between gap-2 aut-document-header-row aut-document-file-header-row">
               <span className="aut-document-file-name">{file.filename}</span>
-              <DownloadButton file={file} onDownload={onDownload} isDownloading={isDownloading} />
+              <DocumentFileActions file={file} onDownload={onDownload} onDelete={onDelete} isDownloading={isDownloading} isDeleting={isDeleting} canDelete={canDelete} />
             </header>
           </div>
           <aside className="flex flex-column align-items-center sm:align-items-start">
@@ -185,7 +230,7 @@ function DocumentFileListItem({ documentId, file, index, onOpenPreview, onDownlo
   );
 }
 
-function DocumentFileGridItem({ documentId, file, onOpenPreview, onDownload, isDownloading }: Readonly<DocumentFileGridItemProps>) {
+function DocumentFileGridItem({ documentId, file, onOpenPreview, onDownload, onDelete, isDownloading, isDeleting, canDelete }: Readonly<DocumentFileGridItemProps>) {
   return (
     <div className="col-12 sm:col-6 lg:col-4 xl:col-3 p-2 aut-document-grid aut-document-file-grid" key={file.id}>
       <div
@@ -208,7 +253,7 @@ function DocumentFileGridItem({ documentId, file, onOpenPreview, onDownload, isD
             <DocumentFileThumbnail documentId={documentId} file={file} />
             <FileMetadata file={file} />
             <div className="aut-document-file-grid-actions">
-              <DownloadButton file={file} onDownload={onDownload} isDownloading={isDownloading} />
+              <DocumentFileActions file={file} onDownload={onDownload} onDelete={onDelete} isDownloading={isDownloading} isDeleting={isDeleting} canDelete={canDelete} />
             </div>
           </aside>
         </section>
@@ -492,9 +537,12 @@ export function ListDocumentFiles() {
   const navigate = useNavigate();
   const { data: document, isLoading: isDocumentLoading, isError: isDocumentError, error: documentError } = useDocument(documentId);
   const { data: files, isLoading: isFilesLoading, isError: isFilesError, error: filesError } = useDocumentFiles(documentId);
+  const deleteDocumentFile = useDeleteDocumentFile();
   const [layout, setLayout] = useState<'list' | 'grid'>('grid');
   const [downloadingIds, setDownloadingIds] = useState<Set<number>>(new Set());
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const openPreview = (fileId: number) => {
     navigate(`/documents/${documentId}/preview?file_id=${fileId}`);
@@ -527,6 +575,31 @@ export function ListDocumentFiles() {
     }
   };
 
+  const deleteFile = async (file: DocumentFile) => {
+    setDeleteError(null);
+    setDeletingId(file.id);
+    try {
+      await deleteDocumentFile.mutateAsync({ documentId, fileId: file.id });
+    } catch (error) {
+      setDeleteError(error instanceof HttpError ? error.message : 'Failed to delete file');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const confirmDeleteFile = (event: React.MouseEvent, file: DocumentFile) => {
+    event.preventDefault();
+    event.stopPropagation();
+    confirmDialog({
+      message: `Are you sure you want to delete "${file.filename}"?`,
+      header: 'Delete File',
+      icon: 'pi pi-trash',
+      defaultFocus: 'reject',
+      acceptClassName: 'p-button-danger',
+      accept: () => void deleteFile(file),
+    });
+  };
+
   const itemTemplate = (file: DocumentFile, currentLayout: 'list' | 'grid', index: number) => {
     if (!file) return null;
     if (currentLayout === 'list') {
@@ -538,7 +611,10 @@ export function ListDocumentFiles() {
           index={index}
           onOpenPreview={openPreview}
           onDownload={handleDownload}
+          onDelete={confirmDeleteFile}
           isDownloading={downloadingIds.has(file.id)}
+          isDeleting={deletingId === file.id}
+          canDelete={(files?.length ?? 0) > 1}
         />
       );
     }
@@ -550,7 +626,10 @@ export function ListDocumentFiles() {
         file={file}
         onOpenPreview={openPreview}
         onDownload={handleDownload}
+        onDelete={confirmDeleteFile}
         isDownloading={downloadingIds.has(file.id)}
+        isDeleting={deletingId === file.id}
+        canDelete={(files?.length ?? 0) > 1}
       />
     );
   };
@@ -587,6 +666,7 @@ export function ListDocumentFiles() {
       <Card title={`Document Files${document?.title ? `: ${document.title}` : ''}`}>
         {isFilesError && <Message severity="error" text={filesError.message} />}
         {downloadError && <Message severity="error" text={downloadError} />}
+        {deleteError && <Message severity="error" text={deleteError} />}
         <DataView
           value={files ?? []}
           loading={isFilesLoading}

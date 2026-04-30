@@ -1,13 +1,39 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import { apiFetch, apiFetchRaw, HttpError, parseApiError } from '../api';
+import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query';
+import { apiFetch, apiFetchRaw, apiMutate, HttpError, parseApiError } from '../api';
 import { type DocumentFile, type DocumentFileOcrPage, type DocumentFilePage } from '../models/documentFile';
 import { useBlobObjectUrl } from './blobUrl';
+
+export interface DeleteDocumentFileInput {
+  documentId: number;
+  fileId: number;
+}
 
 export function useDocumentFiles(documentId: string | number): UseQueryResult<DocumentFile[], HttpError> {
   return useQuery({
     queryKey: ['documentFile', 'list', documentId],
     enabled: !!documentId,
     queryFn: () => apiFetch<DocumentFile[]>(`api/v1/documents/${documentId}/files`),
+  });
+}
+
+export function useDeleteDocumentFile(): UseMutationResult<void, HttpError, DeleteDocumentFileInput> {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, HttpError, DeleteDocumentFileInput>({
+    mutationFn: async ({ documentId, fileId }) => {
+      return apiMutate<void, void>(`api/v1/documents/${documentId}/files/${fileId}`, {
+        method: 'DELETE',
+      });
+    },
+
+    onSuccess: (_data, { documentId, fileId }) => {
+      queryClient.removeQueries({ queryKey: ['documentFile', 'get', documentId, fileId, 'thumbnail'], exact: true });
+      queryClient.removeQueries({ queryKey: ['documentFilePage', 'list', documentId, fileId], exact: true });
+      queryClient.removeQueries({ queryKey: ['documentFileOcrPage', 'list', documentId, fileId], exact: true });
+      queryClient.removeQueries({ queryKey: ['documentFilePageImage', 'get', documentId, fileId] });
+      queryClient.invalidateQueries({ queryKey: ['documentFile', 'list', documentId] });
+      queryClient.invalidateQueries({ queryKey: ['document'] });
+    },
   });
 }
 
