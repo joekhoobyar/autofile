@@ -21,7 +21,7 @@ import Login, { Logout, RequireAdmin, RequireAuth } from './pages/auth.tsx';
 import { AuthProvider } from './AuthProvider.tsx';
 import { canManageUsers, useAuth } from './auth.ts';
 import { EditDocumentMetadata } from './pages/documentMetadata.tsx';
-import { DocumentFilePagePreview, ListDocumentFilePageOcrContent, ListDocumentFilePageTextContent, ListDocumentFiles } from './pages/documentFiles.tsx';
+import { DocumentFilePagePreview, ListDocumentFilePageOcrContent, ListDocumentFilePageTextContent, ListDocumentFiles, UploadDocumentFile } from './pages/documentFiles.tsx';
 import { ListDocumentIndexMembership } from './pages/documentIndexMembership.tsx';
 import { EditDocumentIndex, ListDocumentIndexes, NewDocumentIndex } from './pages/documentIndexes.tsx';
 import { EditDocumentIndexTemplate, ListDocumentIndexTemplates, NewDocumentIndexTemplate } from './pages/documentIndexTemplates.tsx';
@@ -129,6 +129,7 @@ const router = createBrowserRouter([
           { path: ':id/metadata', element: <EditDocumentMetadata/> },
           { path: ':id/indexes', element: <ListDocumentIndexMembership/> },
           { path: ':id/files', element: <ListDocumentFiles/> },
+          { path: ':id/files/new', element: <UploadDocumentFile/> },
           { path: ':id/text-content', element: <ListDocumentFilePageTextContent/> },
           { path: ':id/ocr-content', element: <ListDocumentFilePageOcrContent/> },
           { path: ':id/preview', element: <DocumentFilePagePreview/> },

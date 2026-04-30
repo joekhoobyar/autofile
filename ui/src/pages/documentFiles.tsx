@@ -1,17 +1,23 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { Button } from 'primereact/button';
 import { Card } from 'primereact/card';
 import { DataView, DataViewLayoutOptions } from 'primereact/dataview';
 import { Divider } from 'primereact/divider';
 import { Dropdown } from 'primereact/dropdown';
+import { FileUpload, type FileUploadFile, type FileUploadHandlerEvent, type FileUploadSelectEvent, type FileUploadUploadEvent, type ItemTemplateOptions } from 'primereact/fileupload';
 import { Message } from 'primereact/message';
+import { ProgressBar } from 'primereact/progressbar';
 import { Skeleton } from 'primereact/skeleton';
+import { Tag } from 'primereact/tag';
+import { Toast } from 'primereact/toast';
+import { Tooltip } from 'primereact/tooltip';
 import { classNames } from 'primereact/utils';
 import { format } from 'date-fns';
 
-import { API_HOST, HttpError, apiFetch } from '../api';
+import { API_HOST, HttpError, apiFetch, apiUrl, getAccessToken } from '../api';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { type DocumentFile } from '../models/documentFile';
 import { useDocument } from '../queries/useDocuments';
@@ -211,6 +217,276 @@ function DocumentFileGridItem({ documentId, file, onOpenPreview, onDownload, isD
   );
 }
 
+export function UploadDocumentFile() {
+  const documentId = useId('id');
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const toast = useRef<Toast>(null);
+  const [totalSize, setTotalSize] = useState(0);
+  const fileUploadRef = useRef<FileUpload>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadStatus, setUploadStatus] = useState('');
+  const { data: document, isLoading: isDocumentLoading, isError: isDocumentError, error: documentError } = useDocument(documentId);
+
+  const onTemplateSelect = (event: FileUploadSelectEvent) => {
+    const nextTotalSize = event.files.reduce((sum, file) => sum + (file.size || 0), 0);
+    setTotalSize(nextTotalSize);
+  };
+
+  const onTemplateUpload = (event: FileUploadUploadEvent) => {
+    const nextTotalSize = event.files.reduce((sum, file) => sum + (file.size || 0), 0);
+    setTotalSize(nextTotalSize);
+    toast.current?.show({ severity: 'info', summary: 'Success', detail: 'File Uploaded' });
+  };
+
+  const onTemplateRemove = (file: File, callback: (event: React.SyntheticEvent) => void, event: React.SyntheticEvent) => {
+    setTotalSize((current) => Math.max(0, current - file.size));
+    callback(event);
+  };
+
+  const onTemplateClear = () => {
+    setTotalSize(0);
+  };
+
+  const headerTemplate = (options: { className: string; chooseButton: ReactNode; uploadButton: ReactNode; cancelButton: ReactNode }) => {
+    const { className, chooseButton, uploadButton, cancelButton } = options;
+    const formattedValue = fileUploadRef.current ? fileUploadRef.current.formatSize(totalSize) : '0 B';
+
+    return (
+      <div className={className} style={{ backgroundColor: 'transparent', display: 'flex', alignItems: 'center' }}>
+        {chooseButton}
+        {uploadButton}
+        {cancelButton}
+        <div className="flex align-items-center gap-3 ml-auto">
+          <span>{formattedValue} selected</span>
+        </div>
+      </div>
+    );
+  };
+
+  const itemTemplate = (file: FileUploadFile, props: ItemTemplateOptions) => {
+    return (
+      <div className="flex align-items-center flex-wrap">
+        <div className="flex align-items-center" style={{ width: '40%' }}>
+          {file.objectURL ? (
+            <img alt={file.name} role="presentation" src={file.objectURL} width={100} />
+          ) : (
+            <span className="pi pi-file" style={{ fontSize: '3rem', width: '100px', textAlign: 'center' }} aria-hidden="true" />
+          )}
+          <span className="flex flex-column text-left ml-3">
+            {file.name}
+            <small>{new Date().toLocaleDateString()}</small>
+          </span>
+        </div>
+        <Tag value={props.formatSize} severity="warning" className="px-3 py-2" />
+        <Button
+          type="button"
+          icon="pi pi-times"
+          className="p-button-outlined p-button-rounded p-button-danger ml-auto"
+          onClick={(event) => onTemplateRemove(file, props.onRemove, event)}
+        />
+      </div>
+    );
+  };
+
+  const uploadFile = (
+    formData: FormData,
+    file: File,
+    onProgress: (loaded: number) => void,
+    onUploadComplete: () => void,
+  ) => {
+    return new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', apiUrl(`api/v1/documents/${documentId}/files`));
+      xhr.withCredentials = true;
+      const token = getAccessToken();
+      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          onProgress(event.loaded);
+        }
+      };
+      xhr.upload.onload = onUploadComplete;
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+          return;
+        }
+
+        let detail = `Upload failed (${xhr.status})`;
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (typeof data?.message === 'string') detail = data.message;
+        } catch {
+          if (xhr.responseText) detail = xhr.responseText;
+        }
+        reject(new Error(detail));
+      };
+
+      xhr.onerror = () => reject(new Error(`Upload failed for ${file.name}`));
+      xhr.onabort = () => reject(new Error(`Upload cancelled for ${file.name}`));
+      xhr.send(formData);
+    });
+  };
+
+  const uploadHandler = async (event: FileUploadHandlerEvent) => {
+    const files = event.files ?? [];
+    if (!files.length) return;
+
+    setIsUploading(true);
+    setUploadProgress(0);
+    setUploadStatus(files.length === 1 ? `Uploading ${files[0].name}...` : `Uploading 1 of ${files.length}: ${files[0].name}`);
+
+    const uploadedBytesByFile = new Map<File, number>();
+    const totalBytes = files.reduce((sum, file) => sum + (file.size || 0), 0);
+
+    const updateProgress = (file: File, loaded: number) => {
+      uploadedBytesByFile.set(file, loaded);
+      const loadedBytes = Array.from(uploadedBytesByFile.values()).reduce((sum, value) => sum + value, 0);
+      setUploadProgress(totalBytes > 0 ? Math.min(100, Math.round((loadedBytes / totalBytes) * 100)) : null);
+    };
+
+    const uploadOne = async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      await uploadFile(
+        formData,
+        file,
+        (loaded) => updateProgress(file, loaded),
+        () => {
+          updateProgress(file, file.size || 0);
+          setUploadStatus(`Processing ${file.name}...`);
+        },
+      );
+      uploadedBytesByFile.set(file, file.size || 0);
+    };
+
+    const failures: unknown[] = [];
+    for (const [index, file] of files.entries()) {
+      setUploadStatus(files.length === 1 ? `Uploading ${file.name}...` : `Uploading ${index + 1} of ${files.length}: ${file.name}`);
+      try {
+        await uploadOne(file);
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+
+    if (failures.length) {
+      const message = failures[0] instanceof Error
+        ? failures[0].message
+        : 'Some files failed to upload.';
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Upload incomplete',
+        detail: message,
+      });
+      setIsUploading(false);
+      setUploadProgress(null);
+      setUploadStatus('');
+      return;
+    }
+
+    event.options.clear();
+    setTotalSize(0);
+    setIsUploading(false);
+    setUploadProgress(null);
+    setUploadStatus('');
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['documentFile'] }),
+      queryClient.invalidateQueries({ queryKey: ['document'] }),
+      queryClient.invalidateQueries({ queryKey: ['documentFilePage'] }),
+      queryClient.invalidateQueries({ queryKey: ['documentFilePageImage'] }),
+    ]);
+    const label = files.length === 1 ? 'File uploaded.' : `${files.length} files uploaded.`;
+    toast.current?.show({ severity: 'success', summary: 'Success', detail: label });
+  };
+
+  const emptyTemplate = () => {
+    return (
+      <div className="flex align-items-center flex-column">
+        <i className="pi pi-file mt-3 p-5" style={{ fontSize: '5em', borderRadius: '50%', backgroundColor: 'var(--surface-b)', color: 'var(--surface-d)' }}></i>
+        <span style={{ fontSize: '1.2em', color: 'var(--text-color-secondary)' }} className="my-5">
+          Drag and Drop File Here
+        </span>
+      </div>
+    );
+  };
+
+  const chooseOptions = { label: 'Choose Files', icon: 'pi pi-fw pi-file', className: 'custom-choose-btn p-button-rounded p-button-outlined' };
+  const uploadOptions = { label: 'Upload', icon: 'pi pi-fw pi-cloud-upload', className: 'custom-upload-btn p-button-success p-button-rounded p-button-outlined' };
+  const cancelOptions = { label: 'Clear', icon: 'pi pi-fw pi-times', className: 'custom-cancel-btn p-button-danger p-button-rounded p-button-outlined' };
+
+  if (isDocumentError) {
+    return <Message severity="error" text={documentError.message} />;
+  }
+
+  if (isDocumentLoading) {
+    return <div>Loading</div>;
+  }
+
+  return (
+    <DocumentViewLayout documentId={documentId}>
+      <Card title={`Add File${document?.title ? `: ${document.title}` : ''}`}>
+        <Toast ref={toast}></Toast>
+
+        <div className="flex justify-content-end mb-3">
+          <Button
+            label="Back to Files"
+            type="button"
+            icon="pi pi-arrow-left"
+            severity="secondary"
+            outlined
+            onClick={() => navigate(`/documents/${documentId}/files`)}
+            disabled={isUploading}
+          />
+        </div>
+
+        <Tooltip target=".custom-choose-btn" content="Choose" position="bottom" />
+        <Tooltip target=".custom-upload-btn" content="Upload" position="bottom" />
+        <Tooltip target=".custom-cancel-btn" content="Clear" position="bottom" />
+
+        <FileUpload
+          ref={fileUploadRef}
+          name="file"
+          customUpload
+          uploadHandler={uploadHandler}
+          multiple
+          onUpload={onTemplateUpload}
+          onSelect={onTemplateSelect}
+          onError={onTemplateClear}
+          onClear={onTemplateClear}
+          headerTemplate={headerTemplate}
+          emptyTemplate={emptyTemplate}
+          itemTemplate={itemTemplate as (file: object, options: ItemTemplateOptions) => React.ReactNode}
+          chooseOptions={chooseOptions}
+          uploadOptions={uploadOptions}
+          cancelOptions={cancelOptions}
+          disabled={isUploading}
+        />
+
+        {isUploading && (
+          <div className="aut-upload-progress-panel mt-4" role="status" aria-live="polite">
+            <div className="aut-upload-progress-status">
+              <span className="pi pi-spin pi-spinner" aria-hidden="true" />
+              <span>{uploadStatus}</span>
+              {uploadProgress !== null && <span className="aut-upload-progress-percent">{uploadProgress}%</span>}
+            </div>
+            {uploadProgress === null ? (
+              <ProgressBar mode="indeterminate" showValue={false} className="aut-upload-progress-bar" />
+            ) : (
+              <ProgressBar value={uploadProgress} showValue={false} className="aut-upload-progress-bar" />
+            )}
+          </div>
+        )}
+      </Card>
+    </DocumentViewLayout>
+  );
+}
+
 export function ListDocumentFiles() {
   const documentId = useId('id');
   const navigate = useNavigate();
@@ -284,8 +560,17 @@ export function ListDocumentFiles() {
   );
 
   const header = (
-    <div className="flex justify-content-end">
-      <DataViewLayoutOptions layout={layout} onChange={(event) => setLayout(event.value as 'list' | 'grid')} />
+    <div className="flex flex-column gap-3 md:flex-row md:justify-content-between md:align-items-center">
+      <Button
+        label="Add a File"
+        type="button"
+        icon="pi pi-plus"
+        size="small"
+        onClick={() => navigate(`/documents/${documentId}/files/new`)}
+      />
+      <div className="flex justify-content-end">
+        <DataViewLayoutOptions layout={layout} onChange={(event) => setLayout(event.value as 'list' | 'grid')} />
+      </div>
     </div>
   );
 
@@ -302,18 +587,14 @@ export function ListDocumentFiles() {
       <Card title={`Document Files${document?.title ? `: ${document.title}` : ''}`}>
         {isFilesError && <Message severity="error" text={filesError.message} />}
         {downloadError && <Message severity="error" text={downloadError} />}
-        {!isFilesLoading && !isFilesError && !files?.length && (
-          <Message severity="info" text="No files available for this document." />
-        )}
-        {!!files?.length && (
-          <DataView
-            value={files}
-            loading={isFilesLoading}
-            listTemplate={listTemplate}
-            layout={layout}
-            header={header}
-          />
-        )}
+        <DataView
+          value={files ?? []}
+          loading={isFilesLoading}
+          emptyMessage="No files available for this document."
+          listTemplate={listTemplate}
+          layout={layout}
+          header={header}
+        />
       </Card>
     </DocumentViewLayout>
   );
