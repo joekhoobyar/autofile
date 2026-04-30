@@ -5,8 +5,10 @@ use crate::application::document_files::{
     delete_uploaded_document_file_from_s3, insert_document_file, upload_document_file_to_s3,
 };
 use crate::application::jobs::{FastJob, MediumJob};
+use crate::domain::document_files::DocumentFile;
 use crate::domain::document_files::DocumentFileView;
-use crate::schema::{document_files, documents};
+use crate::infrastructure::s3::delete_prefix_from_s3;
+use crate::schema::{document_file_ocr_pages, document_file_pages, document_files, documents};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::{AuthUser, sign_download, verify_download};
 use crate::shared::extractors::DbConn;
@@ -207,6 +209,105 @@ pub async fn create(
     }
 }
 
+pub async fn delete(
+    _user: AuthUser,
+    State(state): State<Arc<AppState>>,
+    DbConn(mut db): DbConn,
+    Path((document_id, id)): Path<(i64, i64)>,
+) -> Result<Json<()>, ApiError> {
+    let delete_last_file = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let delete_last_file_for_tx = Arc::clone(&delete_last_file);
+
+    let deleted_prefix = db
+        .build_transaction()
+        .run::<_, diesel::result::Error, _>(|conn| {
+            Box::pin(async move {
+                let files = document_files::table
+                    .filter(document_files::document_id.eq(document_id))
+                    .select(DocumentFile::as_select())
+                    .order(document_files::id.asc())
+                    .load::<DocumentFile>(conn)
+                    .await?;
+
+                let Some(file_index) = files.iter().position(|file| file.id == id) else {
+                    return Err(diesel::result::Error::NotFound);
+                };
+
+                if files.len() <= 1 {
+                    delete_last_file_for_tx.store(true, std::sync::atomic::Ordering::Relaxed);
+                    return Err(diesel::result::Error::RollbackTransaction);
+                }
+
+                let deleted_file = &files[file_index];
+                let replacement_thumbnail = if file_index == 0 {
+                    files
+                        .get(1)
+                        .map(|next_file| format!("{}/_thumb.png", next_file.s3_prefix))
+                } else {
+                    None
+                };
+
+                diesel::delete(
+                    document_file_ocr_pages::table
+                        .filter(document_file_ocr_pages::document_file_id.eq(id)),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
+                    document_file_pages::table.filter(document_file_pages::document_file_id.eq(id)),
+                )
+                .execute(conn)
+                .await?;
+
+                let affected = diesel::delete(
+                    document_files::table
+                        .filter(document_files::document_id.eq(document_id))
+                        .filter(document_files::id.eq(id)),
+                )
+                .execute(conn)
+                .await?;
+                if affected == 0 {
+                    return Err(diesel::result::Error::NotFound);
+                }
+
+                if let Some(thumbnail_key) = replacement_thumbnail {
+                    diesel::update(documents::table.filter(documents::id.eq(document_id)))
+                        .set(documents::s3_thumbnail.eq(thumbnail_key))
+                        .execute(conn)
+                        .await?;
+                }
+
+                Ok(deleted_file.s3_prefix.clone())
+            })
+        })
+        .await
+        .map_err(|e| {
+            if delete_last_file
+                .as_ref()
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                ApiError::conflict("Cannot delete the last file in a document")
+            } else if matches!(e, diesel::result::Error::NotFound) {
+                ApiError::not_found("Document file not found")
+            } else {
+                ApiError::new(diesel_to_http(e), "Failed to delete document_file")
+            }
+        })?;
+
+    let delete_prefix = format!("{}/", deleted_prefix);
+    delete_prefix_from_s3(&state.s3_client, &state.s3_bucket, &delete_prefix)
+        .await
+        .map_err(|e| {
+            ApiError::internal_server_error(&format!(
+                "Failed to delete document file from storage: {}",
+                e
+            ))
+        })?;
+
+    Ok(Json(()))
+}
+
 pub async fn thumbnail_get(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -335,7 +436,7 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
         .route("/{document_id}/files", get(list).post(create))
-        .route("/{document_id}/files/{id}", get(get_by_ids))
+        .route("/{document_id}/files/{id}", get(get_by_ids).delete(delete))
         .route("/{document_id}/files/{id}/thumbnail", get(thumbnail_get))
         .route(
             "/{document_id}/files/{id}/download-ticket",
