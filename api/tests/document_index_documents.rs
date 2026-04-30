@@ -52,9 +52,9 @@ async fn rebuild_document_index_clears_stale_rows_and_rebuilds_from_documents() 
         .await
         .expect("db connection should succeed");
     insert_user(&mut db, 1, "tester", "tester@example.com").await;
-    insert_document_type(&mut db, 1, "invoice", "Invoice", 1).await;
-    insert_document(&mut db, 1, "Alpha", 1, 1).await;
-    insert_document(&mut db, 2, "Beta", 1, 1).await;
+    insert_document_type(&mut db, 100, "invoice", "Invoice", 1).await;
+    insert_document(&mut db, 1, "Alpha", 100, 1).await;
+    insert_document(&mut db, 2, "Beta", 100, 1).await;
     insert_document_index(&mut db, 1, "main-index", "Main Index", 1).await;
     insert_document_index_template(&mut db, 1, 1, "{{ doc.title }}", true, None, 1).await;
     insert_document_index_value(&mut db, 10, 1, 1, "STALE", None, true).await;
@@ -85,9 +85,9 @@ async fn rebuild_document_index_only_affects_target_index() {
         .await
         .expect("db connection should succeed");
     insert_user(&mut db, 1, "tester", "tester@example.com").await;
-    insert_document_type(&mut db, 1, "invoice", "Invoice", 1).await;
-    insert_document(&mut db, 1, "Alpha", 1, 1).await;
-    insert_document(&mut db, 2, "Beta", 1, 1).await;
+    insert_document_type(&mut db, 100, "invoice", "Invoice", 1).await;
+    insert_document(&mut db, 1, "Alpha", 100, 1).await;
+    insert_document(&mut db, 2, "Beta", 100, 1).await;
     insert_document_index(&mut db, 1, "main-index", "Main Index", 1).await;
     insert_document_index(&mut db, 2, "other-index", "Other Index", 1).await;
     insert_document_index_template(&mut db, 1, 1, "{{ doc.title }}", true, None, 1).await;

@@ -49,8 +49,8 @@ async fn cleanup_extra_page_rows_removes_rows_above_target_page_count() {
         .expect("db connection should succeed");
 
     insert_user(&mut db, 1, "tester", "tester@example.com").await;
-    insert_document_type(&mut db, 1, "invoice", "Invoice", 1).await;
-    insert_document(&mut db, 1, "Invoice", 1, 1).await;
+    insert_document_type(&mut db, 100, "invoice", "Invoice", 1).await;
+    insert_document(&mut db, 1, "Invoice", 100, 1).await;
     insert_document_file(&mut db, 1, 1, "invoice.pdf", 1).await;
 
     insert_document_file_page(&mut db, 1, 1, "page one").await;
