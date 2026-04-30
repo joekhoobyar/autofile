@@ -3,16 +3,20 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::application::classifier_blocks::{compute_classification_actions, load_document_text};
+use crate::application::document_files::{
+    BufferedDocumentFileUpload, UploadedDocumentFile, buffer_document_file_field,
+    cleanup_buffered_document_file_upload, delete_uploaded_document_file_from_s3,
+    insert_document_file, upload_document_file_to_s3,
+};
 use crate::application::document_index_documents::build_template_document_view;
 use crate::application::document_index_documents::delete_document_index_document;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::documents::{get_document_view, update_document};
 use crate::application::jobs::{FastJob, MediumJob};
 use crate::domain::classifier_blocks::ClassifierBlock;
-use crate::domain::document_files::DocumentFile;
 use crate::domain::document_indexes::DocumentIndexValue;
 use crate::domain::documents::{Document, DocumentChangeset, DocumentView};
-use crate::infrastructure::s3::{delete_from_s3, delete_prefix_from_s3, upload_file_to_s3};
+use crate::infrastructure::s3::delete_prefix_from_s3;
 use crate::schema::{
     cabinet_documents, classifier_blocks, document_file_ocr_pages, document_file_pages,
     document_files, document_index_documents, document_index_values, document_metadatas, documents,
@@ -22,7 +26,7 @@ use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::s3::serve_s3_file;
-use crate::shared::util::{ApiError, ResourceList, diesel_to_http, write_field_to_temp_file};
+use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
 
 use axum::extract::DefaultBodyLimit;
 use diesel::dsl::{exists, sum};
@@ -38,7 +42,6 @@ use axum::{
 };
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
-use uuid::Uuid;
 
 use apalis::prelude::*;
 
@@ -48,19 +51,6 @@ use apalis::prelude::*;
 struct NewDocument {
     title: String,
     document_type_id: i64,
-}
-
-#[derive(Debug, Insertable)]
-#[diesel(table_name = document_files)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-struct NewDocumentFile {
-    document_id: i64,
-    s3_prefix: String,
-    filename: String,
-    content_type: Option<String>,
-    size: i64,
-    created_by: i64,
-    updated_by: i64,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -105,7 +95,7 @@ pub struct ListDocumentsQuery {
 struct ParsedMultipart {
     title: Option<String>,
     document_type_id: Option<i64>,
-    file_temp: Option<(std::path::PathBuf, String, Option<String>, i64)>,
+    file_temp: Option<BufferedDocumentFileUpload>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -132,7 +122,7 @@ struct TestTemplateResponse {
 async fn parse_create_multipart(multipart: &mut Multipart) -> Result<ParsedMultipart, ApiError> {
     let mut title: Option<String> = None;
     let mut document_type_id: Option<i64> = None;
-    let mut file_temp: Option<(std::path::PathBuf, String, Option<String>, i64)> = None;
+    let mut file_temp: Option<BufferedDocumentFileUpload> = None;
 
     while let Some(mut field) = multipart
         .next_field()
@@ -163,21 +153,11 @@ async fn parse_create_multipart(multipart: &mut Multipart) -> Result<ParsedMulti
                 );
             }
             "file" => {
-                if file_temp.is_some() {
+                if let Some(upload) = &file_temp {
+                    cleanup_buffered_document_file_upload(upload).await;
                     return Err(ApiError::bad_request("Only one file upload is supported"));
                 }
-                let mut filename = field
-                    .file_name()
-                    .ok_or_else(|| ApiError::bad_request("File field missing filename"))?
-                    .to_string();
-                let content_type = field.content_type().map(|ct| ct.to_string());
-
-                if filename == "_thumb.png" {
-                    filename = "thumb.png".to_string();
-                }
-
-                let temp_upload = write_field_to_temp_file(&mut field).await?;
-                file_temp = Some((temp_upload.path, filename, content_type, temp_upload.size));
+                file_temp = Some(buffer_document_file_field(&mut field).await?);
             }
             _ => {
                 // Ignore unknown fields
@@ -190,31 +170,6 @@ async fn parse_create_multipart(multipart: &mut Multipart) -> Result<ParsedMulti
         document_type_id,
         file_temp,
     })
-}
-
-async fn upload_temp_file_to_s3(
-    state: &AppState,
-    temp_path: std::path::PathBuf,
-    filename: String,
-    content_type: Option<String>,
-    size: i64,
-) -> Result<(String, String, Option<String>, i64), ApiError> {
-    let s3_prefix = Uuid::new_v4().to_string();
-    let s3_key = format!("{}/{}", s3_prefix, filename);
-    let upload_result = upload_file_to_s3(
-        &state.s3_client,
-        &state.s3_bucket,
-        &s3_key,
-        &temp_path,
-        size,
-        content_type.as_deref(),
-    )
-    .await;
-    let _ = tokio::fs::remove_file(&temp_path).await;
-    upload_result
-        .map_err(|e| ApiError::internal_server_error(&format!("S3 upload failed: {}", e)))?;
-
-    Ok((s3_prefix, filename, content_type, size))
 }
 
 pub async fn get_by_id(
@@ -541,14 +496,14 @@ async fn create(
         mut file_temp,
     } = parse_create_multipart(&mut multipart).await?;
 
-    let mut file_info: Option<(String, String, Option<String>, i64)> = None;
+    let mut file_info: Option<UploadedDocumentFile> = None;
 
     // Validate required fields
     let title = match title {
         Some(value) => value,
         None => {
-            if let Some((temp_path, _, _, _)) = &file_temp {
-                let _ = tokio::fs::remove_file(temp_path).await;
+            if let Some(upload) = &file_temp {
+                cleanup_buffered_document_file_upload(upload).await;
             }
             return Err(ApiError::bad_request("Missing required field: title"));
         }
@@ -556,8 +511,8 @@ async fn create(
     let document_type_id = match document_type_id {
         Some(value) => value,
         None => {
-            if let Some((temp_path, _, _, _)) = &file_temp {
-                let _ = tokio::fs::remove_file(temp_path).await;
+            if let Some(upload) = &file_temp {
+                cleanup_buffered_document_file_upload(upload).await;
             }
             return Err(ApiError::bad_request(
                 "Missing required field: document_type_id",
@@ -566,10 +521,8 @@ async fn create(
     };
 
     // Upload the temp file to S3, then delete it.
-    if let Some((temp_path, filename, content_type, file_size)) = file_temp.take() {
-        file_info = Some(
-            upload_temp_file_to_s3(&state, temp_path, filename, content_type, file_size).await?,
-        );
+    if let Some(upload) = file_temp.take() {
+        file_info = Some(upload_document_file_to_s3(&state, upload).await?);
     }
 
     // Clone file_info for potential cleanup in error path
@@ -603,20 +556,10 @@ async fn create(
                     .await?;
 
                 // If file was uploaded, insert document_files record
-                if let Some((s3_prefix, filename, content_type, file_size)) = file_info {
-                    let inserted_file = diesel::insert_into(document_files::table)
-                        .values(&NewDocumentFile {
-                            document_id: inserted_document.id,
-                            s3_prefix,
-                            filename,
-                            content_type,
-                            size: file_size,
-                            created_by: user.user_id,
-                            updated_by: user.user_id,
-                        })
-                        .returning(DocumentFile::as_returning())
-                        .get_result(conn)
-                        .await?;
+                if let Some(upload) = file_info {
+                    let inserted_file =
+                        insert_document_file(conn, inserted_document.id, upload, user.user_id)
+                            .await?;
 
                     if let Err(_) = fast_jobs
                         .push(FastJob::GenerateThumbnail {
@@ -655,9 +598,8 @@ async fn create(
         }
         Err(e) => {
             // On transaction failure, attempt S3 cleanup (best-effort)
-            if let Some((s3_prefix, filename, _, _)) = file_info_for_cleanup {
-                let s3_key = format!("{}/{}", s3_prefix, filename);
-                let _ = delete_from_s3(&state.s3_client, &state.s3_bucket, &s3_key).await;
+            if let Some(upload) = file_info_for_cleanup {
+                delete_uploaded_document_file_from_s3(&state, &upload).await;
             }
             if matches!(e, diesel::result::Error::RollbackTransaction) {
                 let thumb_failed = thumb_enqueue_failed.as_ref().load(Ordering::Relaxed);

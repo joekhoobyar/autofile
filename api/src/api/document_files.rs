@@ -1,7 +1,12 @@
 use std::sync::Arc;
 
+use crate::application::document_files::{
+    BufferedDocumentFileUpload, buffer_document_file_field, cleanup_buffered_document_file_upload,
+    delete_uploaded_document_file_from_s3, insert_document_file, upload_document_file_to_s3,
+};
+use crate::application::jobs::{FastJob, MediumJob};
 use crate::domain::document_files::DocumentFileView;
-use crate::schema::document_files;
+use crate::schema::{document_files, documents};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::{AuthUser, sign_download, verify_download};
 use crate::shared::extractors::DbConn;
@@ -10,13 +15,15 @@ use crate::shared::util::{ApiError, diesel_to_http};
 
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
-    http::{HeaderMap, header},
+    extract::{DefaultBodyLimit, Multipart, Path, Query, State},
+    http::{HeaderMap, StatusCode, header},
     response::Response,
     routing::{get, post},
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+
+use apalis::prelude::*;
 
 const DOWNLOAD_TTL_SECONDS: i64 = 120;
 
@@ -29,6 +36,33 @@ pub struct DownloadTicketResponse {
 #[derive(serde::Deserialize)]
 pub struct DownloadQuery {
     pub t: Option<String>,
+}
+
+async fn parse_create_multipart(
+    multipart: &mut Multipart,
+) -> Result<BufferedDocumentFileUpload, ApiError> {
+    let mut file_temp: Option<BufferedDocumentFileUpload> = None;
+
+    while let Some(mut field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::bad_request(&format!("Failed to read multipart field: {}", e)))?
+    {
+        let field_name = field
+            .name()
+            .ok_or_else(|| ApiError::bad_request("Field missing name"))?
+            .to_string();
+
+        if field_name.as_str() == "file" {
+            if let Some(upload) = &file_temp {
+                cleanup_buffered_document_file_upload(upload).await;
+                return Err(ApiError::bad_request("Only one file upload is supported"));
+            }
+            file_temp = Some(buffer_document_file_field(&mut field).await?);
+        }
+    }
+
+    file_temp.ok_or_else(|| ApiError::bad_request("Missing required field: file"))
 }
 
 pub async fn list(
@@ -61,6 +95,124 @@ pub async fn get_by_ids(
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document_file"))?;
 
     Ok(Json(row))
+}
+
+pub async fn create(
+    user: AuthUser,
+    State(state): State<Arc<AppState>>,
+    DbConn(mut db): DbConn,
+    Path(document_id): Path<i64>,
+    mut multipart: Multipart,
+) -> Result<Json<DocumentFileView>, ApiError> {
+    let file_temp = parse_create_multipart(&mut multipart).await?;
+    let file_info = upload_document_file_to_s3(&state, file_temp).await?;
+    let file_info_for_cleanup = file_info.clone();
+
+    let fast_jobs = state.fast_jobs.as_ref().clone();
+    let medium_jobs = state.medium_jobs.as_ref().clone();
+    let thumbnail_enqueue_failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let thumbnail_enqueue_failed_for_tx = Arc::clone(&thumbnail_enqueue_failed);
+    let pages_enqueue_failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let pages_enqueue_failed_for_tx = Arc::clone(&pages_enqueue_failed);
+
+    let result = db
+        .build_transaction()
+        .run::<_, diesel::result::Error, _>(|conn| {
+            Box::pin(async move {
+                let mut fast_jobs = fast_jobs;
+                let mut medium_jobs = medium_jobs;
+
+                documents::table
+                    .find(document_id)
+                    .select(documents::id)
+                    .first::<i64>(conn)
+                    .await?;
+
+                let existing_file_count = document_files::table
+                    .filter(document_files::document_id.eq(document_id))
+                    .count()
+                    .get_result::<i64>(conn)
+                    .await?;
+
+                let inserted_file =
+                    insert_document_file(conn, document_id, file_info, user.user_id).await?;
+
+                if let Err(_) = medium_jobs
+                    .push(MediumJob::ProcessFilePages {
+                        document_file_id: inserted_file.id,
+                    })
+                    .await
+                {
+                    pages_enqueue_failed_for_tx.store(true, std::sync::atomic::Ordering::Relaxed);
+                    return Err(diesel::result::Error::RollbackTransaction);
+                }
+
+                if existing_file_count == 0 {
+                    if let Err(_) = fast_jobs
+                        .push(FastJob::GenerateThumbnail {
+                            document_file_id: inserted_file.id,
+                            page: 1,
+                            width: 800,
+                        })
+                        .await
+                    {
+                        thumbnail_enqueue_failed_for_tx
+                            .store(true, std::sync::atomic::Ordering::Relaxed);
+                        return Err(diesel::result::Error::RollbackTransaction);
+                    }
+                }
+
+                Ok(DocumentFileView {
+                    id: inserted_file.id,
+                    document_id: inserted_file.document_id,
+                    filename: inserted_file.filename,
+                    content_type: inserted_file.content_type,
+                    size: inserted_file.size,
+                    pages: inserted_file.pages,
+                    created_at: inserted_file.created_at,
+                    created_by: inserted_file.created_by,
+                    updated_at: inserted_file.updated_at,
+                    updated_by: inserted_file.updated_by,
+                })
+            })
+        })
+        .await;
+
+    match result {
+        Ok(document_file) => Ok(Json(document_file)),
+        Err(e) => {
+            delete_uploaded_document_file_from_s3(&state, &file_info_for_cleanup).await;
+            if matches!(e, diesel::result::Error::RollbackTransaction) {
+                let pages_failed = pages_enqueue_failed
+                    .as_ref()
+                    .load(std::sync::atomic::Ordering::Relaxed);
+                let thumbnail_failed = thumbnail_enqueue_failed
+                    .as_ref()
+                    .load(std::sync::atomic::Ordering::Relaxed);
+                if pages_failed {
+                    Err(ApiError::new(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to enqueue file pages job",
+                    ))
+                } else if thumbnail_failed {
+                    Err(ApiError::new(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to enqueue thumbnail job",
+                    ))
+                } else {
+                    Err(ApiError::new(
+                        diesel_to_http(e),
+                        "Failed to create document_file",
+                    ))
+                }
+            } else {
+                Err(ApiError::new(
+                    diesel_to_http(e),
+                    "Failed to create document_file",
+                ))
+            }
+        }
+    }
 }
 
 pub async fn thumbnail_get(
@@ -189,7 +341,8 @@ pub async fn create_download_ticket(
 
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
-        .route("/{document_id}/files", get(list))
+        .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
+        .route("/{document_id}/files", get(list).post(create))
         .route("/{document_id}/files/{id}", get(get_by_ids))
         .route("/{document_id}/files/{id}/thumbnail", get(thumbnail_get))
         .route(

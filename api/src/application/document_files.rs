@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use apalis::prelude::*;
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use tokio::process::Command;
 use uuid::Uuid;
 
@@ -12,7 +12,118 @@ use crate::infrastructure::s3::delete_from_s3;
 use crate::infrastructure::s3::upload_file_to_s3;
 use crate::schema::{document_file_ocr_pages, document_file_pages, document_files};
 use crate::shared::app_state::AppState;
-use crate::shared::util::JobResult;
+use crate::shared::util::{ApiError, JobResult, write_field_to_temp_file};
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = document_files)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct NewDocumentFile {
+    pub document_id: i64,
+    pub s3_prefix: String,
+    pub filename: String,
+    pub content_type: Option<String>,
+    pub size: i64,
+    pub created_by: i64,
+    pub updated_by: i64,
+}
+
+#[derive(Debug)]
+pub struct BufferedDocumentFileUpload {
+    pub temp_path: std::path::PathBuf,
+    pub filename: String,
+    pub content_type: Option<String>,
+    pub size: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct UploadedDocumentFile {
+    pub s3_prefix: String,
+    pub filename: String,
+    pub content_type: Option<String>,
+    pub size: i64,
+}
+
+pub async fn buffer_document_file_field(
+    field: &mut axum::extract::multipart::Field<'_>,
+) -> Result<BufferedDocumentFileUpload, ApiError> {
+    let mut filename = field
+        .file_name()
+        .ok_or_else(|| ApiError::bad_request("File field missing filename"))?
+        .to_string();
+    let content_type = field.content_type().map(|ct| ct.to_string());
+
+    if filename == "_thumb.png" {
+        filename = "thumb.png".to_string();
+    }
+
+    let temp_upload = write_field_to_temp_file(field).await?;
+    Ok(BufferedDocumentFileUpload {
+        temp_path: temp_upload.path,
+        filename,
+        content_type,
+        size: temp_upload.size,
+    })
+}
+
+pub async fn cleanup_buffered_document_file_upload(upload: &BufferedDocumentFileUpload) {
+    let _ = tokio::fs::remove_file(&upload.temp_path).await;
+}
+
+pub async fn upload_document_file_to_s3(
+    state: &AppState,
+    upload: BufferedDocumentFileUpload,
+) -> Result<UploadedDocumentFile, ApiError> {
+    let s3_prefix = Uuid::new_v4().to_string();
+    let s3_key = format!("{}/{}", s3_prefix, upload.filename);
+    let upload_result = upload_file_to_s3(
+        &state.s3_client,
+        &state.s3_bucket,
+        &s3_key,
+        &upload.temp_path,
+        upload.size,
+        upload.content_type.as_deref(),
+    )
+    .await;
+    let _ = tokio::fs::remove_file(&upload.temp_path).await;
+    upload_result
+        .map_err(|e| ApiError::internal_server_error(&format!("S3 upload failed: {}", e)))?;
+
+    Ok(UploadedDocumentFile {
+        s3_prefix,
+        filename: upload.filename,
+        content_type: upload.content_type,
+        size: upload.size,
+    })
+}
+
+pub async fn delete_uploaded_document_file_from_s3(
+    state: &AppState,
+    upload: &UploadedDocumentFile,
+) {
+    let s3_key = format!("{}/{}", upload.s3_prefix, upload.filename);
+    let _ = delete_from_s3(&state.s3_client, &state.s3_bucket, &s3_key).await;
+}
+
+pub async fn insert_document_file(
+    db: &mut AsyncPgConnection,
+    document_id: i64,
+    upload: UploadedDocumentFile,
+    user_id: i64,
+) -> Result<DocumentFile, diesel::result::Error> {
+    diesel::insert_into(document_files::table)
+        .values(&NewDocumentFile {
+            document_id,
+            s3_prefix: upload.s3_prefix,
+            filename: upload.filename,
+            content_type: upload.content_type,
+            size: upload.size,
+            created_by: user_id,
+            updated_by: user_id,
+        })
+        .returning(DocumentFile::as_returning())
+        .get_result(db)
+        .await
+}
 
 #[derive(Clone, Debug)]
 struct ProcessCommandOutput {
