@@ -2,6 +2,7 @@ use autofile_api::run_migrations;
 use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::{AsyncDieselConnectionManager, bb8};
 use testcontainers::ContainerAsync;
+use testcontainers::ImageExt;
 use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::postgres::Postgres;
 
@@ -13,6 +14,7 @@ pub struct TestDatabase {
 impl TestDatabase {
     pub async fn new() -> Self {
         let container = Postgres::default()
+            .with_tag("17-alpine")
             .start()
             .await
             .expect("postgres should start");
