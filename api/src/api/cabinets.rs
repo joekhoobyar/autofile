@@ -5,7 +5,9 @@ use crate::schema::cabinets;
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ResourceList, de_present_option, diesel_to_http, validate_slug};
+use crate::shared::util::{
+    ApiError, ResourceList, de_present_option, diesel_to_http, validate_slug,
+};
 
 use serde::Deserialize;
 
