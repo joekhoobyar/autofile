@@ -193,10 +193,12 @@ function DocumentListItem({ doc, index, onImageClick, selected, onSelectionChang
     const { data: ddt } = useDocumentTypesMap();
     const cabinetItems = (doc.cabinet_ids ?? [])
       .map((id) => cabinetLookup[id])
-      .filter((cabinet): cabinet is Cabinet => !!cabinet);
+      .filter((cabinet): cabinet is Cabinet => !!cabinet)
+      .sort((a, b) => (a.displayName ?? a.name ?? a.slug).localeCompare(b.displayName ?? b.name ?? b.slug));
     const tagItems = (doc.tag_ids ?? [])
       .map((id) => tagLookup[id])
-      .filter((tag): tag is TagModel => !!tag);
+      .filter((tag): tag is TagModel => !!tag)
+      .sort((a, b) => a.name.localeCompare(b.name));
 
     return (
       <div className={classNames('col-12 aut-document-list', { 'is-selected': selected })} key={doc.id}>
@@ -286,10 +288,12 @@ function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange, cabi
     const { data: ddt } = useDocumentTypesMap();
     const cabinetItems = (doc.cabinet_ids ?? [])
       .map((id) => cabinetLookup[id])
-      .filter((cabinet): cabinet is Cabinet => !!cabinet);
+      .filter((cabinet): cabinet is Cabinet => !!cabinet)
+      .sort((a, b) => (a.displayName ?? a.name ?? a.slug).localeCompare(b.displayName ?? b.name ?? b.slug));
     const tagItems = (doc.tag_ids ?? [])
       .map((id) => tagLookup[id])
-      .filter((tag): tag is TagModel => !!tag);
+      .filter((tag): tag is TagModel => !!tag)
+      .sort((a, b) => a.name.localeCompare(b.name));
 
     const handleGridClick = (event: React.MouseEvent) => {
       const target = event.target as HTMLElement;
