@@ -86,6 +86,8 @@ pub struct ListDocumentsQuery {
     pub metadata_value: Option<String>,
     // optional document index value search
     pub document_index_value_id: Option<i64>,
+    // optional duplicate search
+    pub duplicates: Option<bool>,
     // optional sort field
     pub sf: Option<DocumentSortField>,
     // optional sort descending
@@ -781,6 +783,20 @@ pub async fn list(
             let subquery = document_index_documents::table
                 .filter(document_index_documents::document_index_value_id.eq(id))
                 .filter(document_index_documents::document_id.eq(documents::id));
+
+            if match_any {
+                query = query.or_filter(exists(subquery));
+            } else {
+                query = query.filter(exists(subquery));
+            }
+        }
+
+        // Filter to documents that share their title with at least one other document.
+        if params.duplicates.unwrap_or_default() {
+            let duplicate_documents = diesel::alias!(documents as duplicate_documents);
+            let subquery = duplicate_documents
+                .filter(duplicate_documents.field(documents::title).eq(documents::title))
+                .filter(duplicate_documents.field(documents::id).ne(documents::id));
 
             if match_any {
                 query = query.or_filter(exists(subquery));

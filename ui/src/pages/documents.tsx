@@ -98,6 +98,7 @@ function parseDocumentListHash(hash: string): DocumentListParams {
       text: searchText,
       metadata_value: searchText,
     } : {}),
+    ...(parseBooleanParam(params.get('duplicates')) ? { duplicates: true } : {}),
   };
 }
 
@@ -119,6 +120,9 @@ function serializeDocumentListHash(params: DocumentListParams): string {
   }
   if (searchText) {
     urlParams.set('q', searchText);
+  }
+  if (params.duplicates) {
+    urlParams.set('duplicates', 'true');
   }
 
   return urlParams.toString();
@@ -415,8 +419,11 @@ export function ListDocuments() {
       const cabinet = cabinetLookup[cabinetId];
       chips.push({ key: `cabinet-${cabinetId}`, label: `🗄️ ${cabinet.displayName ?? cabinet.name ?? cabinet.slug}` });
     }
+    if (listParams.duplicates) {
+      chips.push({ key: 'duplicates', label: 'Duplicate titles' });
+    }
     return chips;
-  }, [tagId, cabinetId, tagLookup, cabinetLookup]);
+  }, [tagId, cabinetId, tagLookup, cabinetLookup, listParams.duplicates]);
 
   const sortOptions = [
     { label: 'ID (Ascending)', value: 'id:asc' },
@@ -482,6 +489,19 @@ export function ListDocuments() {
     });
   }
 
+  const findDuplicates = () => {
+    setSearchText('');
+    updateListParams({
+      ...listParams,
+      match_any: undefined,
+      q: undefined,
+      text: undefined,
+      metadata_value: undefined,
+      duplicates: true,
+      page: 1,
+    });
+  };
+
   const openPreview = (src: string | undefined, title: string) => {
     if (!src) return;
     setPreviewSrc(src);
@@ -543,7 +563,7 @@ export function ListDocuments() {
   const header = () => {
     return (
       <div className="flex flex-column gap-3 md:flex-row md:justify-content-between md:align-items-center">
-        <div className="w-full md:w-auto">
+        <div className="flex flex-column gap-2 md:flex-row md:align-items-center w-full md:w-auto">
           <div className="p-inputgroup w-full md:w-30rem">
             <InputText
               value={searchText}
@@ -580,6 +600,14 @@ export function ListDocuments() {
               />
             </span>
           </div>
+          <Button
+            type="button"
+            label="Find Duplicates"
+            link
+            size="small"
+            onClick={findDuplicates}
+            className="align-self-start md:align-self-center p-0 md:ml-5"
+          />
         </div>
         <div className="flex justify-content-end">
           <DataViewLayoutOptions layout={layout} onChange={(e) => setLayout(e.value as 'list' | 'grid')} />
@@ -606,7 +634,11 @@ export function ListDocuments() {
             label={chip.label}
             removable
             onRemove={() => {
-              navigate('/documents');
+              if (chip.key === 'duplicates') {
+                updateListParams({ ...listParams, duplicates: undefined, page: 1 });
+              } else {
+                navigate('/documents');
+              }
               return true;
             }}
           />

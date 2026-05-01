@@ -25,6 +25,7 @@ export interface DocumentListParams {
   document_type_id?: number;
   cabinet_id?: number;
   tag_id?: number;
+  duplicates?: boolean;
 
   // sf = sort field
   sf?: string;
