@@ -397,6 +397,8 @@ export function ListDocuments() {
   const searchText = searchDraft.appliedSearchText === appliedSearchText ? searchDraft.value : appliedSearchText;
   const setSearchText = (value: string) => setSearchDraft({ appliedSearchText, value });
   const { isPending, data, isFetching } = useDocuments(effectiveListParams);
+  const visibleDocumentIds = useMemo(() => data?.items.map((doc) => doc.id) ?? [], [data?.items]);
+  const allVisibleSelected = visibleDocumentIds.length > 0 && visibleDocumentIds.every((id) => selectedIds.has(id));
   const { data: cabinetOptions } = useCabinets({ page: 1, per_page: MAX_CABINETS });
   const { data: tagOptions } = useTags({ page: 1, per_page: 200 });
   const cabinetLookup = useMemo(() => {
@@ -529,6 +531,20 @@ export function ListDocuments() {
     });
   };
 
+  const handleSelectAllChange = (checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of visibleDocumentIds) {
+        if (checked) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+      }
+      return next;
+    });
+  };
+
 
   const itemTemplate = (doc: Document, layout: 'list' | 'grid', index: number) => {
     if (!doc)
@@ -613,7 +629,17 @@ export function ListDocuments() {
             className="align-self-start md:align-self-center p-0 md:ml-5"
           />
         </div>
-        <div className="flex justify-content-end">
+        <div className="flex justify-content-end align-items-center gap-3">
+          <div className="flex align-items-center gap-2">
+            <Checkbox
+              inputId="documents-select-all"
+              checked={allVisibleSelected}
+              onChange={(event) => handleSelectAllChange(!!event.checked)}
+              disabled={visibleDocumentIds.length === 0}
+              aria-label="Select all documents on this page"
+            />
+            <label htmlFor="documents-select-all">Select all</label>
+          </div>
           <DataViewLayoutOptions layout={layout} onChange={(e) => setLayout(e.value as 'list' | 'grid')} />
         </div>
       </div>
