@@ -594,6 +594,7 @@ export function ListDocuments() {
                   applySearch();
                 }
               }}
+              className="p-inputtext-sm"
               placeholder="Search title and document text"
               aria-label="Search documents"
             />
@@ -604,6 +605,7 @@ export function ListDocuments() {
                   icon="pi pi-times"
                   aria-label="Clear search"
                   onClick={clearSearch}
+                  size="small"
                   className="p-button-secondary h-full"
                   style={{ borderRadius: 0 }}
                 />
@@ -615,6 +617,7 @@ export function ListDocuments() {
                 icon="pi pi-search"
                 aria-label="Search"
                 onClick={applySearch}
+                size="small"
                 className="p-button-info h-full"
                 style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
               />
