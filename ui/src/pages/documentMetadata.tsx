@@ -204,7 +204,7 @@ export function EditDocumentMetadata() {
 
     try {
       await saveDocumentMetadata.mutateAsync(updates);
-      navigate('/documents');
+      navigate(`/documents/${id}/preview`);
     } catch (err) {
       console.error(err);
     }
