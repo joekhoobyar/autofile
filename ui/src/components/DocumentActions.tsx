@@ -5,13 +5,13 @@ import { Dialog } from 'primereact/dialog';
 import { Dropdown } from 'primereact/dropdown';
 import { Menu } from 'primereact/menu';
 import type { MenuItem } from 'primereact/menuitem';
+import { TreeSelect } from 'primereact/treeselect';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { Toast } from 'primereact/toast';
 
-import { useCabinets } from '../queries/useCabinets';
+import { useCabinetTree } from '../queries/useCabinets';
 import { useTags } from '../queries/useTags';
 import { useClassifyDocument, useDeleteDocument, useGenerateThumbnail, useProcessDocumentFilePages, useRemoveCabinetDocument, useRemoveTagDocument, useSaveCabinetDocument, useSaveTagDocument } from '../queries/useDocuments';
-import { MAX_CABINETS } from '../models/cabinet';
 
 type DocumentActionsProps = {
   documentIds: number[];
@@ -45,7 +45,7 @@ export function DocumentActions({
   const removeCabinetDocument = useRemoveCabinetDocument();
   const saveTagDocument = useSaveTagDocument();
   const removeTagDocument = useRemoveTagDocument();
-  const { data: cabinetOptions, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinets({ page: 1, per_page: MAX_CABINETS, sf: 'name' });
+  const { data: cabinetOptions, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinetTree({ keyField: 'id' });
   const { data: tagOptions, isPending: isTagsPending, isFetching: isTagsFetching } = useTags({ page: 1, per_page: 200, sf: 'name' });
   const [addToCabinetVisible, setAddToCabinetVisible] = useState(false);
   const [selectedCabinetId, setSelectedCabinetId] = useState<number | null>(null);
@@ -343,15 +343,14 @@ export function DocumentActions({
         <div className="grid p-fluid">
           <div className="col-12">
             <label htmlFor="cabinet_id" className="font-medium mb-2 block">Cabinet</label>
-            <Dropdown
-              id="cabinet_id"
-              value={selectedCabinetId}
-              onChange={(event) => setSelectedCabinetId(event.value as number)}
-              optionLabel="displayName"
-              optionValue="id"
+            <TreeSelect
+              inputId="cabinet_id"
+              value={selectedCabinetId ? String(selectedCabinetId) : null}
+              onChange={(event) => setSelectedCabinetId(event.value ? Number(event.value) : null)}
               placeholder="Select a cabinet"
-              options={cabinetOptions?.items ?? []}
-              loading={isCabinetsPending || isCabinetsFetching}
+              options={cabinetOptions ?? []}
+              disabled={isCabinetsPending || isCabinetsFetching}
+              filter
               className="w-full"
             />
           </div>
@@ -380,15 +379,14 @@ export function DocumentActions({
         <div className="grid p-fluid">
           <div className="col-12">
             <label htmlFor="remove_cabinet_id" className="font-medium mb-2 block">Cabinet</label>
-            <Dropdown
-              id="remove_cabinet_id"
-              value={removeCabinetId}
-              onChange={(event) => setRemoveCabinetId(event.value as number)}
-              optionLabel="displayName"
-              optionValue="id"
+            <TreeSelect
+              inputId="remove_cabinet_id"
+              value={removeCabinetId ? String(removeCabinetId) : null}
+              onChange={(event) => setRemoveCabinetId(event.value ? Number(event.value) : null)}
               placeholder="Select a cabinet"
-              options={cabinetOptions?.items ?? []}
-              loading={isCabinetsPending || isCabinetsFetching}
+              options={cabinetOptions ?? []}
+              disabled={isCabinetsPending || isCabinetsFetching}
+              filter
               className="w-full"
             />
           </div>

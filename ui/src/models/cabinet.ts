@@ -1,4 +1,4 @@
-export const MAX_CABINETS = 200;
+export const MAX_CABINETS = 1000;
 
 export interface Cabinet {
   id: number

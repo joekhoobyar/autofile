@@ -42,9 +42,15 @@ export function useCabinets(params: ListParams): UseQueryResult<ResourceList<Cab
   });
 }
 
-export function useCabinetTree(): UseQueryResult<TreeNode[], HttpError> {
+type CabinetTreeOptions = {
+  keyField?: 'slug' | 'id';
+};
+
+export function useCabinetTree(options: CabinetTreeOptions = {}): UseQueryResult<TreeNode[], HttpError> {
+  const keyField = options.keyField ?? 'slug';
+
   return useQuery({
-    queryKey: ['cabinet', 'tree'],
+    queryKey: ['cabinet', 'tree', keyField],
     queryFn: async () => {
       const response = await apiFetchList<Cabinet>('api/v1/cabinets', {page:1, per_page: MAX_CABINETS, sf: 'name'});
       const sortNodesByName = (nodes: TreeNode[]): TreeNode[] => {
@@ -63,7 +69,8 @@ export function useCabinetTree(): UseQueryResult<TreeNode[], HttpError> {
       response.items.forEach((cabinet: Cabinet) => {
         nodeMap.set(cabinet.id, {
           id: String(cabinet.id),
-          key: cabinet.slug,
+          key: keyField === 'id' ? String(cabinet.id) : cabinet.slug,
+          label: cabinet.name,
           data: cabinet,
           leaf: true,
           expanded: false,

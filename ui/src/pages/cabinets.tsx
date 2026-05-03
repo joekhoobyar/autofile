@@ -8,12 +8,12 @@ import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
 import { classNames } from 'primereact/utils';
 
-import { useCabinet, useCabinets, useCabinetTree, useDeleteCabinet, useSaveCabinet } from '../queries/useCabinets';
-import { MAX_CABINETS, type Cabinet } from '../models/cabinet';
+import { useCabinet, useCabinetTree, useDeleteCabinet, useSaveCabinet } from '../queries/useCabinets';
+import { type Cabinet } from '../models/cabinet';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
 import { TreeTable } from 'primereact/treetable';
-import { Dropdown } from 'primereact/dropdown';
+import { TreeSelect } from 'primereact/treeselect';
 import type { TreeNode } from 'primereact/treenode';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { Toast } from 'primereact/toast';
@@ -229,16 +229,24 @@ function CabinetForm({ data }: Readonly<{ data?: Partial<Cabinet> }>) {
   const errMsg = (name: keyof Partial<Cabinet>) =>
     errors[name]?.message ? String(errors[name]?.message) : null;
 
-  // Parent cabinet options
-  const {
-    data: parents, 
-    isLoading: isParentsLoading, 
-    isError: isParentsError, 
-  } = useCabinets({page:1, per_page: MAX_CABINETS, sf: 'name'});
-  let parent_id_options: Cabinet[] = [];
-  if (! isParentsLoading && ! isParentsError && parents?.items?.length) {
-    parent_id_options = parents.items.filter(c => c.id !== data?.id);
-  }
+  const { data: parentOptions, isLoading: isParentsLoading } = useCabinetTree({ keyField: 'id' });
+  const parentTreeOptions = useMemo(() => {
+    const excludedId = data?.id;
+    if (!excludedId) return parentOptions ?? [];
+
+    const removeSubtree = (nodes: TreeNode[]): TreeNode[] => nodes
+      .filter((node) => node.data.id !== excludedId)
+      .map((node) => {
+        const children = node.children ? removeSubtree(node.children) : [];
+        return {
+          ...node,
+          children,
+          leaf: children.length === 0,
+        };
+      });
+
+    return removeSubtree(parentOptions ?? []);
+  }, [data?.id, parentOptions]);
 
   return (
     <form onSubmit={handleSubmit(submitter)}>
@@ -284,10 +292,15 @@ function CabinetForm({ data }: Readonly<{ data?: Partial<Cabinet> }>) {
           <label htmlFor="parent_id" className="font-medium mb-2 block">Parent Cabinet</label>
           <Controller name="parent_id" control={control}
             render={({ field }) => (
-              <Dropdown id="parent_id" {...field}
-                optionLabel="displayName" optionValue="id"
+              <TreeSelect inputId="parent_id"
+                value={field.value ? String(field.value) : null}
+                onChange={(event) => field.onChange(event.value ? Number(event.value) : null)}
                 className={classNames({ 'p-invalid': !!errors.parent_id })}
-                placeholder="Parent cabinet" options={parent_id_options} autoComplete="parent_id"
+                placeholder="Parent cabinet"
+                options={parentTreeOptions}
+                disabled={isParentsLoading}
+                filter
+                showClear
               />
             )}
           />
