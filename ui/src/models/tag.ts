@@ -3,4 +3,5 @@ export interface Tag {
   slug: string
   name: string
   color: string
+  document_count: number
 }

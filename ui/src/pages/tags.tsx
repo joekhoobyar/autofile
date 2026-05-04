@@ -161,6 +161,7 @@ export function ListTags() {
         >
         <Column field="slug" header="Slug" body={slugTemplate} sortable></Column>
         <Column field="name" header="Name" body={nameTemplate} sortable></Column>
+        <Column field="document_count" header="Documents"></Column>
         <Column header="Preview" body={previewTemplate}></Column>
         <Column body={actionTemplate} headerClassName="w-9rem" />
       </DataTable>

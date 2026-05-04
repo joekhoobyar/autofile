@@ -7,4 +7,5 @@ export interface Cabinet {
   displayName?: string
   description: string
   parent_id: number | null
+  document_count: number
 }
