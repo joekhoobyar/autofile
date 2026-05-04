@@ -23,9 +23,11 @@ import { type ClassifierBlock } from '../models/classifierBlock';
 import { useClassifierBlock, useClassifierBlocks, useDeleteClassifierBlock, useReorderClassifierBlock, useSaveClassifierBlock } from '../queries/useClassifierBlocks';
 import { useId } from '../util';
 import { defaultClassifierRules, rulesToYaml, yamlToRules } from '../util/classifierRulesYaml';
+import { useHashListParams } from '../util/listParamsHash';
 
 const yamlEditorExtensions = [yamlLanguage(), keymap.of([indentWithTab]), EditorView.lineWrapping];
 const REORDER_SUCCESS_MS = 1200;
+const CLASSIFIER_BLOCK_LIST_DEFAULT_PARAMS: ListParams = { sf: 'order' };
 
 type ClassifierBlockFormValues = Partial<ClassifierBlock> & {
   rulesYaml: string;
@@ -36,8 +38,11 @@ export function ListClassifierBlocks() {
   const reorderSuccessTimeout = useRef<number | null>(null);
   const deleteClassifierBlock = useDeleteClassifierBlock();
   const reorderClassifierBlock = useReorderClassifierBlock();
-  const [listParams, setListParams] = useState<ListParams>({ sf: 'order' });
-  const [searchText, setSearchText] = useState(listParams.q ?? '');
+  const { listParams, updateListParams } = useHashListParams(CLASSIFIER_BLOCK_LIST_DEFAULT_PARAMS);
+  const appliedSearchText = listParams.q ?? '';
+  const [searchDraft, setSearchDraft] = useState({ appliedSearchText, value: appliedSearchText });
+  const searchText = searchDraft.appliedSearchText === appliedSearchText ? searchDraft.value : appliedSearchText;
+  const setSearchText = (value: string) => setSearchDraft({ appliedSearchText, value });
   const [recentlyReorderedRowId, setRecentlyReorderedRowId] = useState<number | null>(null);
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useClassifierBlocks(listParams);
@@ -113,24 +118,24 @@ export function ListClassifierBlocks() {
   };
 
   const onSort = (event: DataTableStateEvent) => {
-    setListParams({ ...listParams, sf: event.sortField, sd: event.sortOrder === -1, page: 1 });
+    updateListParams({ ...listParams, sf: event.sortField, sd: event.sortOrder === -1, page: 1 });
   };
 
   const onPage = (event: DataTableStateEvent) => {
-    setListParams({ ...listParams, page: (event.page ?? 0) + 1, per_page: event.rows });
+    updateListParams({ ...listParams, page: (event.page ?? 0) + 1, per_page: event.rows });
   };
 
   const applySearch = () => {
-    setListParams((prev) => ({
-      ...prev,
+    updateListParams({
+      ...listParams,
       q: searchText.trim() ? searchText.trim() : undefined,
       page: 1,
-    }));
+    });
   };
 
   const clearSearch = () => {
     setSearchText('');
-    setListParams((prev) => ({ ...prev, q: undefined, page: 1 }));
+    updateListParams({ ...listParams, q: undefined, page: 1 });
   };
 
   const onRowReorder = async (event: DataTableRowReorderEvent<ClassifierBlock[]>) => {

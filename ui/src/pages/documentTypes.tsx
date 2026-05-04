@@ -21,12 +21,18 @@ import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { useDocumentTypeMetadataTypes, useDocumentTypeSaveMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { type DocumentTypeNewMetadataType } from '../models/documentTypeMetadataType';
 import { createSlugRules, normalizeSlug } from '../util/slugValidation';
+import { useHashListParams } from '../util/listParamsHash';
+
+const DOCUMENT_TYPE_LIST_DEFAULT_PARAMS: ListParams = { sf: 'name' };
 
 export function ListDocumentTypes() {
   const toast = useRef(null);
   const deleteDocumentType = useDeleteDocumentType();
-  const [listParams, setListParams] = useState<ListParams>({sf: 'name'});
-  const [searchText, setSearchText] = useState(listParams.q ?? '');
+  const { listParams, updateListParams } = useHashListParams(DOCUMENT_TYPE_LIST_DEFAULT_PARAMS);
+  const appliedSearchText = listParams.q ?? '';
+  const [searchDraft, setSearchDraft] = useState({ appliedSearchText, value: appliedSearchText });
+  const searchText = searchDraft.appliedSearchText === appliedSearchText ? searchDraft.value : appliedSearchText;
+  const setSearchText = (value: string) => setSearchDraft({ appliedSearchText, value });
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useDocumentTypes(listParams);
 
@@ -75,24 +81,24 @@ export function ListDocumentTypes() {
   };
 
   const onSort = (event: DataTableStateEvent) => {
-    setListParams({ ...listParams, sf: event.sortField, sd: event.sortOrder === -1, page: 1 });
+    updateListParams({ ...listParams, sf: event.sortField, sd: event.sortOrder === -1, page: 1 });
   };
 
   const onPage = (event: DataTableStateEvent) => {
-    setListParams({ ...listParams, page: (event.page ?? 0) + 1, per_page: event.rows });
+    updateListParams({ ...listParams, page: (event.page ?? 0) + 1, per_page: event.rows });
   };
 
   const applySearch = () => {
-    setListParams((prev) => ({
-      ...prev,
+    updateListParams({
+      ...listParams,
       q: searchText.trim() ? searchText.trim() : undefined,
       page: 1,
-    }));
+    });
   };
 
   const clearSearch = () => {
     setSearchText('');
-    setListParams((prev) => ({ ...prev, q: undefined, page: 1 }));
+    updateListParams({ ...listParams, q: undefined, page: 1 });
   };
 
   return (

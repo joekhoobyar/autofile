@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { DataTable, type DataTableStateEvent } from 'primereact/datatable';
@@ -11,6 +11,9 @@ import type { MenuItem } from 'primereact/menuitem';
 import { useDocumentIndex } from '../queries/useDocumentIndexes';
 import { useDocumentIndexValueAncestors, useDocumentIndexValues } from '../queries/useDocumentIndexValues';
 import { type DocumentIndexValue, type DocumentIndexValueListParams } from '../models/documentIndex';
+import { useHashListParams } from '../util/listParamsHash';
+
+const DOCUMENT_INDEX_VALUE_LIST_DEFAULT_PARAMS: DocumentIndexValueListParams = {};
 
 export function ListDocumentIndexValues() {
   const { documentIndexId: documentIndexIdParam, documentIndexValueId: documentIndexValueIdParam } = useParams();
@@ -20,7 +23,7 @@ export function ListDocumentIndexValues() {
     ? parsedDocumentIndexValueId
     : undefined;
   const navigate = useNavigate();
-  const [listParams, setListParams] = useState<DocumentIndexValueListParams>({});
+  const { listParams, updateListParams } = useHashListParams(DOCUMENT_INDEX_VALUE_LIST_DEFAULT_PARAMS);
   const { data: documentIndex } = useDocumentIndex(documentIndexId);
   const effectiveListParams: DocumentIndexValueListParams = {
     ...listParams,
@@ -30,11 +33,11 @@ export function ListDocumentIndexValues() {
   const { data: indexAncestors } = useDocumentIndexValueAncestors(documentIndexId, documentIndexValueId ?? 0);
 
   const onSort = (event: DataTableStateEvent) => {
-    setListParams((prev) => ({ ...prev, sf: event.sortField, sd: event.sortOrder === -1, page: 1 }));
+    updateListParams({ ...listParams, sf: event.sortField, sd: event.sortOrder === -1, page: 1 });
   };
 
   const onPage = (event: DataTableStateEvent) => {
-    setListParams((prev) => ({ ...prev, page: (event.page ?? 0) + 1, per_page: event.rows }));
+    updateListParams({ ...listParams, page: (event.page ?? 0) + 1, per_page: event.rows });
   };
 
   const valueTemplate = (row: DocumentIndexValue) => {

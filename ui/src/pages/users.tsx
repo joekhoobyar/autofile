@@ -17,8 +17,10 @@ import { useId } from "../util";
 import type { User, UserUpdateInput } from "../models/user";
 import { useDeleteUser, useSaveUser, useUser, useUsers } from "../queries/useUsers";
 import { canManageUsers, useAuth } from "../auth";
+import { useHashListParams } from "../util/listParamsHash";
 
 const SYSTEM_USER_ID = 1;
+const USER_LIST_DEFAULT_PARAMS: ListParams = { sf: "username" };
 
 function isSystemUser(id: number): boolean {
   return id === SYSTEM_USER_ID;
@@ -32,8 +34,11 @@ export function ListUsers() {
   const auth = useAuth();
   const navigate = useNavigate();
   const deleteUser = useDeleteUser();
-  const [search, setSearch] = useState("");
-  const [listParams, setListParams] = useState<ListParams>({ sf: "username" });
+  const { listParams, updateListParams } = useHashListParams(USER_LIST_DEFAULT_PARAMS);
+  const appliedSearchText = listParams.q ?? "";
+  const [searchDraft, setSearchDraft] = useState({ appliedSearchText, value: appliedSearchText });
+  const search = searchDraft.appliedSearchText === appliedSearchText ? searchDraft.value : appliedSearchText;
+  const setSearch = (value: string) => setSearchDraft({ appliedSearchText, value });
   const { data, isPending, isFetching } = useUsers(listParams);
 
   if (!canManageUsers(auth)) {
@@ -41,33 +46,33 @@ export function ListUsers() {
   }
 
   const onSort = (event: DataTableStateEvent) => {
-    setListParams((prev) => ({
-      ...prev,
+    updateListParams({
+      ...listParams,
       sf: event.sortField,
       sd: event.sortOrder === -1,
       page: 1,
-    }));
+    });
   };
 
   const onPage = (event: DataTableStateEvent) => {
-    setListParams((prev) => ({
-      ...prev,
+    updateListParams({
+      ...listParams,
       page: (event.page ?? 0) + 1,
       per_page: event.rows,
-    }));
+    });
   };
 
   const applySearch = () => {
-    setListParams((prev) => ({
-      ...prev,
+    updateListParams({
+      ...listParams,
       q: search.trim() ? search.trim() : undefined,
       page: 1,
-    }));
+    });
   };
 
   const clearSearch = () => {
     setSearch("");
-    setListParams((prev) => ({ ...prev, q: undefined, page: 1 }));
+    updateListParams({ ...listParams, q: undefined, page: 1 });
   };
 
   const confirmDeleteUser = (user: User) => {
