@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use crate::domain::tags::Tag;
-use crate::schema::tags;
+use crate::domain::tags::{Tag, TagView};
+use crate::schema::{tag_documents, tags};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
@@ -159,7 +159,7 @@ pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
     Query(params): Query<ListTagsQuery>,
-) -> Result<Json<ResourceList<Tag>>, ApiError> {
+) -> Result<Json<ResourceList<TagView>>, ApiError> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
@@ -205,13 +205,47 @@ pub async fn list(
         _ => query.order(tags::id.asc()),
     };
 
-    let items = query
+    let tags = query
         .limit(per_page)
         .offset(offset)
         .select(Tag::as_select())
         .load::<Tag>(&mut db)
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list tags"))?;
+    let tag_ids: Vec<i64> = tags.iter().map(|tag| tag.id).collect();
+
+    let mut document_counts_by_tag: HashMap<i64, i64> = HashMap::new();
+    if !tag_ids.is_empty() {
+        let document_count_rows: Vec<(i64, i64)> = tag_documents::table
+            .filter(tag_documents::tag_id.eq_any(&tag_ids))
+            .group_by(tag_documents::tag_id)
+            .select((
+                tag_documents::tag_id,
+                diesel::dsl::count(tag_documents::document_id),
+            ))
+            .load::<(i64, i64)>(&mut db)
+            .await
+            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count tag documents"))?;
+
+        for (tag_id, document_count) in document_count_rows {
+            document_counts_by_tag.insert(tag_id, document_count);
+        }
+    }
+
+    let items = tags
+        .into_iter()
+        .map(|tag| TagView {
+            id: tag.id,
+            slug: tag.slug,
+            name: tag.name,
+            color: tag.color,
+            document_count: document_counts_by_tag.get(&tag.id).cloned().unwrap_or(0),
+            created_at: tag.created_at,
+            created_by: tag.created_by,
+            updated_at: tag.updated_at,
+            updated_by: tag.updated_by,
+        })
+        .collect();
 
     Ok(Json(ResourceList {
         total,

@@ -17,3 +17,16 @@ pub struct Tag {
     pub updated_at: DateTime<Utc>,
     pub updated_by: i64,
 }
+
+#[derive(Debug, Serialize, PartialEq)]
+pub struct TagView {
+    pub id: i64,
+    pub slug: String,
+    pub name: String,
+    pub color: String,
+    pub document_count: i64,
+    pub created_at: DateTime<Utc>,
+    pub created_by: i64,
+    pub updated_at: DateTime<Utc>,
+    pub updated_by: i64,
+}

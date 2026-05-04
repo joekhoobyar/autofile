@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use crate::domain::cabinets::Cabinet;
-use crate::schema::cabinets;
+use crate::domain::cabinets::{Cabinet, CabinetView};
+use crate::schema::{cabinet_documents, cabinets};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
@@ -202,7 +202,7 @@ pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
     Query(params): Query<ListCabinetsQuery>,
-) -> Result<Json<ResourceList<Cabinet>>, ApiError> {
+) -> Result<Json<ResourceList<CabinetView>>, ApiError> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
@@ -282,13 +282,51 @@ pub async fn list(
         _ => query.order(cabinets::id.asc()),
     };
 
-    let items = query
+    let cabinets = query
         .limit(per_page)
         .offset(offset)
         .select(Cabinet::as_select())
         .load::<Cabinet>(&mut db)
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list cabinets"))?;
+    let cabinet_ids: Vec<i64> = cabinets.iter().map(|cabinet| cabinet.id).collect();
+
+    let mut document_counts_by_cabinet: HashMap<i64, i64> = HashMap::new();
+    if !cabinet_ids.is_empty() {
+        let document_count_rows: Vec<(i64, i64)> = cabinet_documents::table
+            .filter(cabinet_documents::cabinet_id.eq_any(&cabinet_ids))
+            .group_by(cabinet_documents::cabinet_id)
+            .select((
+                cabinet_documents::cabinet_id,
+                diesel::dsl::count(cabinet_documents::document_id),
+            ))
+            .load::<(i64, i64)>(&mut db)
+            .await
+            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count cabinet documents"))?;
+
+        for (cabinet_id, document_count) in document_count_rows {
+            document_counts_by_cabinet.insert(cabinet_id, document_count);
+        }
+    }
+
+    let items = cabinets
+        .into_iter()
+        .map(|cabinet| CabinetView {
+            id: cabinet.id,
+            slug: cabinet.slug,
+            name: cabinet.name,
+            created_by: cabinet.created_by,
+            created_at: cabinet.created_at,
+            updated_by: cabinet.updated_by,
+            updated_at: cabinet.updated_at,
+            description: cabinet.description,
+            parent_id: cabinet.parent_id,
+            document_count: document_counts_by_cabinet
+                .get(&cabinet.id)
+                .cloned()
+                .unwrap_or(0),
+        })
+        .collect();
 
     Ok(Json(ResourceList {
         total,
