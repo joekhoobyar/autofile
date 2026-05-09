@@ -72,6 +72,10 @@ pub struct ListDocumentsQuery {
     pub metadata_type_id: Option<i64>,
     // optional metadata value search
     pub metadata_value: Option<String>,
+    // optional file name search
+    pub filename: Option<String>,
+    // optional file content type search
+    pub file_content_type: Option<String>,
     // optional document index value search
     pub document_index_value_id: Option<i64>,
     // optional duplicate search
@@ -460,6 +464,38 @@ pub async fn list(
                     .or_filter(exists(ocr_subquery));
             } else {
                 query = query.filter(exists(text_subquery).or(exists(ocr_subquery)));
+            }
+        }
+
+        // Filter by document file name
+        if let Some(filename) = params.filename.as_deref().filter(|s| !s.is_empty()) {
+            let pattern = format!("%{}%", filename);
+            let subquery = document_files::table
+                .filter(document_files::document_id.eq(documents::id))
+                .filter(document_files::filename.ilike(pattern));
+
+            if match_any {
+                query = query.or_filter(exists(subquery));
+            } else {
+                query = query.filter(exists(subquery));
+            }
+        }
+
+        // Filter by document file content type
+        if let Some(content_type) = params
+            .file_content_type
+            .as_deref()
+            .filter(|s| !s.is_empty())
+        {
+            let pattern = format!("%{}%", content_type);
+            let subquery = document_files::table
+                .filter(document_files::document_id.eq(documents::id))
+                .filter(document_files::content_type.ilike(pattern));
+
+            if match_any {
+                query = query.or_filter(exists(subquery));
+            } else {
+                query = query.filter(exists(subquery));
             }
         }
 

@@ -21,6 +21,8 @@ export interface DocumentListParams {
   text?: string;
   metadata_type_id?: number;
   metadata_value?: string;
+  filename?: string;
+  file_content_type?: string;
   document_index_value_id?: number;
   document_type_id?: number;
   cabinet_id?: number;

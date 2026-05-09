@@ -89,6 +89,8 @@ function parseDocumentListHash(hash: string): DocumentListParams {
   const titleSearch = params.get('q')?.trim() || undefined;
   const textSearch = params.get('text')?.trim() || undefined;
   const metadataValue = params.get('metadata_value')?.trim() || undefined;
+  const filename = params.get('filename')?.trim() || undefined;
+  const fileContentType = params.get('file_content_type')?.trim() || undefined;
   const documentTypeId = parsePositiveIntParam(params.get('document_type_id'));
   const metadataTypeId = parsePositiveIntParam(params.get('metadata_type_id'));
 
@@ -110,6 +112,8 @@ function parseDocumentListHash(hash: string): DocumentListParams {
       ...(documentTypeId ? { document_type_id: documentTypeId } : {}),
       ...(metadataValue ? { metadata_value: metadataValue } : {}),
       ...(metadataTypeId ? { metadata_type_id: metadataTypeId } : {}),
+      ...(filename ? { filename } : {}),
+      ...(fileContentType ? { file_content_type: fileContentType } : {}),
     }),
     ...(parseBooleanParam(params.get('duplicates')) ? { duplicates: true } : {}),
   };
@@ -168,6 +172,12 @@ function serializeDocumentListHash(params: DocumentListParams): string {
   }
   if (params.metadata_type_id) {
     urlParams.set('metadata_type_id', String(params.metadata_type_id));
+  }
+  if (params.filename?.trim()) {
+    urlParams.set('filename', params.filename.trim());
+  }
+  if (params.file_content_type?.trim()) {
+    urlParams.set('file_content_type', params.file_content_type.trim());
   }
   if (params.duplicates) {
     urlParams.set('duplicates', 'true');
@@ -492,6 +502,12 @@ export function ListDocuments() {
           label: `Metadata type: ${metadataTypeLookup?.[String(listParams.metadata_type_id)]?.name ?? listParams.metadata_type_id}`,
         });
       }
+      if (listParams.filename) {
+        chips.push({ key: 'filename', label: `Filename: ${listParams.filename}` });
+      }
+      if (listParams.file_content_type) {
+        chips.push({ key: 'file-content-type', label: `Content type: ${listParams.file_content_type}` });
+      }
     }
     if (tagId && tagLookup[tagId]) {
       chips.push({ key: `tag-${tagId}`, label: `🏷️ ${tagLookup[tagId].name}` });
@@ -563,6 +579,8 @@ export function ListDocuments() {
       document_type_id: undefined,
       metadata_value: undefined,
       metadata_type_id: undefined,
+      filename: undefined,
+      file_content_type: undefined,
       duplicates: undefined,
       page: 1,
     });
@@ -746,6 +764,12 @@ export function ListDocuments() {
                 case 'metadata-type':
                   updateListParams({ ...listParams, metadata_type_id: undefined, page: 1 });
                   break;
+                case 'filename':
+                  updateListParams({ ...listParams, filename: undefined, page: 1 });
+                  break;
+                case 'file-content-type':
+                  updateListParams({ ...listParams, file_content_type: undefined, page: 1 });
+                  break;
                 case 'duplicates':
                   updateListParams({ ...listParams, duplicates: undefined, page: 1 });
                   break;
@@ -848,6 +872,8 @@ type AdvancedDocumentSearchFormValues = {
   document_type_id: number | null;
   metadata_value: string;
   metadata_type_id: number | null;
+  filename: string;
+  file_content_type: string;
   duplicates: boolean;
 };
 
@@ -865,6 +891,8 @@ export function AdvancedDocumentSearch() {
       document_type_id: existingParams.document_type_id ?? null,
       metadata_value: parseBasicDocumentSearchHash(location.hash) ? '' : existingParams.metadata_value ?? '',
       metadata_type_id: existingParams.metadata_type_id ?? null,
+      filename: existingParams.filename ?? '',
+      file_content_type: existingParams.file_content_type ?? '',
       duplicates: !!existingParams.duplicates,
     },
   });
@@ -881,6 +909,8 @@ export function AdvancedDocumentSearch() {
       document_type_id: values.document_type_id ?? undefined,
       metadata_value: values.metadata_value.trim() || undefined,
       metadata_type_id: values.metadata_type_id ?? undefined,
+      filename: values.filename.trim() || undefined,
+      file_content_type: values.file_content_type.trim() || undefined,
       duplicates: values.duplicates || undefined,
     };
 
@@ -898,6 +928,8 @@ export function AdvancedDocumentSearch() {
       document_type_id: null,
       metadata_value: '',
       metadata_type_id: null,
+      filename: '',
+      file_content_type: '',
       duplicates: false,
     });
   };
@@ -988,6 +1020,38 @@ export function AdvancedDocumentSearch() {
                   loading={isMetadataTypesPending || isMetadataTypesFetching}
                   placeholder="Any metadata type"
                   showClear
+                />
+              )}
+            />
+          </div>
+
+          <div className="col-12 md:col-6">
+            <label htmlFor="advanced-search-filename" className="font-medium mb-2 block">Filename</label>
+            <Controller
+              name="filename"
+              control={control}
+              render={({ field }) => (
+                <InputText
+                  id="advanced-search-filename"
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder="Filename contains..."
+                />
+              )}
+            />
+          </div>
+
+          <div className="col-12 md:col-6">
+            <label htmlFor="advanced-search-file-content-type" className="font-medium mb-2 block">File Content Type</label>
+            <Controller
+              name="file_content_type"
+              control={control}
+              render={({ field }) => (
+                <InputText
+                  id="advanced-search-file-content-type"
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder="Content type contains..."
                 />
               )}
             />
