@@ -152,6 +152,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "sha2",
  "sprintf",
  "testcontainers",
  "testcontainers-modules",

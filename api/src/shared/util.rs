@@ -9,6 +9,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use diesel::result::{DatabaseErrorKind, Error as DieselError};
+use sha2::{Digest, Sha256};
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
@@ -127,6 +128,7 @@ pub fn validate_slug(slug: &str) -> Result<(), ApiError> {
 pub struct TempUpload {
     pub path: std::path::PathBuf,
     pub size: i64,
+    pub checksum_sha256: String,
 }
 
 #[derive(Debug)]
@@ -177,6 +179,7 @@ pub async fn write_field_to_temp_file(
     })?;
 
     let mut size: i64 = 0;
+    let mut hasher = Sha256::new();
     loop {
         let chunk = field
             .chunk()
@@ -188,6 +191,7 @@ pub async fn write_field_to_temp_file(
         };
 
         size += chunk.len() as i64;
+        hasher.update(&chunk);
         temp_file.write_all(&chunk).await.map_err(|e| {
             ApiError::internal_server_error(&format!("Failed to buffer upload: {}", e))
         })?;
@@ -200,6 +204,7 @@ pub async fn write_field_to_temp_file(
     Ok(TempUpload {
         path: temp_path,
         size,
+        checksum_sha256: format!("{:x}", hasher.finalize()),
     })
 }
 

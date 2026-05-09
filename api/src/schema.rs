@@ -73,6 +73,8 @@ diesel::table! {
         #[max_length = 255]
         content_type -> Nullable<Varchar>,
         size -> Int8,
+        #[max_length = 64]
+        checksum_sha256 -> Nullable<Varchar>,
         created_at -> Timestamptz,
         created_by -> Int8,
         updated_at -> Timestamptz,

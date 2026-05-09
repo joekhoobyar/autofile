@@ -26,6 +26,7 @@ pub struct NewDocumentFile {
     pub filename: String,
     pub content_type: Option<String>,
     pub size: i64,
+    pub checksum_sha256: String,
     pub created_by: i64,
     pub updated_by: i64,
 }
@@ -36,6 +37,7 @@ pub struct BufferedDocumentFileUpload {
     pub filename: String,
     pub content_type: Option<String>,
     pub size: i64,
+    pub checksum_sha256: String,
 }
 
 #[derive(Clone, Debug)]
@@ -44,6 +46,7 @@ pub struct UploadedDocumentFile {
     pub filename: String,
     pub content_type: Option<String>,
     pub size: i64,
+    pub checksum_sha256: String,
 }
 
 pub async fn buffer_document_file_field(
@@ -65,6 +68,7 @@ pub async fn buffer_document_file_field(
         filename,
         content_type,
         size: temp_upload.size,
+        checksum_sha256: temp_upload.checksum_sha256,
     })
 }
 
@@ -96,6 +100,7 @@ pub async fn upload_document_file_to_s3(
         filename: upload.filename,
         content_type: upload.content_type,
         size: upload.size,
+        checksum_sha256: upload.checksum_sha256,
     })
 }
 
@@ -120,6 +125,7 @@ pub async fn insert_document_file(
             filename: upload.filename,
             content_type: upload.content_type,
             size: upload.size,
+            checksum_sha256: upload.checksum_sha256,
             created_by: user_id,
             updated_by: user_id,
         })
