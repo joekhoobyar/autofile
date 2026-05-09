@@ -14,7 +14,7 @@ pub struct DocumentFile {
     pub filename: String,
     pub content_type: Option<String>,
     pub size: i64,
-    pub checksum_sha256: Option<String>,
+    pub checksum_sha256: String,
     pub pages: i32,
     pub created_at: DateTime<Utc>,
     pub created_by: i64,
