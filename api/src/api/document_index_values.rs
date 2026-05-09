@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::application::document_index_values::list_document_index_value_ancestors;
 use crate::domain::document_indexes::DocumentIndexValue;
 use crate::schema::document_index_values;
 use crate::shared::app_state::AppState;
@@ -15,7 +16,6 @@ use axum::{
     routing::get,
 };
 use diesel::prelude::*;
-use diesel::sql_types::{BigInt, Bool, Nullable, Text};
 use diesel_async::RunQueryDsl;
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -43,22 +43,6 @@ pub struct ListDocumentIndexValuesQuery {
     pub sf: Option<DocumentIndexValueSortField>,
     // optional sort descending
     pub sd: Option<bool>,
-}
-
-#[derive(Debug, QueryableByName)]
-struct DocumentIndexValueRow {
-    #[diesel(sql_type = BigInt)]
-    id: i64,
-    #[diesel(sql_type = Text)]
-    value: String,
-    #[diesel(sql_type = BigInt)]
-    document_index_id: i64,
-    #[diesel(sql_type = BigInt)]
-    document_index_template_id: i64,
-    #[diesel(sql_type = Nullable<BigInt>)]
-    parent_id: Option<i64>,
-    #[diesel(sql_type = Bool)]
-    is_leaf: bool,
 }
 
 pub async fn list(
@@ -159,49 +143,7 @@ pub async fn ancestors(
     DbConn(mut db): DbConn,
     Path((document_index_id, id)): Path<(i64, i64)>,
 ) -> Result<Json<Vec<DocumentIndexValue>>, ApiError> {
-    let rows = diesel::sql_query(
-        r#"
-        WITH RECURSIVE nodes AS (
-            SELECT t.id, t.parent_id, 0 AS depth
-            FROM document_index_values t
-            WHERE t.id = $1 AND t.document_index_id = $2
-
-            UNION ALL
-
-            SELECT p.id, p.parent_id, d.depth + 1
-            FROM document_index_values p
-            JOIN nodes d ON p.id = d.parent_id
-            WHERE p.document_index_id = $2
-        )
-        SELECT v.*
-        FROM document_index_values v
-        JOIN nodes n ON v.id = n.id
-        ORDER BY n.depth DESC
-        "#,
-    )
-    .bind::<BigInt, _>(id)
-    .bind::<BigInt, _>(document_index_id)
-    .load::<DocumentIndexValueRow>(&mut db)
-    .await
-    .map_err(|e| {
-        ApiError::new(
-            diesel_to_http(e),
-            "Failed to fetch document_index_value ancestors",
-        )
-    })?;
-
-    let items = rows
-        .into_iter()
-        .map(|row| DocumentIndexValue {
-            id: row.id,
-            value: row.value,
-            document_index_id: row.document_index_id,
-            document_index_template_id: row.document_index_template_id,
-            parent_id: row.parent_id,
-            is_leaf: row.is_leaf,
-        })
-        .collect();
-
+    let items = list_document_index_value_ancestors(&mut db, document_index_id, id).await?;
     Ok(Json(items))
 }
 
