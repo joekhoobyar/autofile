@@ -1,20 +1,17 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::application::classifier_blocks::{compute_classification_actions, load_document_text};
 use crate::application::document_files::{
-    BufferedDocumentFileUpload, UploadedDocumentFile, buffer_document_file_field,
-    cleanup_buffered_document_file_upload, delete_uploaded_document_file_from_s3,
-    insert_document_file, upload_document_file_to_s3,
+    BufferedDocumentFileUpload, buffer_document_file_field, cleanup_buffered_document_file_upload,
 };
 use crate::application::document_index_documents::build_template_document_view;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::documents::{
-    delete_document, enqueue_document_classification, enqueue_document_file_page_processing,
-    enqueue_document_thumbnail_generation, get_document_view, update_document,
+    CreateDocumentInput, create_document, delete_document, enqueue_document_classification,
+    enqueue_document_file_page_processing, enqueue_document_thumbnail_generation,
+    get_document_view, update_document,
 };
-use crate::application::jobs::{FastJob, MediumJob};
 use crate::domain::classifier_blocks::ClassifierBlock;
 use crate::domain::document_indexes::DocumentIndexValue;
 use crate::domain::documents::{Document, DocumentChangeset, DocumentView};
@@ -37,22 +34,12 @@ use serde::Deserialize;
 use axum::{
     Json, Router,
     extract::{Multipart, Path, Query, State},
-    http::{HeaderMap, StatusCode},
+    http::HeaderMap,
     response::Response,
     routing::{get, post},
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-
-use apalis::prelude::*;
-
-#[derive(Debug, Deserialize, Insertable)]
-#[diesel(table_name = documents)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-struct NewDocument {
-    title: String,
-    document_type_id: i64,
-}
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -333,146 +320,22 @@ async fn create(
     let ParsedMultipart {
         title,
         document_type_id,
-        mut file_temp,
+        file_temp,
     } = parse_create_multipart(&mut multipart).await?;
 
-    let mut file_info: Option<UploadedDocumentFile> = None;
+    let document = create_document(
+        state,
+        &mut db,
+        user.user_id,
+        CreateDocumentInput {
+            title,
+            document_type_id,
+            file_upload: file_temp,
+        },
+    )
+    .await?;
 
-    // Validate required fields
-    let title = match title {
-        Some(value) => value,
-        None => {
-            if let Some(upload) = &file_temp {
-                cleanup_buffered_document_file_upload(upload).await;
-            }
-            return Err(ApiError::bad_request("Missing required field: title"));
-        }
-    };
-    let document_type_id = match document_type_id {
-        Some(value) => value,
-        None => {
-            if let Some(upload) = &file_temp {
-                cleanup_buffered_document_file_upload(upload).await;
-            }
-            return Err(ApiError::bad_request(
-                "Missing required field: document_type_id",
-            ));
-        }
-    };
-
-    // Upload the temp file to S3, then delete it.
-    if let Some(upload) = file_temp.take() {
-        file_info = Some(upload_document_file_to_s3(&state, upload).await?);
-    }
-
-    // Clone file_info for potential cleanup in error path
-    let file_info_for_cleanup = file_info.clone();
-
-    // Clone the fast job queue handle for use inside the transaction closure
-    let fast_jobs = state.fast_jobs.as_ref().clone();
-    let medium_jobs = state.medium_jobs.as_ref().clone();
-    let thumb_enqueue_failed = Arc::new(AtomicBool::new(false));
-    let thumb_enqueue_failed_for_tx = Arc::clone(&thumb_enqueue_failed);
-    let pages_enqueue_failed = Arc::new(AtomicBool::new(false));
-    let pages_enqueue_failed_for_tx = Arc::clone(&pages_enqueue_failed);
-
-    // Begin database transaction
-    let result = db
-        .build_transaction()
-        .run::<_, diesel::result::Error, _>(|conn| {
-            Box::pin(async move {
-                let mut fast_jobs = fast_jobs;
-                let mut medium_jobs = medium_jobs;
-                // Insert document record
-                let inserted_document: Document = diesel::insert_into(documents::table)
-                    .values((
-                        documents::title.eq(&title),
-                        documents::document_type_id.eq(document_type_id),
-                        documents::created_by.eq(user.user_id),
-                        documents::updated_by.eq(user.user_id),
-                    ))
-                    .returning(Document::as_returning())
-                    .get_result(conn)
-                    .await?;
-
-                // If file was uploaded, insert document_files record
-                if let Some(upload) = file_info {
-                    let inserted_file =
-                        insert_document_file(conn, inserted_document.id, upload, user.user_id)
-                            .await?;
-
-                    if let Err(_) = fast_jobs
-                        .push(FastJob::GenerateThumbnail {
-                            document_file_id: inserted_file.id,
-                            page: 1,
-                            width: 800,
-                        })
-                        .await
-                    {
-                        thumb_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
-                        return Err(diesel::result::Error::RollbackTransaction);
-                    }
-
-                    if let Err(_) = medium_jobs
-                        .push(MediumJob::ProcessFilePages {
-                            document_file_id: inserted_file.id,
-                        })
-                        .await
-                    {
-                        pages_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
-                        return Err(diesel::result::Error::RollbackTransaction);
-                    }
-                }
-
-                Ok(inserted_document)
-            })
-        })
-        .await;
-
-    match result {
-        Ok(document) => {
-            // Enqueue jobs to update document indexes for this document, as the tags may be used in index rules.
-            enqueue_document_index_document_updates(document.id, state.clone()).await?;
-
-            Ok(Json(document))
-        }
-        Err(e) => {
-            // On transaction failure, attempt S3 cleanup (best-effort)
-            if let Some(upload) = file_info_for_cleanup {
-                delete_uploaded_document_file_from_s3(&state, &upload).await;
-            }
-            if matches!(e, diesel::result::Error::RollbackTransaction) {
-                let thumb_failed = thumb_enqueue_failed.as_ref().load(Ordering::Relaxed);
-                let pages_failed = pages_enqueue_failed.as_ref().load(Ordering::Relaxed);
-                if thumb_failed && pages_failed {
-                    Err(ApiError::new(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to enqueue document processing jobs",
-                    ))
-                } else if thumb_failed {
-                    Err(ApiError::new(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to enqueue thumbnail job",
-                    ))
-                } else if pages_failed {
-                    Err(ApiError::new(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to enqueue file pages job",
-                    ))
-                } else {
-                    Err(ApiError::new(
-                        diesel_to_http(e),
-                        "Failed to create document",
-                    ))
-                }
-            } else {
-                Err(ApiError::new(
-                    diesel_to_http(e),
-                    "Failed to create document",
-                ))
-            }
-        }
-    }
+    Ok(Json(document))
 }
 
 async fn update(

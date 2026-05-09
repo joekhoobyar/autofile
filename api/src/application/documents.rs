@@ -1,8 +1,14 @@
 use chrono::Utc;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
+use crate::application::document_files::{
+    BufferedDocumentFileUpload, cleanup_buffered_document_file_upload,
+    delete_uploaded_document_file_from_s3, insert_document_file, upload_document_file_to_s3,
+};
 use crate::application::document_index_documents::delete_document_index_document;
+use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::jobs::{FastJob, MediumJob};
 use crate::domain::documents::{Document, DocumentChangeset, DocumentView};
 use crate::infrastructure::s3::delete_prefix_from_s3;
@@ -14,11 +20,156 @@ use crate::shared::app_state::AppState;
 use crate::shared::util::{ApiError, diesel_to_http};
 
 use apalis::prelude::*;
+use axum::http::StatusCode;
 use bb8::PooledConnection;
 use diesel::dsl::{exists, not, sum};
 use diesel::prelude::*;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
+
+pub struct CreateDocumentInput {
+    pub title: Option<String>,
+    pub document_type_id: Option<i64>,
+    pub file_upload: Option<BufferedDocumentFileUpload>,
+}
+
+pub async fn create_document(
+    state: Arc<AppState>,
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    user_id: i64,
+    input: CreateDocumentInput,
+) -> Result<Document, ApiError> {
+    let CreateDocumentInput {
+        title,
+        document_type_id,
+        mut file_upload,
+    } = input;
+
+    let title = match title {
+        Some(value) => value,
+        None => {
+            if let Some(upload) = &file_upload {
+                cleanup_buffered_document_file_upload(upload).await;
+            }
+            return Err(ApiError::bad_request("Missing required field: title"));
+        }
+    };
+    let document_type_id = match document_type_id {
+        Some(value) => value,
+        None => {
+            if let Some(upload) = &file_upload {
+                cleanup_buffered_document_file_upload(upload).await;
+            }
+            return Err(ApiError::bad_request(
+                "Missing required field: document_type_id",
+            ));
+        }
+    };
+
+    let mut file_info = None;
+    if let Some(upload) = file_upload.take() {
+        file_info = Some(upload_document_file_to_s3(&state, upload).await?);
+    }
+
+    let file_info_for_cleanup = file_info.clone();
+    let fast_jobs = state.fast_jobs.as_ref().clone();
+    let medium_jobs = state.medium_jobs.as_ref().clone();
+    let thumb_enqueue_failed = Arc::new(AtomicBool::new(false));
+    let thumb_enqueue_failed_for_tx = Arc::clone(&thumb_enqueue_failed);
+    let pages_enqueue_failed = Arc::new(AtomicBool::new(false));
+    let pages_enqueue_failed_for_tx = Arc::clone(&pages_enqueue_failed);
+
+    let result = db
+        .build_transaction()
+        .run::<_, diesel::result::Error, _>(|conn| {
+            Box::pin(async move {
+                let mut fast_jobs = fast_jobs;
+                let mut medium_jobs = medium_jobs;
+                let inserted_document: Document = diesel::insert_into(documents::table)
+                    .values((
+                        documents::title.eq(&title),
+                        documents::document_type_id.eq(document_type_id),
+                        documents::created_by.eq(user_id),
+                        documents::updated_by.eq(user_id),
+                    ))
+                    .returning(Document::as_returning())
+                    .get_result(conn)
+                    .await?;
+
+                if let Some(upload) = file_info {
+                    let inserted_file =
+                        insert_document_file(conn, inserted_document.id, upload, user_id).await?;
+
+                    if let Err(_) = fast_jobs
+                        .push(FastJob::GenerateThumbnail {
+                            document_file_id: inserted_file.id,
+                            page: 1,
+                            width: 800,
+                        })
+                        .await
+                    {
+                        thumb_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
+                        return Err(diesel::result::Error::RollbackTransaction);
+                    }
+
+                    if let Err(_) = medium_jobs
+                        .push(MediumJob::ProcessFilePages {
+                            document_file_id: inserted_file.id,
+                        })
+                        .await
+                    {
+                        pages_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
+                        return Err(diesel::result::Error::RollbackTransaction);
+                    }
+                }
+
+                Ok(inserted_document)
+            })
+        })
+        .await;
+
+    match result {
+        Ok(document) => {
+            enqueue_document_index_document_updates(document.id, state.clone()).await?;
+            Ok(document)
+        }
+        Err(e) => {
+            if let Some(upload) = file_info_for_cleanup {
+                delete_uploaded_document_file_from_s3(&state, &upload).await;
+            }
+            if matches!(e, diesel::result::Error::RollbackTransaction) {
+                let thumb_failed = thumb_enqueue_failed.as_ref().load(Ordering::Relaxed);
+                let pages_failed = pages_enqueue_failed.as_ref().load(Ordering::Relaxed);
+                if thumb_failed && pages_failed {
+                    Err(ApiError::new(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to enqueue document processing jobs",
+                    ))
+                } else if thumb_failed {
+                    Err(ApiError::new(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to enqueue thumbnail job",
+                    ))
+                } else if pages_failed {
+                    Err(ApiError::new(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to enqueue file pages job",
+                    ))
+                } else {
+                    Err(ApiError::new(
+                        diesel_to_http(e),
+                        "Failed to create document",
+                    ))
+                }
+            } else {
+                Err(ApiError::new(
+                    diesel_to_http(e),
+                    "Failed to create document",
+                ))
+            }
+        }
+    }
+}
 
 pub async fn delete_document(
     state: Arc<AppState>,
