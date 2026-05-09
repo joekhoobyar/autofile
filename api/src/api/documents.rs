@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -9,14 +9,15 @@ use crate::application::document_files::{
     insert_document_file, upload_document_file_to_s3,
 };
 use crate::application::document_index_documents::build_template_document_view;
-use crate::application::document_index_documents::delete_document_index_document;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
-use crate::application::documents::{get_document_view, update_document};
+use crate::application::documents::{
+    delete_document, enqueue_document_classification, enqueue_document_file_page_processing,
+    enqueue_document_thumbnail_generation, get_document_view, update_document,
+};
 use crate::application::jobs::{FastJob, MediumJob};
 use crate::domain::classifier_blocks::ClassifierBlock;
 use crate::domain::document_indexes::DocumentIndexValue;
 use crate::domain::documents::{Document, DocumentChangeset, DocumentView};
-use crate::infrastructure::s3::delete_prefix_from_s3;
 use crate::schema::{
     cabinet_documents, classifier_blocks, document_file_ocr_pages, document_file_pages,
     document_files, document_index_documents, document_index_values, document_metadatas, documents,
@@ -41,7 +42,7 @@ use axum::{
     routing::{get, post},
 };
 use diesel::prelude::*;
-use diesel_async::{AsyncConnection, RunQueryDsl};
+use diesel_async::RunQueryDsl;
 
 use apalis::prelude::*;
 
@@ -189,96 +190,7 @@ pub async fn delete(
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
 ) -> Result<Json<()>, ApiError> {
-    let prefixes = db
-        .transaction::<_, diesel::result::Error, _>(move |conn| {
-            Box::pin(async move {
-                // Remove document index associations before deleting the document row.
-                delete_document_index_document(conn, id).await?;
-
-                // Delete the cabinet document associations
-                diesel::delete(
-                    cabinet_documents::table.filter(cabinet_documents::document_id.eq(id)),
-                )
-                .execute(conn)
-                .await?;
-
-                // Delete the tag document associations
-                diesel::delete(tag_documents::table.filter(tag_documents::document_id.eq(id)))
-                    .execute(conn)
-                    .await?;
-
-                // Delete the document metadata associations
-                diesel::delete(
-                    document_metadatas::table.filter(document_metadatas::document_id.eq(id)),
-                )
-                .execute(conn)
-                .await?;
-
-                diesel::delete(
-                    document_file_ocr_pages::table.filter(exists(
-                        document_files::table
-                            .filter(document_files::document_id.eq(id))
-                            .filter(
-                                document_files::id.eq(document_file_ocr_pages::document_file_id),
-                            ),
-                    )),
-                )
-                .execute(conn)
-                .await?;
-
-                diesel::delete(
-                    document_file_pages::table.filter(exists(
-                        document_files::table
-                            .filter(document_files::document_id.eq(id))
-                            .filter(document_files::id.eq(document_file_pages::document_file_id)),
-                    )),
-                )
-                .execute(conn)
-                .await?;
-
-                // Delete the document files, fetching the S3 keys for later deletion.
-                let prefixes: Vec<String> = diesel::delete(
-                    document_files::table.filter(document_files::document_id.eq(id)),
-                )
-                .returning(document_files::s3_prefix)
-                .get_results(conn)
-                .await?;
-
-                // Delete the document.
-                let affected = diesel::delete(documents::table.filter(documents::id.eq(id)))
-                    .execute(conn)
-                    .await?;
-                if affected == 0 {
-                    return Err(diesel::result::Error::NotFound);
-                }
-
-                Ok(prefixes)
-            })
-        })
-        .await
-        .map_err(|e| {
-            if matches!(e, diesel::result::Error::NotFound) {
-                ApiError::not_found("Document not found")
-            } else {
-                ApiError::new(diesel_to_http(e), "Failed to delete document")
-            }
-        })?;
-
-    if !prefixes.is_empty() {
-        let unique_prefixes: HashSet<String> = prefixes.into_iter().collect();
-        for prefix in unique_prefixes {
-            let delete_prefix = format!("{}/", prefix);
-            delete_prefix_from_s3(&state.s3_client, &state.s3_bucket, &delete_prefix)
-                .await
-                .map_err(|e| {
-                    ApiError::internal_server_error(&format!(
-                        "Failed to delete document files from storage: {}",
-                        e
-                    ))
-                })?;
-        }
-    }
-
+    delete_document(state, &mut db, id).await?;
     Ok(Json(()))
 }
 
@@ -288,30 +200,7 @@ pub async fn process_file_pages(
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
 ) -> Result<Json<()>, ApiError> {
-    let file_ids: Vec<i64> = document_files::table
-        .filter(document_files::document_id.eq(id))
-        .select(document_files::id)
-        .order(document_files::id.asc())
-        .load::<i64>(&mut db)
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document files"))?;
-
-    if file_ids.is_empty() {
-        return Ok(Json(()));
-    }
-
-    let mut medium_jobs = state.medium_jobs.as_ref().clone();
-    for document_file_id in file_ids {
-        if let Err(_) = medium_jobs
-            .push(MediumJob::ProcessFilePages { document_file_id })
-            .await
-        {
-            return Err(ApiError::internal_server_error(
-                "Failed to enqueue file pages job",
-            ));
-        }
-    }
-
+    enqueue_document_file_page_processing(state, &mut db, id).await?;
     Ok(Json(()))
 }
 
@@ -321,33 +210,7 @@ pub async fn generate_thumbnail(
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
 ) -> Result<Json<()>, ApiError> {
-    let document_file_id = document_files::table
-        .filter(document_files::document_id.eq(id))
-        .select(document_files::id)
-        .order(document_files::id.asc())
-        .first::<i64>(&mut db)
-        .await
-        .optional()
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document file"))?;
-
-    let Some(document_file_id) = document_file_id else {
-        return Ok(Json(()));
-    };
-
-    let mut fast_jobs = state.fast_jobs.as_ref().clone();
-    if let Err(_) = fast_jobs
-        .push(FastJob::GenerateThumbnail {
-            document_file_id,
-            page: 1,
-            width: 800,
-        })
-        .await
-    {
-        return Err(ApiError::internal_server_error(
-            "Failed to enqueue thumbnail job",
-        ));
-    }
-
+    enqueue_document_thumbnail_generation(state, &mut db, id).await?;
     Ok(Json(()))
 }
 
@@ -357,32 +220,7 @@ pub async fn classify_document(
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
 ) -> Result<Json<()>, ApiError> {
-    documents::table
-        .find(id)
-        .select(documents::id)
-        .first::<i64>(&mut db)
-        .await
-        .map_err(|e| {
-            if matches!(e, diesel::result::Error::NotFound) {
-                ApiError::not_found("Document not found")
-            } else {
-                ApiError::new(diesel_to_http(e), "Failed to fetch document")
-            }
-        })?;
-
-    let mut medium_jobs = state.medium_jobs.as_ref().clone();
-    if let Err(_) = medium_jobs
-        .push(MediumJob::ClassifyDocument {
-            document_id: id,
-            user_id: user.user_id,
-        })
-        .await
-    {
-        return Err(ApiError::internal_server_error(
-            "Failed to enqueue classify document job",
-        ));
-    }
-
+    enqueue_document_classification(state, &mut db, id, user.user_id).await?;
     Ok(Json(()))
 }
 
@@ -795,7 +633,11 @@ pub async fn list(
         if params.duplicates.unwrap_or_default() {
             let duplicate_documents = diesel::alias!(documents as duplicate_documents);
             let subquery = duplicate_documents
-                .filter(duplicate_documents.field(documents::title).eq(documents::title))
+                .filter(
+                    duplicate_documents
+                        .field(documents::title)
+                        .eq(documents::title),
+                )
                 .filter(duplicate_documents.field(documents::id).ne(documents::id));
 
             if match_any {
