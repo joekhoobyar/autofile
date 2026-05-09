@@ -120,6 +120,7 @@ function parseDocumentListHash(hash: string): DocumentListParams {
       ...(tagId ? { tag_id: tagId } : {}),
     }),
     ...(parseBooleanParam(params.get('duplicates')) ? { duplicates: true } : {}),
+    ...(parseBooleanParam(params.get('duplicate_checksum')) ? { duplicate_checksum: true } : {}),
   };
 }
 
@@ -191,6 +192,9 @@ function serializeDocumentListHash(params: DocumentListParams): string {
   }
   if (params.duplicates) {
     urlParams.set('duplicates', 'true');
+  }
+  if (params.duplicate_checksum) {
+    urlParams.set('duplicate_checksum', 'true');
   }
 
   return urlParams.toString();
@@ -535,7 +539,10 @@ export function ListDocuments() {
       });
     }
     if (listParams.duplicates) {
-      chips.push({ key: 'duplicates', label: 'Duplicate titles' });
+      chips.push({ key: 'duplicates', label: 'Duplicate title' });
+    }
+    if (listParams.duplicate_checksum) {
+      chips.push({ key: 'duplicate-checksum', label: 'Duplicate file checksum' });
     }
     return chips;
   }, [appliedSearchText, tagId, cabinetId, tagLookup, cabinetLookup, listParams, documentTypeLookup, metadataTypeLookup]);
@@ -602,6 +609,7 @@ export function ListDocuments() {
       cabinet_id: undefined,
       tag_id: undefined,
       duplicates: undefined,
+      duplicate_checksum: undefined,
       page: 1,
     });
   }
@@ -808,6 +816,9 @@ export function ListDocuments() {
                 case 'duplicates':
                   updateListParams({ ...listParams, duplicates: undefined, page: 1 });
                   break;
+                case 'duplicate-checksum':
+                  updateListParams({ ...listParams, duplicate_checksum: undefined, page: 1 });
+                  break;
                 default:
                   navigate('/documents');
               }
@@ -912,6 +923,7 @@ type AdvancedDocumentSearchFormValues = {
   cabinet_id: number | null;
   tag_id: number | null;
   duplicates: boolean;
+  duplicate_checksum: boolean;
 };
 
 export function AdvancedDocumentSearch() {
@@ -935,6 +947,7 @@ export function AdvancedDocumentSearch() {
       cabinet_id: existingParams.cabinet_id ?? null,
       tag_id: existingParams.tag_id ?? null,
       duplicates: !!existingParams.duplicates,
+      duplicate_checksum: !!existingParams.duplicate_checksum,
     },
   });
 
@@ -955,6 +968,7 @@ export function AdvancedDocumentSearch() {
       cabinet_id: values.cabinet_id ?? undefined,
       tag_id: values.tag_id ?? undefined,
       duplicates: values.duplicates || undefined,
+      duplicate_checksum: values.duplicate_checksum || undefined,
     };
 
     navigate({
@@ -976,6 +990,7 @@ export function AdvancedDocumentSearch() {
       cabinet_id: null,
       tag_id: null,
       duplicates: false,
+      duplicate_checksum: false,
     });
   };
 
@@ -1176,7 +1191,24 @@ export function AdvancedDocumentSearch() {
                     checked={field.value}
                     onChange={(event) => field.onChange(!!event.checked)}
                   />
-                  <label htmlFor="advanced-search-duplicates">Find documents with duplicate titles</label>
+                  <label htmlFor="advanced-search-duplicates">Find documents with duplicate title</label>
+                </div>
+              )}
+            />
+          </div>
+
+          <div className="col-12 md:col-6 flex align-items-end">
+            <Controller
+              name="duplicate_checksum"
+              control={control}
+              render={({ field }) => (
+                <div className="flex align-items-center gap-2 mb-2">
+                  <Checkbox
+                    inputId="advanced-search-duplicate-checksum"
+                    checked={field.value}
+                    onChange={(event) => field.onChange(!!event.checked)}
+                  />
+                  <label htmlFor="advanced-search-duplicate-checksum">Find documents with duplicate file checksum</label>
                 </div>
               )}
             />

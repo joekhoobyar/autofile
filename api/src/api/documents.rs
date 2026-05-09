@@ -39,6 +39,7 @@ use axum::{
     routing::{get, post},
 };
 use diesel::prelude::*;
+use diesel::sql_types::Bool;
 use diesel_async::RunQueryDsl;
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -80,6 +81,8 @@ pub struct ListDocumentsQuery {
     pub document_index_value_id: Option<i64>,
     // optional duplicate search
     pub duplicates: Option<bool>,
+    // optional duplicate file checksum search
+    pub duplicate_checksum: Option<bool>,
     // optional sort field
     pub sf: Option<DocumentSortField>,
     // optional sort descending
@@ -553,6 +556,32 @@ pub async fn list(
                 query = query.or_filter(exists(subquery));
             } else {
                 query = query.filter(exists(subquery));
+            }
+        }
+
+        // Filter to documents with a file checksum shared by a file on another document.
+        if params.duplicate_checksum.unwrap_or_default() {
+            let criteria = diesel::dsl::sql::<Bool>(
+                r#"
+                EXISTS (
+                    SELECT 1
+                    FROM document_files matching_files
+                    WHERE matching_files.document_id = documents.id
+                      AND matching_files.checksum_sha256 IS NOT NULL
+                      AND EXISTS (
+                          SELECT 1
+                          FROM document_files duplicate_files
+                          WHERE duplicate_files.checksum_sha256 = matching_files.checksum_sha256
+                            AND duplicate_files.document_id <> matching_files.document_id
+                      )
+                )
+                "#,
+            );
+
+            if match_any {
+                query = query.or_filter(criteria);
+            } else {
+                query = query.filter(criteria);
             }
         }
 
