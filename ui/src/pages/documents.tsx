@@ -15,7 +15,7 @@ import { useDocuments, useDocumentThumbnail } from '../queries/useDocuments';
 import { useDocumentIndex } from '../queries/useDocumentIndexes';
 import { useDocumentIndexValueAncestors } from '../queries/useDocumentIndexValues';
 import { type Document, type DocumentListParams } from '../models/document';
-import { useMetadataTypesMap } from '../queries/useMetadataTypes';
+import { useMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { useDocumentTypes, useDocumentTypesMap } from '../queries/useDocumentTypes';
 import { Menu } from 'primereact/menu';
 import type { MenuItem } from 'primereact/menuitem';
@@ -84,7 +84,13 @@ function parseDocumentListHash(hash: string): DocumentListParams {
   const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
   const page = parsePositiveIntParam(params.get('page'));
   const perPage = parsePositiveIntParam(params.get('per_page'));
-  const searchText = params.get('q')?.trim() || undefined;
+  const basicSearch = params.get('search')?.trim() || undefined;
+  const matchAny = parseBooleanParam(params.get('match_any'));
+  const titleSearch = params.get('q')?.trim() || undefined;
+  const textSearch = params.get('text')?.trim() || undefined;
+  const metadataValue = params.get('metadata_value')?.trim() || undefined;
+  const documentTypeId = parsePositiveIntParam(params.get('document_type_id'));
+  const metadataTypeId = parsePositiveIntParam(params.get('metadata_type_id'));
 
   return {
     ...DEFAULT_DOCUMENT_LIST_PARAMS,
@@ -92,20 +98,29 @@ function parseDocumentListHash(hash: string): DocumentListParams {
     ...(perPage && DOCUMENT_LIST_PAGE_SIZES.includes(perPage) ? { per_page: perPage } : {}),
     ...(params.has('sf') ? { sf: params.get('sf') || undefined } : {}),
     ...(params.has('sd') ? { sd: parseBooleanParam(params.get('sd')) } : {}),
-    ...(searchText ? {
+    ...(basicSearch ? {
       match_any: true,
-      q: searchText,
-      text: searchText,
-      metadata_value: searchText,
-    } : {}),
+      q: basicSearch,
+      text: basicSearch,
+      metadata_value: basicSearch,
+    } : {
+      ...(matchAny ? { match_any: true } : {}),
+      ...(titleSearch ? { q: titleSearch } : {}),
+      ...(textSearch ? { text: textSearch } : {}),
+      ...(documentTypeId ? { document_type_id: documentTypeId } : {}),
+      ...(metadataValue ? { metadata_value: metadataValue } : {}),
+      ...(metadataTypeId ? { metadata_type_id: metadataTypeId } : {}),
+    }),
     ...(parseBooleanParam(params.get('duplicates')) ? { duplicates: true } : {}),
   };
 }
 
-function serializeDocumentListHash(params: DocumentListParams): string {
-  const urlParams = new URLSearchParams();
-  const searchText = params.q?.trim() || params.text?.trim() || params.metadata_value?.trim();
+function parseBasicDocumentSearchHash(hash: string): string {
+  const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+  return params.get('search')?.trim() ?? '';
+}
 
+function serializeDocumentListCommonParams(params: DocumentListParams, urlParams: URLSearchParams) {
   if (params.page && params.page !== DEFAULT_DOCUMENT_LIST_PARAMS.page) {
     urlParams.set('page', String(params.page));
   }
@@ -118,8 +133,41 @@ function serializeDocumentListHash(params: DocumentListParams): string {
   if (params.sd !== DEFAULT_DOCUMENT_LIST_PARAMS.sd) {
     urlParams.set('sd', params.sd ? 'desc' : 'asc');
   }
+}
+
+function serializeBasicDocumentSearchHash(value: string, params: DocumentListParams): string {
+  const urlParams = new URLSearchParams();
+  const searchText = value.trim();
+
+  serializeDocumentListCommonParams({ ...params, page: 1 }, urlParams);
   if (searchText) {
-    urlParams.set('q', searchText);
+    urlParams.set('search', searchText);
+  }
+
+  return urlParams.toString();
+}
+
+function serializeDocumentListHash(params: DocumentListParams): string {
+  const urlParams = new URLSearchParams();
+
+  serializeDocumentListCommonParams(params, urlParams);
+  if (params.match_any) {
+    urlParams.set('match_any', 'true');
+  }
+  if (params.q?.trim()) {
+    urlParams.set('q', params.q.trim());
+  }
+  if (params.text?.trim()) {
+    urlParams.set('text', params.text.trim());
+  }
+  if (params.document_type_id) {
+    urlParams.set('document_type_id', String(params.document_type_id));
+  }
+  if (params.metadata_value?.trim()) {
+    urlParams.set('metadata_value', params.metadata_value.trim());
+  }
+  if (params.metadata_type_id) {
+    urlParams.set('metadata_type_id', String(params.metadata_type_id));
   }
   if (params.duplicates) {
     urlParams.set('duplicates', 'true');
@@ -392,7 +440,7 @@ export function ListDocuments() {
   const [previewSrc, setPreviewSrc] = useState<string | undefined>(undefined);
   const [previewTitle, setPreviewTitle] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const appliedSearchText = listParams.q ?? '';
+  const appliedSearchText = parseBasicDocumentSearchHash(location.hash);
   const [searchDraft, setSearchDraft] = useState({ appliedSearchText, value: appliedSearchText });
   const searchText = searchDraft.appliedSearchText === appliedSearchText ? searchDraft.value : appliedSearchText;
   const setSearchText = (value: string) => setSearchDraft({ appliedSearchText, value });
@@ -401,6 +449,8 @@ export function ListDocuments() {
   const allVisibleSelected = visibleDocumentIds.length > 0 && visibleDocumentIds.every((id) => selectedIds.has(id));
   const { data: cabinetOptions } = useCabinets({ page: 1, per_page: MAX_CABINETS });
   const { data: tagOptions } = useTags({ page: 1, per_page: 200 });
+  const { data: documentTypeLookup } = useDocumentTypesMap();
+  const { data: metadataTypeLookup } = useMetadataTypesMap('id');
   const cabinetLookup = useMemo(() => {
     const lookup: Record<number, Cabinet> = {};
     for (const cabinet of cabinetOptions?.items ?? []) {
@@ -418,6 +468,31 @@ export function ListDocuments() {
 
   const activeFilterChips = useMemo(() => {
     const chips: Array<{ key: string; label: string }> = [];
+    if (appliedSearchText) {
+      chips.push({ key: 'basic-search', label: `Search: ${appliedSearchText}` });
+    } else {
+      if (listParams.q) {
+        chips.push({ key: 'q', label: `Title: ${listParams.q}` });
+      }
+      if (listParams.text) {
+        chips.push({ key: 'text', label: `Text: ${listParams.text}` });
+      }
+      if (listParams.document_type_id) {
+        chips.push({
+          key: 'document-type',
+          label: `Document type: ${documentTypeLookup?.[String(listParams.document_type_id)]?.name ?? listParams.document_type_id}`,
+        });
+      }
+      if (listParams.metadata_value) {
+        chips.push({ key: 'metadata-value', label: `Metadata: ${listParams.metadata_value}` });
+      }
+      if (listParams.metadata_type_id) {
+        chips.push({
+          key: 'metadata-type',
+          label: `Metadata type: ${metadataTypeLookup?.[String(listParams.metadata_type_id)]?.name ?? listParams.metadata_type_id}`,
+        });
+      }
+    }
     if (tagId && tagLookup[tagId]) {
       chips.push({ key: `tag-${tagId}`, label: `🏷️ ${tagLookup[tagId].name}` });
     }
@@ -429,7 +504,7 @@ export function ListDocuments() {
       chips.push({ key: 'duplicates', label: 'Duplicate titles' });
     }
     return chips;
-  }, [tagId, cabinetId, tagLookup, cabinetLookup, listParams.duplicates]);
+  }, [appliedSearchText, tagId, cabinetId, tagLookup, cabinetLookup, listParams, documentTypeLookup, metadataTypeLookup]);
 
   const sortOptions = [
     { label: 'ID (Ascending)', value: 'id:asc' },
@@ -471,15 +546,10 @@ export function ListDocuments() {
   };
 
   const applySearch = () => {
-    const value = searchText.trim();
-
-    updateListParams({
-      ...listParams,
-      match_any: true,
-      q: value || undefined,
-      text: value || undefined,
-      metadata_value: value || undefined,
-      page: 1,
+    navigate({
+      pathname: location.pathname,
+      search: location.search,
+      hash: serializeBasicDocumentSearchHash(searchText, listParams),
     });
   };
 
@@ -487,26 +557,16 @@ export function ListDocuments() {
     setSearchText('');
     updateListParams({
       ...listParams,
-      match_any: true,
-      q: undefined,
-      text: undefined,
-      metadata_value: undefined,
-      page: 1,
-    });
-  }
-
-  const findDuplicates = () => {
-    setSearchText('');
-    updateListParams({
-      ...listParams,
       match_any: undefined,
       q: undefined,
       text: undefined,
+      document_type_id: undefined,
       metadata_value: undefined,
-      duplicates: true,
+      metadata_type_id: undefined,
+      duplicates: undefined,
       page: 1,
     });
-  };
+  }
 
   const openPreview = (src: string | undefined, title: string) => {
     if (!src) return;
@@ -625,10 +685,10 @@ export function ListDocuments() {
           </div>
           <Button
             type="button"
-            label="Find Duplicates"
+            label="Advanced Search"
             link
             size="small"
-            onClick={findDuplicates}
+            onClick={() => navigate('/documents/search')}
             className="align-self-start md:align-self-center p-0 md:ml-5"
           />
         </div>
@@ -667,10 +727,30 @@ export function ListDocuments() {
             label={chip.label}
             removable
             onRemove={() => {
-              if (chip.key === 'duplicates') {
-                updateListParams({ ...listParams, duplicates: undefined, page: 1 });
-              } else {
-                navigate('/documents');
+              switch (chip.key) {
+                case 'basic-search':
+                  clearSearch();
+                  break;
+                case 'q':
+                  updateListParams({ ...listParams, q: undefined, page: 1 });
+                  break;
+                case 'text':
+                  updateListParams({ ...listParams, text: undefined, page: 1 });
+                  break;
+                case 'document-type':
+                  updateListParams({ ...listParams, document_type_id: undefined, page: 1 });
+                  break;
+                case 'metadata-value':
+                  updateListParams({ ...listParams, metadata_value: undefined, page: 1 });
+                  break;
+                case 'metadata-type':
+                  updateListParams({ ...listParams, metadata_type_id: undefined, page: 1 });
+                  break;
+                case 'duplicates':
+                  updateListParams({ ...listParams, duplicates: undefined, page: 1 });
+                  break;
+                default:
+                  navigate('/documents');
               }
               return true;
             }}
@@ -758,6 +838,207 @@ export function ListDocuments() {
         {mainContent}
       </div>
     </div>
+  );
+}
+
+type AdvancedDocumentSearchFormValues = {
+  match_any: boolean;
+  q: string;
+  text: string;
+  document_type_id: number | null;
+  metadata_value: string;
+  metadata_type_id: number | null;
+  duplicates: boolean;
+};
+
+export function AdvancedDocumentSearch() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const existingParams = useMemo(() => parseDocumentListHash(location.hash), [location.hash]);
+  const { data: documentTypes, isPending: isDocumentTypesPending, isFetching: isDocumentTypesFetching } = useDocumentTypes({ page: 1, per_page: 200, sf: 'name' });
+  const { data: metadataTypes, isPending: isMetadataTypesPending, isFetching: isMetadataTypesFetching } = useMetadataTypes({ page: 1, per_page: 200, sf: 'name' });
+  const { control, handleSubmit, reset, formState: { isSubmitting } } = useForm<AdvancedDocumentSearchFormValues>({
+    defaultValues: {
+      match_any: !!existingParams.match_any,
+      q: parseBasicDocumentSearchHash(location.hash) ? '' : existingParams.q ?? '',
+      text: parseBasicDocumentSearchHash(location.hash) ? '' : existingParams.text ?? '',
+      document_type_id: existingParams.document_type_id ?? null,
+      metadata_value: parseBasicDocumentSearchHash(location.hash) ? '' : existingParams.metadata_value ?? '',
+      metadata_type_id: existingParams.metadata_type_id ?? null,
+      duplicates: !!existingParams.duplicates,
+    },
+  });
+
+  const onSubmit = (values: AdvancedDocumentSearchFormValues) => {
+    const nextParams: DocumentListParams = {
+      page: 1,
+      per_page: existingParams.per_page,
+      sf: existingParams.sf,
+      sd: existingParams.sd,
+      match_any: values.match_any || undefined,
+      q: values.q.trim() || undefined,
+      text: values.text.trim() || undefined,
+      document_type_id: values.document_type_id ?? undefined,
+      metadata_value: values.metadata_value.trim() || undefined,
+      metadata_type_id: values.metadata_type_id ?? undefined,
+      duplicates: values.duplicates || undefined,
+    };
+
+    navigate({
+      pathname: '/documents',
+      hash: serializeDocumentListHash(nextParams),
+    });
+  };
+
+  const resetForm = () => {
+    reset({
+      match_any: false,
+      q: '',
+      text: '',
+      document_type_id: null,
+      metadata_value: '',
+      metadata_type_id: null,
+      duplicates: false,
+    });
+  };
+
+  return (
+    <Card title="Advanced Document Search">
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <div className="grid p-fluid">
+          <div className="col-12">
+            <Controller
+              name="match_any"
+              control={control}
+              render={({ field }) => (
+                <div className="flex align-items-center gap-2">
+                  <Checkbox
+                    inputId="advanced-search-match-any"
+                    checked={field.value}
+                    onChange={(event) => field.onChange(!!event.checked)}
+                  />
+                  <label htmlFor="advanced-search-match-any">Match Any</label>
+                </div>
+              )}
+            />
+            <small className="text-color-secondary block mt-2">When checked, documents can match any search criterion instead of all criteria.</small>
+          </div>
+
+          <div className="col-12 md:col-6">
+            <label htmlFor="advanced-search-title" className="font-medium mb-2 block">Title</label>
+            <Controller
+              name="q"
+              control={control}
+              render={({ field }) => (
+                <InputText
+                  id="advanced-search-title"
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder="Title contains..."
+                />
+              )}
+            />
+          </div>
+
+          <div className="col-12 md:col-6">
+            <label htmlFor="advanced-search-text" className="font-medium mb-2 block">Document Text / OCR Search</label>
+            <Controller
+              name="text"
+              control={control}
+              render={({ field }) => (
+                <InputText
+                  id="advanced-search-text"
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder="Document text or OCR search..."
+                />
+              )}
+            />
+          </div>
+
+          <div className="col-12 md:col-6">
+            <label htmlFor="advanced-search-metadata-value" className="font-medium mb-2 block">Metadata Value</label>
+            <Controller
+              name="metadata_value"
+              control={control}
+              render={({ field }) => (
+                <InputText
+                  id="advanced-search-metadata-value"
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder="Metadata value contains..."
+                />
+              )}
+            />
+          </div>
+
+          <div className="col-12 md:col-6">
+            <label htmlFor="advanced-search-metadata-type" className="font-medium mb-2 block">Metadata Type</label>
+            <Controller
+              name="metadata_type_id"
+              control={control}
+              render={({ field }) => (
+                <Dropdown
+                  id="advanced-search-metadata-type"
+                  value={field.value}
+                  onChange={(event) => field.onChange(event.value ?? null)}
+                  optionLabel="name"
+                  optionValue="id"
+                  options={metadataTypes?.items ?? []}
+                  loading={isMetadataTypesPending || isMetadataTypesFetching}
+                  placeholder="Any metadata type"
+                  showClear
+                />
+              )}
+            />
+          </div>
+
+          <div className="col-12 md:col-6">
+            <label htmlFor="advanced-search-document-type" className="font-medium mb-2 block">Document Type</label>
+            <Controller
+              name="document_type_id"
+              control={control}
+              render={({ field }) => (
+                <Dropdown
+                  id="advanced-search-document-type"
+                  value={field.value}
+                  onChange={(event) => field.onChange(event.value ?? null)}
+                  optionLabel="name"
+                  optionValue="id"
+                  options={documentTypes?.items ?? []}
+                  loading={isDocumentTypesPending || isDocumentTypesFetching}
+                  placeholder="Any document type"
+                  showClear
+                />
+              )}
+            />
+          </div>
+
+          <div className="col-12 md:col-6 flex align-items-end">
+            <Controller
+              name="duplicates"
+              control={control}
+              render={({ field }) => (
+                <div className="flex align-items-center gap-2 mb-2">
+                  <Checkbox
+                    inputId="advanced-search-duplicates"
+                    checked={field.value}
+                    onChange={(event) => field.onChange(!!event.checked)}
+                  />
+                  <label htmlFor="advanced-search-duplicates">Find documents with duplicate titles</label>
+                </div>
+              )}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-column sm:flex-row justify-content-end gap-2 mt-4">
+          <Button label="Search" type="submit" icon="pi pi-search" raised disabled={isSubmitting} />
+          <Button label="Reset" type="button" icon="pi pi-refresh" severity="secondary" outlined onClick={resetForm} />
+          <Button label="Cancel" type="button" icon="pi pi-times" severity="secondary" text onClick={() => navigate('/documents')} />
+        </div>
+      </form>
+    </Card>
   );
 }
 

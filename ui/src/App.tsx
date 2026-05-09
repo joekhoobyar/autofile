@@ -10,7 +10,7 @@ import { BreadCrumb } from 'primereact/breadcrumb';
         
 // app
 import './App.scss'
-import UploadDocument, { EditDocumentProperties, ListDocuments } from './pages/documents.tsx';
+import UploadDocument, { AdvancedDocumentSearch, EditDocumentProperties, ListDocuments } from './pages/documents.tsx';
 import { EditCabinet, ListCabinets, NewCabinet } from './pages/cabinets.tsx';
 import { EditMetadataType, ListMetadataTypes, NewMetadataType } from './pages/metadataTypes.tsx';
 import { EditDocumentType, ListDocumentTypes, NewDocumentType } from './pages/documentTypes.tsx';
@@ -124,6 +124,7 @@ const router = createBrowserRouter([
       { path: 'documents', 
         children: [
           { index: true, element: <ListDocuments/> },
+          { path: 'search', element: <AdvancedDocumentSearch/> },
           { path: 'new', element: <UploadDocument/> },
           { path: ':id/properties', element: <EditDocumentProperties/> },
           { path: ':id/metadata', element: <EditDocumentMetadata/> },

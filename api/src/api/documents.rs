@@ -58,7 +58,7 @@ pub struct ListDocumentsQuery {
     pub per_page: Option<i64>,
     // if true, match any of the search criteria instead of all.
     pub match_any: Option<bool>,
-    // optional substring search
+    // optional title search
     pub q: Option<String>,
     // optional text search
     pub text: Option<String>,
@@ -415,6 +415,16 @@ pub async fn list(
                 } else {
                     query = query.filter(exists(subquery));
                 }
+            }
+        } else if let Some(metadata_type_id) = params.metadata_type_id {
+            let subquery = document_metadatas::table
+                .filter(document_metadatas::document_id.eq(documents::id))
+                .filter(document_metadatas::metadata_type_id.eq(metadata_type_id));
+
+            if match_any {
+                query = query.or_filter(exists(subquery));
+            } else {
+                query = query.filter(exists(subquery));
             }
         }
 
