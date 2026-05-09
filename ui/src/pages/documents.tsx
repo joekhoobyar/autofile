@@ -93,6 +93,8 @@ function parseDocumentListHash(hash: string): DocumentListParams {
   const fileContentType = params.get('file_content_type')?.trim() || undefined;
   const documentTypeId = parsePositiveIntParam(params.get('document_type_id'));
   const metadataTypeId = parsePositiveIntParam(params.get('metadata_type_id'));
+  const cabinetId = parsePositiveIntParam(params.get('cabinet_id'));
+  const tagId = parsePositiveIntParam(params.get('tag_id'));
 
   return {
     ...DEFAULT_DOCUMENT_LIST_PARAMS,
@@ -114,6 +116,8 @@ function parseDocumentListHash(hash: string): DocumentListParams {
       ...(metadataTypeId ? { metadata_type_id: metadataTypeId } : {}),
       ...(filename ? { filename } : {}),
       ...(fileContentType ? { file_content_type: fileContentType } : {}),
+      ...(cabinetId ? { cabinet_id: cabinetId } : {}),
+      ...(tagId ? { tag_id: tagId } : {}),
     }),
     ...(parseBooleanParam(params.get('duplicates')) ? { duplicates: true } : {}),
   };
@@ -178,6 +182,12 @@ function serializeDocumentListHash(params: DocumentListParams): string {
   }
   if (params.file_content_type?.trim()) {
     urlParams.set('file_content_type', params.file_content_type.trim());
+  }
+  if (params.cabinet_id) {
+    urlParams.set('cabinet_id', String(params.cabinet_id));
+  }
+  if (params.tag_id) {
+    urlParams.set('tag_id', String(params.tag_id));
   }
   if (params.duplicates) {
     urlParams.set('duplicates', 'true');
@@ -438,9 +448,9 @@ export function ListDocuments() {
   const documentIndexId = params.documentIndexId ? Number.parseInt(params.documentIndexId) : undefined;
   const effectiveListParams: DocumentListParams = {
     ...listParams,
-    tag_id: tagId,
-    cabinet_id: cabinetId,
-    document_index_value_id: documentIndexValueId,
+    tag_id: tagId ?? listParams.tag_id,
+    cabinet_id: cabinetId ?? listParams.cabinet_id,
+    document_index_value_id: documentIndexValueId ?? listParams.document_index_value_id,
   };
   const showIndexMenu = !!documentIndexId && !!documentIndexValueId;
   const { data: indexAncestors } = useDocumentIndexValueAncestors(documentIndexId ?? 0, documentIndexValueId ?? 0);
@@ -509,12 +519,20 @@ export function ListDocuments() {
         chips.push({ key: 'file-content-type', label: `Content type: ${listParams.file_content_type}` });
       }
     }
-    if (tagId && tagLookup[tagId]) {
-      chips.push({ key: `tag-${tagId}`, label: `🏷️ ${tagLookup[tagId].name}` });
+    const effectiveTagId = tagId ?? listParams.tag_id;
+    const effectiveCabinetId = cabinetId ?? listParams.cabinet_id;
+    if (effectiveTagId && tagLookup[effectiveTagId]) {
+      chips.push({
+        key: tagId ? `route-tag-${effectiveTagId}` : 'tag',
+        label: `🏷️ ${tagLookup[effectiveTagId].name}`,
+      });
     }
-    if (cabinetId && cabinetLookup[cabinetId]) {
-      const cabinet = cabinetLookup[cabinetId];
-      chips.push({ key: `cabinet-${cabinetId}`, label: `🗄️ ${cabinet.displayName ?? cabinet.name ?? cabinet.slug}` });
+    if (effectiveCabinetId && cabinetLookup[effectiveCabinetId]) {
+      const cabinet = cabinetLookup[effectiveCabinetId];
+      chips.push({
+        key: cabinetId ? `route-cabinet-${effectiveCabinetId}` : 'cabinet',
+        label: `🗄️ ${cabinet.displayName ?? cabinet.name ?? cabinet.slug}`,
+      });
     }
     if (listParams.duplicates) {
       chips.push({ key: 'duplicates', label: 'Duplicate titles' });
@@ -581,6 +599,8 @@ export function ListDocuments() {
       metadata_type_id: undefined,
       filename: undefined,
       file_content_type: undefined,
+      cabinet_id: undefined,
+      tag_id: undefined,
       duplicates: undefined,
       page: 1,
     });
@@ -659,6 +679,12 @@ export function ListDocuments() {
   };
 
   const header = () => {
+    const advancedSearchParams: DocumentListParams = {
+      ...listParams,
+      cabinet_id: cabinetId ?? listParams.cabinet_id,
+      tag_id: tagId ?? listParams.tag_id,
+    };
+
     return (
       <div className="flex flex-column gap-3 md:flex-row md:justify-content-between md:align-items-center">
         <div className="flex flex-column gap-2 md:flex-row md:align-items-center w-full md:w-auto">
@@ -706,7 +732,10 @@ export function ListDocuments() {
             label="Advanced Search"
             link
             size="small"
-            onClick={() => navigate('/documents/search')}
+            onClick={() => navigate({
+              pathname: '/documents/search',
+              hash: serializeDocumentListHash(advancedSearchParams),
+            })}
             className="align-self-start md:align-self-center p-0 md:ml-5"
           />
         </div>
@@ -769,6 +798,12 @@ export function ListDocuments() {
                   break;
                 case 'file-content-type':
                   updateListParams({ ...listParams, file_content_type: undefined, page: 1 });
+                  break;
+                case 'tag':
+                  updateListParams({ ...listParams, tag_id: undefined, page: 1 });
+                  break;
+                case 'cabinet':
+                  updateListParams({ ...listParams, cabinet_id: undefined, page: 1 });
                   break;
                 case 'duplicates':
                   updateListParams({ ...listParams, duplicates: undefined, page: 1 });
@@ -874,6 +909,8 @@ type AdvancedDocumentSearchFormValues = {
   metadata_type_id: number | null;
   filename: string;
   file_content_type: string;
+  cabinet_id: number | null;
+  tag_id: number | null;
   duplicates: boolean;
 };
 
@@ -883,6 +920,8 @@ export function AdvancedDocumentSearch() {
   const existingParams = useMemo(() => parseDocumentListHash(location.hash), [location.hash]);
   const { data: documentTypes, isPending: isDocumentTypesPending, isFetching: isDocumentTypesFetching } = useDocumentTypes({ page: 1, per_page: 200, sf: 'name' });
   const { data: metadataTypes, isPending: isMetadataTypesPending, isFetching: isMetadataTypesFetching } = useMetadataTypes({ page: 1, per_page: 200, sf: 'name' });
+  const { data: cabinets, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinets({ page: 1, per_page: MAX_CABINETS, sf: 'name' });
+  const { data: tags, isPending: isTagsPending, isFetching: isTagsFetching } = useTags({ page: 1, per_page: 200, sf: 'name' });
   const { control, handleSubmit, reset, formState: { isSubmitting } } = useForm<AdvancedDocumentSearchFormValues>({
     defaultValues: {
       match_any: !!existingParams.match_any,
@@ -893,6 +932,8 @@ export function AdvancedDocumentSearch() {
       metadata_type_id: existingParams.metadata_type_id ?? null,
       filename: existingParams.filename ?? '',
       file_content_type: existingParams.file_content_type ?? '',
+      cabinet_id: existingParams.cabinet_id ?? null,
+      tag_id: existingParams.tag_id ?? null,
       duplicates: !!existingParams.duplicates,
     },
   });
@@ -911,6 +952,8 @@ export function AdvancedDocumentSearch() {
       metadata_type_id: values.metadata_type_id ?? undefined,
       filename: values.filename.trim() || undefined,
       file_content_type: values.file_content_type.trim() || undefined,
+      cabinet_id: values.cabinet_id ?? undefined,
+      tag_id: values.tag_id ?? undefined,
       duplicates: values.duplicates || undefined,
     };
 
@@ -930,6 +973,8 @@ export function AdvancedDocumentSearch() {
       metadata_type_id: null,
       filename: '',
       file_content_type: '',
+      cabinet_id: null,
+      tag_id: null,
       duplicates: false,
     });
   };
@@ -1052,6 +1097,48 @@ export function AdvancedDocumentSearch() {
                   value={field.value}
                   onChange={field.onChange}
                   placeholder="Content type contains..."
+                />
+              )}
+            />
+          </div>
+
+          <div className="col-12 md:col-6">
+            <label htmlFor="advanced-search-cabinet" className="font-medium mb-2 block">Cabinet</label>
+            <Controller
+              name="cabinet_id"
+              control={control}
+              render={({ field }) => (
+                <Dropdown
+                  id="advanced-search-cabinet"
+                  value={field.value}
+                  onChange={(event) => field.onChange(event.value ?? null)}
+                  optionLabel="displayName"
+                  optionValue="id"
+                  options={cabinets?.items ?? []}
+                  loading={isCabinetsPending || isCabinetsFetching}
+                  placeholder="Any cabinet"
+                  showClear
+                />
+              )}
+            />
+          </div>
+
+          <div className="col-12 md:col-6">
+            <label htmlFor="advanced-search-tag" className="font-medium mb-2 block">Tag</label>
+            <Controller
+              name="tag_id"
+              control={control}
+              render={({ field }) => (
+                <Dropdown
+                  id="advanced-search-tag"
+                  value={field.value}
+                  onChange={(event) => field.onChange(event.value ?? null)}
+                  optionLabel="name"
+                  optionValue="id"
+                  options={tags?.items ?? []}
+                  loading={isTagsPending || isTagsFetching}
+                  placeholder="Any tag"
+                  showClear
                 />
               )}
             />
