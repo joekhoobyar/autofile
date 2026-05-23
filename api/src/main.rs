@@ -117,6 +117,7 @@ async fn main() {
         .register({
             // One or more workers pulling from Redis
             WorkerBuilder::new("fast-job-worker")
+                .catch_panic()
                 .retry(RetryPolicy::retries(7))
                 .enable_tracing()
                 .concurrency(6) // Adjust concurrency as needed
@@ -126,6 +127,7 @@ async fn main() {
         })
         .register({
             WorkerBuilder::new("medium-job-worker")
+                .catch_panic()
                 .retry(RetryPolicy::retries(7))
                 .enable_tracing()
                 .concurrency(4)
@@ -135,6 +137,7 @@ async fn main() {
         })
         .register({
             WorkerBuilder::new("slow-job-worker")
+                .catch_panic()
                 .retry(RetryPolicy::retries(7))
                 .enable_tracing()
                 .concurrency(2)

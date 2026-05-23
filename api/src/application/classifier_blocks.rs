@@ -979,7 +979,7 @@ fn apply_modifier(
         }
         ClassifierModifier::Sprintf { from, to, format } => {
             let value = apply_replacements(from, snippets);
-            Ok(Some((*to, mod_sprintf(&value, format))))
+            Ok(Some((*to, mod_sprintf(&value, format)?)))
         }
         ClassifierModifier::ZeroPad { from, to, length } => {
             let value = apply_replacements(from, snippets);
@@ -1109,7 +1109,7 @@ fn mod_month_number(value: &str) -> Option<String> {
     result
 }
 
-fn mod_sprintf(value: &str, fmt: &str) -> String {
+fn mod_sprintf(value: &str, fmt: &str) -> Result<String, String> {
     tracing::debug!(value, fmt, "classification: modifier: sprintf");
     let mut v = value;
     let re = Regex::new(r"^0+([1-9])").unwrap();
@@ -1119,7 +1119,9 @@ fn mod_sprintf(value: &str, fmt: &str) -> String {
         }
     }
 
-    sprintf!(fmt, v).unwrap().replace(" ", "0")
+    sprintf!(fmt, v)
+        .map(|value| value.replace(" ", "0"))
+        .map_err(|err| err.to_string())
 }
 
 fn mod_zeropad(value: &str, length: usize) -> String {
@@ -1701,6 +1703,21 @@ mod tests {
         );
 
         assert_eq!(snippets.get(&2), Some(&"0007".to_string()));
+    }
+
+    #[test]
+    fn modifier_sprintf_returns_error_for_invalid_format() {
+        let snippets = HashMap::from([(1, "7".to_string())]);
+        let computed_actions = HashMap::new();
+        let modifier = ClassifierModifier::Sprintf {
+            from: "\\1".to_string(),
+            to: 2,
+            format: "%q".to_string(),
+        };
+
+        let result = apply_modifier(&snippets, &modifier, &computed_actions);
+
+        assert!(result.is_err());
     }
 
     #[test]
