@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use apalis::prelude::*;
 use diesel::prelude::*;
@@ -17,6 +16,17 @@ use crate::schema::{
 };
 use crate::shared::app_state::AppState;
 use crate::shared::util::{ApiError, JobResult};
+
+#[derive(Clone)]
+struct PendingIndexValue {
+    template_idx: usize,
+    value: String,
+}
+
+struct TraversalFrame {
+    template_idx: usize,
+    path: Vec<PendingIndexValue>,
+}
 
 /**
  * This function is responsible for enqueueing jobs to update all document indexes for a given document.
@@ -194,8 +204,8 @@ async fn do_update_document_index_document_inner(
             .await?;
     let mut existing_value_ids: HashSet<i64> = existing_value_ids.into_iter().collect();
 
-    // Next, start at the root(s) of the document index (the template with no parent) and traverse down the tree, matching the document's metadata to the template's criteria, and updating the document_index_documents records as needed.
-    // This function will evaluate the template against the DocumentView, using minijinja.
+    // Next, start at the root(s) of the document index and traverse down the tree. Values are
+    // only persisted after a complete leaf path matches, so empty branches do not leave partial nodes.
     let templates = document_index_templates::table
         .filter(document_index_templates::document_index_id.eq(document_index_id))
         .select(DocumentIndexTemplate::as_select())
@@ -214,15 +224,10 @@ async fn do_update_document_index_document_inner(
     let templates = Arc::new(templates);
     let children_by_parent = Arc::new(children_by_parent);
 
-    // Seed the stack with root templates (parent_id = None). Each root is processed independently
-    // so a rollback only affects the current root.
+    // Seed the stack with root templates (parent_id = None). Each root is processed independently.
     if let Some(root_ids) = children_by_parent.get(&None) {
         let root_ids: Vec<usize> = root_ids.clone();
         for root_idx in root_ids {
-            let skip_due_to_empty_template = Arc::new(AtomicBool::new(false));
-            let skip_due_to_empty_template_tx = Arc::clone(&skip_due_to_empty_template);
-            let skip_due_to_no_leaf = Arc::new(AtomicBool::new(false));
-            let skip_due_to_no_leaf_tx = Arc::clone(&skip_due_to_no_leaf);
             let templates = Arc::clone(&templates);
             let children_by_parent = Arc::clone(&children_by_parent);
             let document_view = Arc::clone(&document_view);
@@ -231,47 +236,50 @@ async fn do_update_document_index_document_inner(
                 .build_transaction()
                 .run::<Vec<i64>, diesel::result::Error, _>(|conn| {
                     Box::pin(async move {
-                        let mut stack: Vec<(usize, Option<i64>)> = vec![(root_idx, None)];
-                        let mut leaf_found = false;
+                        let mut stack: Vec<TraversalFrame> = vec![TraversalFrame {
+                            template_idx: root_idx,
+                            path: Vec::new(),
+                        }];
                         let mut matched_leaf_value_ids: Vec<i64> = Vec::new();
 
                         // Depth-first traversal using an explicit stack to avoid recursive async calls.
-                        while let Some((idx, parent_value_id)) = stack.pop() {
-                            let template = &templates[idx];
+                        while let Some(frame) = stack.pop() {
+                            let template = &templates[frame.template_idx];
 
-                            let value_id = apply_document_index_value(
-                                conn,
-                                &document_view,
-                                template,
-                                parent_value_id,
-                            )
-                            .await
-                            .map_err(|err| {
-                                tracing::error!(error = %err, "document_index_values apply failed inside transaction");
+                            let rendered_value = render_document_index_value(&document_view, template).map_err(|err| {
+                                tracing::error!(error = %err, "document_index_values render failed inside transaction");
                                 err
                             })?;
 
-                            let Some(value_id) = value_id else {
-                                skip_due_to_empty_template_tx.store(true, Ordering::Relaxed);
-                                return Err(diesel::result::Error::RollbackTransaction);
+                            let Some(rendered_value) = rendered_value else {
+                                continue;
                             };
 
+                            let mut path = frame.path;
+                            path.push(PendingIndexValue {
+                                template_idx: frame.template_idx,
+                                value: rendered_value,
+                            });
+
                             if !template.is_leaf {
-                                // Push children onto the stack with this node's value_id as their parent.
                                 if let Some(child_ids) = children_by_parent.get(&Some(template.id)) {
                                     for &child_idx in child_ids {
-                                        stack.push((child_idx, Some(value_id)));
+                                        stack.push(TraversalFrame {
+                                            template_idx: child_idx,
+                                            path: path.clone(),
+                                        });
                                     }
                                 }
                             } else {
-                                leaf_found = true;
+                                let value_id = persist_document_index_path(
+                                    conn,
+                                    document_id,
+                                    templates.as_ref(),
+                                    &path,
+                                )
+                                .await?;
                                 matched_leaf_value_ids.push(value_id);
                             }
-                        }
-
-                        if !leaf_found {
-                            skip_due_to_no_leaf_tx.store(true, Ordering::Relaxed);
-                            return Err(diesel::result::Error::RollbackTransaction);
                         }
 
                         Ok(matched_leaf_value_ids)
@@ -284,14 +292,6 @@ async fn do_update_document_index_document_inner(
                     for value_id in matched_leaf_value_ids {
                         existing_value_ids.remove(&value_id);
                     }
-                }
-                Err(diesel::result::Error::RollbackTransaction) => {
-                    let should_skip = skip_due_to_empty_template.as_ref().load(Ordering::Relaxed)
-                        || skip_due_to_no_leaf.as_ref().load(Ordering::Relaxed);
-                    if should_skip {
-                        continue;
-                    }
-                    return Err(diesel::result::Error::RollbackTransaction.into());
                 }
                 Err(err) => {
                     return Err(err.into());
@@ -465,18 +465,10 @@ async fn delete_stale_document_index_values(
     Ok(())
 }
 
-/**
- * Internal function to evaluate a document index template for a document, which may result in
- * upserting document_index_value and document_index_document records.
- *
- * Will remove the value_id from the set of existing_value_ids if a document_index_document record is upserted.
- */
-async fn apply_document_index_value(
-    db: &mut AsyncPgConnection,
+fn render_document_index_value(
     doc: &TemplateDocumentView,
     template: &DocumentIndexTemplate,
-    parent_value_id: Option<i64>,
-) -> Result<Option<i64>, diesel::result::Error> {
+) -> Result<Option<String>, diesel::result::Error> {
     // Evaluate the template against the DocumentView, using minijinja
     // We will pass this DocumentView to minijinja under the "doc" key.
     let env = minijinja::Environment::new();
@@ -491,12 +483,59 @@ async fn apply_document_index_value(
         return Ok(None);
     }
 
+    Ok(Some(rendered_value))
+}
+
+async fn persist_document_index_path(
+    db: &mut AsyncPgConnection,
+    document_id: i64,
+    templates: &[DocumentIndexTemplate],
+    path: &[PendingIndexValue],
+) -> Result<i64, diesel::result::Error> {
+    let mut parent_value_id = None;
+    let mut leaf_value_id = None;
+
+    for pending_value in path {
+        let template = &templates[pending_value.template_idx];
+        let value_id =
+            upsert_document_index_value(db, template, &pending_value.value, parent_value_id)
+                .await?;
+
+        if template.is_leaf {
+            diesel::insert_into(document_index_documents::table)
+                .values((
+                    document_index_documents::document_index_value_id.eq(value_id),
+                    document_index_documents::document_id.eq(document_id),
+                ))
+                .on_conflict((
+                    document_index_documents::document_index_value_id,
+                    document_index_documents::document_id,
+                ))
+                .do_nothing()
+                .execute(db)
+                .await?;
+
+            leaf_value_id = Some(value_id);
+        }
+
+        parent_value_id = Some(value_id);
+    }
+
+    leaf_value_id.ok_or(diesel::result::Error::RollbackTransaction)
+}
+
+async fn upsert_document_index_value(
+    db: &mut AsyncPgConnection,
+    template: &DocumentIndexTemplate,
+    value: &str,
+    parent_value_id: Option<i64>,
+) -> Result<i64, diesel::result::Error> {
     // Upsert the document_index_values record for the evaluated text value.
-    let value_id: i64 = diesel::insert_into(document_index_values::table)
+    diesel::insert_into(document_index_values::table)
         .values((
             document_index_values::document_index_id.eq(template.document_index_id),
             document_index_values::document_index_template_id.eq(template.id),
-            document_index_values::value.eq(rendered_value),
+            document_index_values::value.eq(value),
             document_index_values::parent_id.eq(parent_value_id),
             document_index_values::is_leaf.eq(template.is_leaf),
         ))
@@ -515,23 +554,5 @@ async fn apply_document_index_value(
         ))
         .returning(document_index_values::id)
         .get_result(db)
-        .await?;
-
-    // If this is a leaf node, we need upsert a document_index_documents record for this document and the document_index_value_id we just upserted.
-    if template.is_leaf {
-        diesel::insert_into(document_index_documents::table)
-            .values((
-                document_index_documents::document_index_value_id.eq(value_id),
-                document_index_documents::document_id.eq(doc.id),
-            ))
-            .on_conflict((
-                document_index_documents::document_index_value_id,
-                document_index_documents::document_id,
-            ))
-            .do_nothing()
-            .execute(db)
-            .await?;
-    }
-
-    Ok(Some(value_id))
+        .await
 }

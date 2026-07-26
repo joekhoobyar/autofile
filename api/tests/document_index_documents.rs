@@ -43,6 +43,23 @@ async fn list_index_documents(
         .expect("document index documents should load")
 }
 
+async fn list_index_value_rows(
+    db: &mut bb8::PooledConnection<'_, AsyncPgConnection>,
+    document_index_id: i64,
+) -> Vec<(String, Option<i64>, bool)> {
+    document_index_values::table
+        .filter(document_index_values::document_index_id.eq(document_index_id))
+        .order(document_index_values::value.asc())
+        .select((
+            document_index_values::value,
+            document_index_values::parent_id,
+            document_index_values::is_leaf,
+        ))
+        .load(db)
+        .await
+        .expect("document index value rows should load")
+}
+
 #[tokio::test]
 async fn rebuild_document_index_clears_stale_rows_and_rebuilds_from_documents() {
     let test_db = TestDatabase::new().await;
@@ -150,4 +167,176 @@ async fn rebuild_nonexistent_document_index_is_successful_noop() {
     rebuild_document_index_inner(999, test_db.pool.clone())
         .await
         .expect("rebuild should succeed");
+}
+
+#[tokio::test]
+async fn rebuild_document_index_skips_empty_child_branch_but_keeps_matching_sibling() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(&mut db, 1, "tester", "tester@example.com").await;
+    insert_document_type(&mut db, 100, "invoice", "Invoice", 1).await;
+    insert_document(&mut db, 1, "Alpha", 100, 1).await;
+    insert_document_index(&mut db, 1, "main-index", "Main Index", 1).await;
+    insert_document_index_template(&mut db, 1, 1, "root", false, None, 1).await;
+    insert_document_index_template(&mut db, 2, 1, "", true, Some(1), 1).await;
+    insert_document_index_template(&mut db, 3, 1, "{{ doc.title }}", true, Some(1), 1).await;
+
+    rebuild_document_index_inner(1, test_db.pool.clone())
+        .await
+        .expect("rebuild should succeed");
+
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    assert_eq!(list_index_values(&mut db, 1).await, vec!["Alpha", "root"]);
+    assert_eq!(
+        list_index_documents(&mut db, 1).await,
+        vec![(1, "Alpha".to_string())]
+    );
+}
+
+#[tokio::test]
+async fn rebuild_document_index_skips_empty_grandchild_but_keeps_sibling_grandchild() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(&mut db, 1, "tester", "tester@example.com").await;
+    insert_document_type(&mut db, 100, "invoice", "Invoice", 1).await;
+    insert_document(&mut db, 1, "Alpha", 100, 1).await;
+    insert_document_index(&mut db, 1, "main-index", "Main Index", 1).await;
+    insert_document_index_template(&mut db, 1, 1, "root", false, None, 1).await;
+    insert_document_index_template(&mut db, 2, 1, "section", false, Some(1), 1).await;
+    insert_document_index_template(&mut db, 3, 1, "", true, Some(2), 1).await;
+    insert_document_index_template(&mut db, 4, 1, "{{ doc.title }}", true, Some(2), 1).await;
+
+    rebuild_document_index_inner(1, test_db.pool.clone())
+        .await
+        .expect("rebuild should succeed");
+
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    assert_eq!(
+        list_index_values(&mut db, 1).await,
+        vec!["Alpha", "root", "section"]
+    );
+    assert_eq!(
+        list_index_documents(&mut db, 1).await,
+        vec![(1, "Alpha".to_string())]
+    );
+}
+
+#[tokio::test]
+async fn rebuild_document_index_does_not_persist_partial_path_when_branch_has_no_matching_leaf() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(&mut db, 1, "tester", "tester@example.com").await;
+    insert_document_type(&mut db, 100, "invoice", "Invoice", 1).await;
+    insert_document(&mut db, 1, "Alpha", 100, 1).await;
+    insert_document_index(&mut db, 1, "main-index", "Main Index", 1).await;
+    insert_document_index_template(&mut db, 1, 1, "root", false, None, 1).await;
+    insert_document_index_template(&mut db, 2, 1, "section", false, Some(1), 1).await;
+    insert_document_index_template(&mut db, 3, 1, "", true, Some(2), 1).await;
+
+    rebuild_document_index_inner(1, test_db.pool.clone())
+        .await
+        .expect("rebuild should succeed");
+
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    assert_eq!(list_index_values(&mut db, 1).await, Vec::<String>::new());
+    assert_eq!(
+        list_index_documents(&mut db, 1).await,
+        Vec::<(i64, String)>::new()
+    );
+}
+
+#[tokio::test]
+async fn rebuild_document_index_keeps_independent_roots_isolated() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(&mut db, 1, "tester", "tester@example.com").await;
+    insert_document_type(&mut db, 100, "invoice", "Invoice", 1).await;
+    insert_document(&mut db, 1, "Alpha", 100, 1).await;
+    insert_document_index(&mut db, 1, "main-index", "Main Index", 1).await;
+    insert_document_index_template(&mut db, 1, 1, "root-a", false, None, 1).await;
+    insert_document_index_template(&mut db, 2, 1, "", true, Some(1), 1).await;
+    insert_document_index_template(&mut db, 3, 1, "root-b", false, None, 1).await;
+    insert_document_index_template(&mut db, 4, 1, "{{ doc.title }}", true, Some(3), 1).await;
+
+    rebuild_document_index_inner(1, test_db.pool.clone())
+        .await
+        .expect("rebuild should succeed");
+
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    assert_eq!(list_index_values(&mut db, 1).await, vec!["Alpha", "root-b"]);
+    assert_eq!(
+        list_index_documents(&mut db, 1).await,
+        vec![(1, "Alpha".to_string())]
+    );
+}
+
+#[tokio::test]
+async fn rebuild_document_index_removes_stale_leaf_when_branch_becomes_empty() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(&mut db, 1, "tester", "tester@example.com").await;
+    insert_document_type(&mut db, 100, "invoice", "Invoice", 1).await;
+    insert_document(&mut db, 1, "Alpha", 100, 1).await;
+    insert_document_index(&mut db, 1, "main-index", "Main Index", 1).await;
+    insert_document_index_template(&mut db, 1, 1, "root", false, None, 1).await;
+    insert_document_index_template(&mut db, 2, 1, "section", false, Some(1), 1).await;
+    insert_document_index_template(&mut db, 3, 1, "", true, Some(2), 1).await;
+    insert_document_index_value(&mut db, 10, 1, 1, "root", None, false).await;
+    insert_document_index_value(&mut db, 11, 1, 2, "section", Some(10), false).await;
+    insert_document_index_value(&mut db, 12, 1, 3, "Old Leaf", Some(11), true).await;
+    insert_document_index_document(&mut db, 12, 1).await;
+
+    rebuild_document_index_inner(1, test_db.pool.clone())
+        .await
+        .expect("rebuild should succeed");
+
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    assert_eq!(
+        list_index_value_rows(&mut db, 1).await,
+        Vec::<(String, Option<i64>, bool)>::new()
+    );
+    assert_eq!(
+        list_index_documents(&mut db, 1).await,
+        Vec::<(i64, String)>::new()
+    );
 }
