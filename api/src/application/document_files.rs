@@ -4,6 +4,7 @@ use std::sync::Arc;
 use apalis::prelude::*;
 use diesel::prelude::*;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
+use tokio::io::AsyncRead;
 use tokio::process::Command;
 use uuid::Uuid;
 
@@ -939,24 +940,30 @@ async fn process_file_pages_pdf(
         .await?;
 
     for page in 1..=pages {
-        tracing::info!(document_file_id, page, "extracting text for page");
-        let text = extract_pdf_page_text(temp_file.to_owned(), page, state.clone()).await?;
-        upsert_document_file_page(&mut db, document_file_id, page as i32, Some(text)).await?;
+        {
+            tracing::info!(document_file_id, page, "extracting text for page");
+            let text =
+                extract_pdf_page_text(temp_file.to_owned(), page, temp_dir, state.clone()).await?;
+            upsert_document_file_page(&mut db, document_file_id, page as i32, Some(text)).await?;
+        }
 
-        tracing::info!(document_file_id, page, "extracting image for page");
-        let image_path = extract_pdf_page_image(
-            temp_file.to_owned(),
-            page,
-            temp_dir,
-            &document_file.s3_prefix,
-            state.clone(),
-        )
-        .await?;
-
-        tracing::info!(document_file_id, page, "extracting OCR text for page");
-        let ocr_text = extract_page_ocr(image_path, state.clone()).await?;
-        upsert_document_file_ocr_page(&mut db, document_file_id, page as i32, Some(ocr_text))
+        {
+            tracing::info!(document_file_id, page, "extracting image for page");
+            let image_path = extract_pdf_page_image(
+                temp_file.to_owned(),
+                page,
+                temp_dir,
+                &document_file.s3_prefix,
+                state.clone(),
+            )
             .await?;
+
+            tracing::info!(document_file_id, page, "extracting OCR text for page");
+            let ocr_text = extract_page_ocr(&image_path, temp_dir, state.clone()).await?;
+            upsert_document_file_ocr_page(&mut db, document_file_id, page as i32, Some(ocr_text))
+                .await?;
+            remove_temp_file_best_effort(&image_path, "page image").await;
+        }
     }
 
     cleanup_extra_pages(
@@ -1004,8 +1011,9 @@ async fn process_file_pages_image(
         page = 1,
         "extracting OCR text for image page"
     );
-    let ocr_text = extract_page_ocr(image_path, state.clone()).await?;
+    let ocr_text = extract_page_ocr(&image_path, temp_dir, state.clone()).await?;
     upsert_document_file_ocr_page(&mut db, document_file_id, 1, Some(ocr_text)).await?;
+    remove_temp_file_best_effort(&image_path, "image page").await;
 
     cleanup_extra_pages(
         &mut db,
@@ -1151,31 +1159,31 @@ async fn upsert_document_file_ocr_page(
 async fn extract_pdf_page_text(
     file: String,
     page: u32,
+    temp_dir: &Path,
     _state: Data<Arc<AppState>>,
 ) -> JobResult<String> {
-    let output = Command::new("pdftotext")
-        .arg("-f")
-        .arg(page.to_string())
-        .arg("-l")
-        .arg(page.to_string())
-        .arg(file)
-        .arg("-")
-        .output()
-        .await?;
+    let runner = TokioProcessRunner;
+    extract_pdf_page_text_with_runner(file, page, temp_dir, &runner).await
+}
 
-    if !output.status.success() {
-        let error = std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!(
-                "pdftotext failed with status {}: {}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr)
-            ),
-        );
-        return Err(error.into());
-    }
+async fn extract_pdf_page_text_with_runner<R: ProcessRunner + ?Sized>(
+    file: String,
+    page: u32,
+    temp_dir: &Path,
+    runner: &R,
+) -> JobResult<String> {
+    let output_path = temp_dir.join(format!("page-{page}-text.txt"));
+    let args = vec![
+        "-f".to_string(),
+        page.to_string(),
+        "-l".to_string(),
+        page.to_string(),
+        file,
+        output_path.to_string_lossy().to_string(),
+    ];
+    run_process(runner, "pdftotext", &args, "pdftotext").await?;
 
-    let text = String::from_utf8(output.stdout)?;
+    let text = read_string_and_remove_file(&output_path).await?;
     Ok(text)
 }
 
@@ -1273,27 +1281,42 @@ pub(crate) async fn upload_png_to_s3(
  * Internal function to extract OCR text from a page image
  * by running `tesseract` on the file and capturing the output.
  */
-async fn extract_page_ocr(image_path: PathBuf, _state: Data<Arc<AppState>>) -> JobResult<String> {
-    let output = Command::new("tesseract")
-        .arg(&image_path)
-        .arg("stdout")
-        .output()
-        .await?;
+async fn extract_page_ocr(
+    image_path: &Path,
+    temp_dir: &Path,
+    _state: Data<Arc<AppState>>,
+) -> JobResult<String> {
+    let runner = TokioProcessRunner;
+    extract_page_ocr_with_runner(image_path, temp_dir, &runner).await
+}
 
-    if !output.status.success() {
-        let error = std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!(
-                "tesseract failed with status {}: {}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr)
-            ),
-        );
-        return Err(error.into());
-    }
+async fn extract_page_ocr_with_runner<R: ProcessRunner + ?Sized>(
+    image_path: &Path,
+    temp_dir: &Path,
+    runner: &R,
+) -> JobResult<String> {
+    let output_base = temp_dir.join(format!("ocr-{}", Uuid::new_v4()));
+    let output_path = output_base.with_extension("txt");
+    let args = vec![
+        image_path.to_string_lossy().to_string(),
+        output_base.to_string_lossy().to_string(),
+    ];
+    run_process(runner, "tesseract", &args, "tesseract").await?;
 
-    let text = String::from_utf8(output.stdout)?;
+    let text = read_string_and_remove_file(&output_path).await?;
     Ok(text)
+}
+
+async fn read_string_and_remove_file(path: &Path) -> JobResult<String> {
+    let text = tokio::fs::read_to_string(path).await?;
+    tokio::fs::remove_file(path).await?;
+    Ok(text)
+}
+
+async fn remove_temp_file_best_effort(path: &Path, artifact_name: &str) {
+    if let Err(err) = tokio::fs::remove_file(path).await {
+        tracing::warn!(error = %err, path = %path.display(), artifact_name, "failed to remove temp artifact");
+    }
 }
 
 /**
@@ -1353,13 +1376,22 @@ pub async fn stage_document_file_from_s3(
         .key(&s3_key)
         .send()
         .await?;
-    let file_bytes = object.body.collect().await?.into_bytes();
     let tmp_dir = std::env::temp_dir().join(format!("{}-{}", tempfile_prefix, Uuid::new_v4()));
     tokio::fs::create_dir_all(&tmp_dir).await?;
     let tmp_file = tmp_dir.join("staged-file");
-    tokio::fs::write(&tmp_file, file_bytes).await?;
+    write_stream_to_file(object.body.into_async_read(), &tmp_file).await?;
 
     Ok((tmp_dir, tmp_file.to_string_lossy().to_string()))
+}
+
+async fn write_stream_to_file<R>(mut reader: R, path: &Path) -> JobResult<()>
+where
+    R: AsyncRead + Unpin,
+{
+    let mut file = tokio::fs::File::create(path).await?;
+    tokio::io::copy(&mut reader, &mut file).await?;
+    file.sync_all().await?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1371,6 +1403,7 @@ mod tests {
     #[derive(Clone)]
     enum FakeRunnerMode {
         SuccessCreatesOutput,
+        SuccessCreatesTextOutput(String),
         SuccessNoOutput,
         Failure { status: String, stderr: String },
     }
@@ -1415,6 +1448,21 @@ mod tests {
                         .to_string_lossy();
                     let output_path = Path::new(outdir).join(format!("{}.pdf", input_stem));
                     tokio::fs::write(output_path, b"pdf").await?;
+
+                    Ok(ProcessCommandOutput {
+                        success: true,
+                        status: "0".to_string(),
+                        stderr: String::new(),
+                    })
+                }
+                FakeRunnerMode::SuccessCreatesTextOutput(text) => {
+                    if program == "pdftotext" {
+                        let output_path = args.last().expect("output path not passed");
+                        tokio::fs::write(output_path, text).await?;
+                    } else if program == "tesseract" {
+                        let output_base = args.get(1).expect("output base not passed");
+                        tokio::fs::write(format!("{output_base}.txt"), text).await?;
+                    }
 
                     Ok(ProcessCommandOutput {
                         success: true,
@@ -1920,5 +1968,171 @@ mod tests {
         tokio::fs::remove_dir_all(&test_dir)
             .await
             .expect("failed to clean test dir");
+    }
+
+    #[tokio::test]
+    async fn write_stream_to_file_writes_stream_without_collecting_first() {
+        let test_dir = std::env::temp_dir().join(format!("autofile-test-{}", Uuid::new_v4()));
+        tokio::fs::create_dir_all(&test_dir)
+            .await
+            .expect("failed to create test dir");
+        let output_path = test_dir.join("streamed-output");
+        let contents = b"first chunk\nsecond chunk\nthird chunk";
+
+        write_stream_to_file(&contents[..], &output_path)
+            .await
+            .expect("stream write should succeed");
+
+        let written = tokio::fs::read(&output_path)
+            .await
+            .expect("failed to read streamed output");
+        assert_eq!(written, contents);
+
+        tokio::fs::remove_dir_all(&test_dir)
+            .await
+            .expect("failed to clean test dir");
+    }
+
+    #[tokio::test]
+    async fn pdf_text_extraction_writes_to_temp_file_not_stdout() {
+        let test_dir = std::env::temp_dir().join(format!("autofile-test-{}", Uuid::new_v4()));
+        tokio::fs::create_dir_all(&test_dir)
+            .await
+            .expect("failed to create test dir");
+        let runner = FakeProcessRunner::new(FakeRunnerMode::SuccessCreatesTextOutput(
+            "extracted pdf text".to_string(),
+        ));
+
+        let text =
+            extract_pdf_page_text_with_runner("/tmp/source.pdf".to_string(), 7, &test_dir, &runner)
+                .await
+                .expect("pdf text extraction should succeed");
+
+        assert_eq!(text, "extracted pdf text");
+        assert_single_process_call(
+            &runner,
+            "pdftotext",
+            &[
+                "-f",
+                "7",
+                "-l",
+                "7",
+                "/tmp/source.pdf",
+                test_dir.join("page-7-text.txt").to_string_lossy().as_ref(),
+            ],
+        );
+        assert!(
+            !tokio::fs::try_exists(test_dir.join("page-7-text.txt"))
+                .await
+                .expect("try_exists failed")
+        );
+
+        tokio::fs::remove_dir_all(&test_dir)
+            .await
+            .expect("failed to clean test dir");
+    }
+
+    #[tokio::test]
+    async fn ocr_extraction_writes_to_temp_file_not_stdout() {
+        let test_dir = std::env::temp_dir().join(format!("autofile-test-{}", Uuid::new_v4()));
+        tokio::fs::create_dir_all(&test_dir)
+            .await
+            .expect("failed to create test dir");
+        let image_path = test_dir.join("page-1.png");
+        tokio::fs::write(&image_path, b"png")
+            .await
+            .expect("failed to write page image");
+        let runner = FakeProcessRunner::new(FakeRunnerMode::SuccessCreatesTextOutput(
+            "ocr text".to_string(),
+        ));
+
+        let text = extract_page_ocr_with_runner(&image_path, &test_dir, &runner)
+            .await
+            .expect("ocr extraction should succeed");
+
+        assert_eq!(text, "ocr text");
+        let calls = runner.calls();
+        assert_eq!(calls.len(), 1);
+        let (program, args) = &calls[0];
+        assert_eq!(program, "tesseract");
+        assert_eq!(args.len(), 2);
+        assert_eq!(args[0], image_path.to_string_lossy());
+        assert!(args[1].starts_with(test_dir.to_string_lossy().as_ref()));
+        assert!(args[1].contains("ocr-"));
+        assert!(!args.iter().any(|arg| arg == "stdout"));
+        assert!(
+            !tokio::fs::try_exists(format!("{}.txt", args[1]))
+                .await
+                .expect("try_exists failed")
+        );
+
+        tokio::fs::remove_dir_all(&test_dir)
+            .await
+            .expect("failed to clean test dir");
+    }
+
+    #[tokio::test]
+    async fn read_string_and_remove_file_returns_contents_and_deletes_file() {
+        let test_dir = std::env::temp_dir().join(format!("autofile-test-{}", Uuid::new_v4()));
+        tokio::fs::create_dir_all(&test_dir)
+            .await
+            .expect("failed to create test dir");
+        let output_path = test_dir.join("text-output.txt");
+        tokio::fs::write(&output_path, "extracted text")
+            .await
+            .expect("failed to write text output");
+
+        let text = read_string_and_remove_file(&output_path)
+            .await
+            .expect("read and cleanup should succeed");
+
+        assert_eq!(text, "extracted text");
+        assert!(
+            !tokio::fs::try_exists(&output_path)
+                .await
+                .expect("try_exists failed")
+        );
+
+        tokio::fs::remove_dir_all(&test_dir)
+            .await
+            .expect("failed to clean test dir");
+    }
+
+    #[tokio::test]
+    async fn remove_temp_file_best_effort_deletes_existing_file() {
+        let test_dir = std::env::temp_dir().join(format!("autofile-test-{}", Uuid::new_v4()));
+        tokio::fs::create_dir_all(&test_dir)
+            .await
+            .expect("failed to create test dir");
+        let output_path = test_dir.join("page-1.png");
+        tokio::fs::write(&output_path, b"png")
+            .await
+            .expect("failed to write page image");
+
+        remove_temp_file_best_effort(&output_path, "page image").await;
+
+        assert!(
+            !tokio::fs::try_exists(&output_path)
+                .await
+                .expect("try_exists failed")
+        );
+
+        tokio::fs::remove_dir_all(&test_dir)
+            .await
+            .expect("failed to clean test dir");
+    }
+
+    #[tokio::test]
+    async fn remove_temp_file_best_effort_ignores_missing_file() {
+        let missing_path =
+            std::env::temp_dir().join(format!("autofile-test-missing-{}", Uuid::new_v4()));
+
+        remove_temp_file_best_effort(&missing_path, "missing temp file").await;
+
+        assert!(
+            !tokio::fs::try_exists(&missing_path)
+                .await
+                .expect("try_exists failed")
+        );
     }
 }
