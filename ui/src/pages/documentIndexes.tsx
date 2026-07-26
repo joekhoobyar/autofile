@@ -91,11 +91,13 @@ export function ListDocumentIndexes() {
   );
 
   const doDeleteDocumentIndex = async (c: DocumentIndex) => {
-    await deleteDocumentIndex.mutateAsync(c.id, {
-      onSuccess: () => {
-        navigate('/indexes');
-      }
-    });
+    try {
+      await deleteDocumentIndex.mutateAsync(c.id);
+      toast.current?.show({ severity: 'success', summary: 'Document index deleted', detail: `Deleted ${c.name}.` });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Something went wrong';
+      toast.current?.show({ severity: 'error', summary: 'Delete failed', detail });
+    }
   }
 
   const confirmDeleteDocumentIndex = (c: DocumentIndex) => {

@@ -536,13 +536,13 @@ export function UploadDocumentFile() {
 export function ListDocumentFiles() {
   const documentId = useId('id');
   const navigate = useNavigate();
+  const toast = useRef<Toast>(null);
   const { data: document, isLoading: isDocumentLoading, isError: isDocumentError, error: documentError } = useDocument(documentId);
   const { data: files, isLoading: isFilesLoading, isError: isFilesError, error: filesError } = useDocumentFiles(documentId);
   const deleteDocumentFile = useDeleteDocumentFile();
   const [layout, setLayout] = useState<'list' | 'grid'>('grid');
   const [downloadingIds, setDownloadingIds] = useState<Set<number>>(new Set());
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const openPreview = (fileId: number) => {
@@ -577,12 +577,13 @@ export function ListDocumentFiles() {
   };
 
   const deleteFile = async (file: DocumentFile) => {
-    setDeleteError(null);
     setDeletingId(file.id);
     try {
       await deleteDocumentFile.mutateAsync({ documentId, fileId: file.id });
+      toast.current?.show({ severity: 'success', summary: 'File deleted', detail: `Deleted ${file.filename}.` });
     } catch (error) {
-      setDeleteError(error instanceof HttpError ? error.message : 'Failed to delete file');
+      const detail = error instanceof Error ? error.message : 'Something went wrong';
+      toast.current?.show({ severity: 'error', summary: 'Delete failed', detail });
     } finally {
       setDeletingId(null);
     }
@@ -667,7 +668,6 @@ export function ListDocumentFiles() {
       <Card title={`Document Files${document?.title ? `: ${document.title}` : ''}`}>
         {isFilesError && <Message severity="error" text={filesError.message} />}
         {downloadError && <Message severity="error" text={downloadError} />}
-        {deleteError && <Message severity="error" text={deleteError} />}
         <DataView
           value={files ?? []}
           loading={isFilesLoading}
@@ -677,6 +677,7 @@ export function ListDocumentFiles() {
           header={header}
         />
       </Card>
+      <AppToast ref={toast} />
     </DocumentViewLayout>
   );
 }

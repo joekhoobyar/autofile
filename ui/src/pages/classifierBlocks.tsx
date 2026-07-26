@@ -100,11 +100,13 @@ export function ListClassifierBlocks() {
   );
 
   const doDeleteClassifierBlock = async (block: ClassifierBlock) => {
-    await deleteClassifierBlock.mutateAsync(block.id, {
-      onSuccess: () => {
-        navigate('/classifier-blocks');
-      },
-    });
+    try {
+      await deleteClassifierBlock.mutateAsync(block.id);
+      toast.current?.show({ severity: 'success', summary: 'Classifier deleted', detail: `Deleted ${block.name}.` });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Something went wrong';
+      toast.current?.show({ severity: 'error', summary: 'Delete failed', detail });
+    }
   };
 
   const confirmDeleteClassifierBlock = (block: ClassifierBlock) => {

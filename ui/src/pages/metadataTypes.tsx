@@ -17,6 +17,7 @@ import { Dropdown } from 'primereact/dropdown';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
+import { type Toast } from 'primereact/toast';
 import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 import { useHashListParams } from '../util/listParamsHash';
 import { AppToast } from '../components/AppToast';
@@ -24,7 +25,7 @@ import { AppToast } from '../components/AppToast';
 const METADATA_TYPE_LIST_DEFAULT_PARAMS: ListParams = { sf: 'name' };
 
 export function ListMetadataTypes() {
-  const toast = useRef(null);
+  const toast = useRef<Toast>(null);
   const deleteMetadataType = useDeleteMetadataType();
   const { listParams, updateListParams } = useHashListParams(METADATA_TYPE_LIST_DEFAULT_PARAMS);
   const appliedSearchText = listParams.q ?? '';
@@ -60,11 +61,13 @@ export function ListMetadataTypes() {
   };
 
   const doDeleteMetadataType = async (c: MetadataType) => {
-    await deleteMetadataType.mutateAsync(c.id, {
-      onSuccess: () => {
-        navigate('/metadata-types');
-      }
-    });
+    try {
+      await deleteMetadataType.mutateAsync(c.id);
+      toast.current?.show({ severity: 'success', summary: 'Metadata type deleted', detail: `Deleted ${c.name}.` });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Something went wrong';
+      toast.current?.show({ severity: 'error', summary: 'Delete failed', detail });
+    }
   }
 
   const confirmDeleteMetadataType = (c: MetadataType) => {

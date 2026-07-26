@@ -16,6 +16,7 @@ import { type Tag } from '../models/tag';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
+import { type Toast } from 'primereact/toast';
 import { ColorPicker } from 'primereact/colorpicker';
 import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 import { useHashListParams } from '../util/listParamsHash';
@@ -24,7 +25,7 @@ import { AppToast } from '../components/AppToast';
 const TAG_LIST_DEFAULT_PARAMS: ListParams = { sf: 'name' };
 
 export function ListTags() {
-  const toast = useRef(null);
+  const toast = useRef<Toast>(null);
   const deleteTag = useDeleteTag();
   const { listParams, updateListParams } = useHashListParams(TAG_LIST_DEFAULT_PARAMS);
   const appliedSearchText = listParams.q ?? '';
@@ -68,11 +69,13 @@ export function ListTags() {
   };
 
   const doDeleteTag = async (c: Tag) => {
-    await deleteTag.mutateAsync(c.id, {
-      onSuccess: () => {
-        navigate('/tags');
-      }
-    });
+    try {
+      await deleteTag.mutateAsync(c.id);
+      toast.current?.show({ severity: 'success', summary: 'Tag deleted', detail: `Deleted ${c.name}.` });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Something went wrong';
+      toast.current?.show({ severity: 'error', summary: 'Delete failed', detail });
+    }
   }
 
   const confirmDeleteTag = (c: Tag) => {

@@ -16,11 +16,12 @@ import { TreeTable } from 'primereact/treetable';
 import { TreeSelect } from 'primereact/treeselect';
 import type { TreeNode } from 'primereact/treenode';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
+import { type Toast } from 'primereact/toast';
 import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 import { AppToast } from '../components/AppToast';
 
 export function ListCabinets() {
-  const toast = useRef(null);
+  const toast = useRef<Toast>(null);
   const deleteCabinet = useDeleteCabinet();
   const [searchText, setSearchText] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
@@ -87,11 +88,13 @@ export function ListCabinets() {
   };
 
   const doDeleteCabinet = async (cabinet: Cabinet) => {
-    await deleteCabinet.mutateAsync(cabinet.id, {
-      onSuccess: () => {
-        navigate('/cabinets');
-      }
-    });
+    try {
+      await deleteCabinet.mutateAsync(cabinet.id);
+      toast.current?.show({ severity: 'success', summary: 'Cabinet deleted', detail: `Deleted ${cabinet.name}.` });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Something went wrong';
+      toast.current?.show({ severity: 'error', summary: 'Delete failed', detail });
+    }
   }
 
   const confirmDeleteCabinet = (cabinet: Cabinet) => {

@@ -17,12 +17,13 @@ import { TreeTable } from 'primereact/treetable';
 import { Dropdown } from 'primereact/dropdown';
 import type { TreeNode } from 'primereact/treenode';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
+import { type Toast } from 'primereact/toast';
 import { AppToast } from '../components/AppToast';
 
 const MAX_DOCUMENT_INDEX_TEMPLATES = 200;
 
 export function ListDocumentIndexTemplates() {
-  const toast = useRef(null);
+  const toast = useRef<Toast>(null);
   const { documentIndexId: documentIndexIdParam } = useParams();
   const documentIndexId = Number(documentIndexIdParam);
   const deleteTemplate = useDeleteDocumentIndexTemplate(documentIndexId);
@@ -87,11 +88,13 @@ export function ListDocumentIndexTemplates() {
   };
 
   const doDeleteTemplate = async (template: DocumentIndexTemplate) => {
-    await deleteTemplate.mutateAsync(template.id, {
-      onSuccess: () => {
-        navigate(`/indexes/${documentIndexId}/templates`);
-      }
-    });
+    try {
+      await deleteTemplate.mutateAsync(template.id);
+      toast.current?.show({ severity: 'success', summary: 'Template deleted', detail: `Deleted ${template.template}.` });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Something went wrong';
+      toast.current?.show({ severity: 'error', summary: 'Delete failed', detail });
+    }
   }
 
   const confirmDeleteTemplate = (template: DocumentIndexTemplate) => {

@@ -17,6 +17,7 @@ import { type DocumentType } from '../models/documentType';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
+import { type Toast } from 'primereact/toast';
 import { useDocumentTypeMetadataTypes, useDocumentTypeSaveMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 import { useHashListParams } from '../util/listParamsHash';
@@ -25,7 +26,7 @@ import { AppToast } from '../components/AppToast';
 const DOCUMENT_TYPE_LIST_DEFAULT_PARAMS: ListParams = { sf: 'name' };
 
 export function ListDocumentTypes() {
-  const toast = useRef(null);
+  const toast = useRef<Toast>(null);
   const deleteDocumentType = useDeleteDocumentType();
   const { listParams, updateListParams } = useHashListParams(DOCUMENT_TYPE_LIST_DEFAULT_PARAMS);
   const appliedSearchText = listParams.q ?? '';
@@ -61,11 +62,13 @@ export function ListDocumentTypes() {
   };
 
   const doDeleteDocumentType = async (c: DocumentType) => {
-    await deleteDocumentType.mutateAsync(c.id, {
-      onSuccess: () => {
-        navigate('/document-types');
-      }
-    });
+    try {
+      await deleteDocumentType.mutateAsync(c.id);
+      toast.current?.show({ severity: 'success', summary: 'Document type deleted', detail: `Deleted ${c.name}.` });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Something went wrong';
+      toast.current?.show({ severity: 'error', summary: 'Delete failed', detail });
+    }
   }
 
   const confirmDeleteDocumentType = (c: DocumentType) => {

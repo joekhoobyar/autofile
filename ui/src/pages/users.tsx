@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 
 import { DataTable, type DataTableStateEvent } from "primereact/datatable";
@@ -10,6 +10,7 @@ import { Button } from "primereact/button";
 import { InputText } from "primereact/inputtext";
 import { Message } from "primereact/message";
 import { ConfirmDialog, confirmDialog } from "primereact/confirmdialog";
+import { type Toast, type ToastMessage } from "primereact/toast";
 import { classNames } from "primereact/utils";
 
 import type { ListParams } from "../api";
@@ -18,6 +19,7 @@ import type { User, UserUpdateInput } from "../models/user";
 import { useDeleteUser, useSaveUser, useUser, useUsers } from "../queries/useUsers";
 import { canManageUsers, useAuth } from "../auth";
 import { useHashListParams } from "../util/listParamsHash";
+import { AppToast } from "../components/AppToast";
 
 const SYSTEM_USER_ID = 1;
 const USER_LIST_DEFAULT_PARAMS: ListParams = { sf: "username" };
@@ -33,6 +35,8 @@ function formatDate(value: string): string {
 export function ListUsers() {
   const auth = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const toast = useRef<Toast>(null);
   const deleteUser = useDeleteUser();
   const { listParams, updateListParams } = useHashListParams(USER_LIST_DEFAULT_PARAMS);
   const appliedSearchText = listParams.q ?? "";
@@ -40,6 +44,14 @@ export function ListUsers() {
   const search = searchDraft.appliedSearchText === appliedSearchText ? searchDraft.value : appliedSearchText;
   const setSearch = (value: string) => setSearchDraft({ appliedSearchText, value });
   const { data, isPending, isFetching } = useUsers(listParams);
+
+  useEffect(() => {
+    const state = location.state as { toast?: ToastMessage } | null;
+    if (!state?.toast) return;
+
+    toast.current?.show(state.toast);
+    navigate("/users", { replace: true, state: null });
+  }, [location.state, navigate]);
 
   if (!canManageUsers(auth)) {
     return <Message severity="warn" text="You do not have permission to manage users." />;
@@ -86,14 +98,18 @@ export function ListUsers() {
       icon: "pi pi-trash",
       defaultFocus: "reject",
       acceptClassName: "p-button-danger",
-      accept: () => {
-        void deleteUser.mutateAsync(user.id, {
-          onSuccess: () => {
-            navigate("/users");
-          },
-        });
-      },
+      accept: () => void deleteUserFromList(user),
     });
+  };
+
+  const deleteUserFromList = async (user: User) => {
+    try {
+      await deleteUser.mutateAsync(user.id);
+      toast.current?.show({ severity: "success", summary: "User deleted", detail: `Deleted ${user.username}.` });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Something went wrong";
+      toast.current?.show({ severity: "error", summary: "Delete failed", detail });
+    }
   };
 
   const usernameTemplate = (user: User) => (
@@ -194,6 +210,7 @@ export function ListUsers() {
           <Column body={actionTemplate} headerClassName="w-9rem" />
         </DataTable>
       </Card>
+      <AppToast ref={toast} />
       <ConfirmDialog />
     </>
   );
@@ -203,6 +220,7 @@ export function ViewUser() {
   const auth = useAuth();
   const id = useId("id");
   const navigate = useNavigate();
+  const toast = useRef<Toast>(null);
   const deleteUser = useDeleteUser();
   const { isLoading, isError, data, error } = useUser(id);
 
@@ -218,6 +236,20 @@ export function ViewUser() {
     return <div>Loading</div>;
   }
 
+  const deleteUserFromDetail = async (user: User) => {
+    try {
+      await deleteUser.mutateAsync(user.id);
+      navigate("/users", {
+        state: {
+          toast: { severity: "success", summary: "User deleted", detail: `Deleted ${user.username}.` },
+        },
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Something went wrong";
+      toast.current?.show({ severity: "error", summary: "Delete failed", detail });
+    }
+  };
+
   const confirmDelete = () => {
     if (isSystemUser(data.id)) {
       return;
@@ -229,13 +261,7 @@ export function ViewUser() {
       icon: "pi pi-trash",
       defaultFocus: "reject",
       acceptClassName: "p-button-danger",
-      accept: () => {
-        void deleteUser.mutateAsync(data.id, {
-          onSuccess: () => {
-            navigate("/users");
-          },
-        });
-      },
+      accept: () => void deleteUserFromDetail(data),
     });
   };
 
@@ -295,6 +321,7 @@ export function ViewUser() {
           />
         </div>
       </Card>
+      <AppToast ref={toast} />
       <ConfirmDialog />
     </>
   );
