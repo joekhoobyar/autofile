@@ -7,8 +7,9 @@ import { Menu } from 'primereact/menu';
 import type { MenuItem } from 'primereact/menuitem';
 import { TreeSelect } from 'primereact/treeselect';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
-import { Toast } from 'primereact/toast';
+import { type Toast } from 'primereact/toast';
 
+import { AppToast } from './AppToast';
 import { useCabinetTree } from '../queries/useCabinets';
 import { useTags } from '../queries/useTags';
 import { useClassifyDocument, useDeleteDocument, useGenerateThumbnail, useProcessDocumentFilePages, useRemoveCabinetDocument, useRemoveTagDocument, useSaveCabinetDocument, useSaveTagDocument } from '../queries/useDocuments';
@@ -466,7 +467,7 @@ export function DocumentActions({
         </div>
       </Dialog>
       <ConfirmDialog />
-      <Toast ref={toast} />
+      <AppToast ref={toast} />
     </div>
   );
 }

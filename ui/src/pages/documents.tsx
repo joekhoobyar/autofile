@@ -24,7 +24,7 @@ import { useCabinets } from '../queries/useCabinets';
 import { MAX_CABINETS, type Cabinet } from '../models/cabinet';
 import { useTags } from '../queries/useTags';
 import type { Tag as TagModel } from '../models/tag';
-import { Toast } from 'primereact/toast';
+import { type Toast } from 'primereact/toast';
 import { Tooltip } from 'primereact/tooltip';
 import { FileUpload, type FileUploadFile, type FileUploadHandlerEvent, type FileUploadSelectEvent, type FileUploadUploadEvent, type ItemTemplateOptions } from 'primereact/fileupload';
 import { ProgressBar } from 'primereact/progressbar';
@@ -33,6 +33,7 @@ import { InputText } from 'primereact/inputtext';
 import { Badge } from 'primereact/badge';
 import { Chip } from 'primereact/chip';
 import { DocumentActions } from '../components/DocumentActions';
+import { AppToast } from '../components/AppToast';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
@@ -1598,7 +1599,7 @@ export default function UploadDocument() {
 
     return (
         <div>
-            <Toast ref={toast}></Toast>
+            <AppToast ref={toast} />
 
             <div className="grid p-fluid mb-4">
                 <div className="col-12 md:col-6">

@@ -16,12 +16,12 @@ import { useDeleteDocumentType, useDocumentType, useDocumentTypes, useSaveDocume
 import { type DocumentType } from '../models/documentType';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
-import { Toast } from 'primereact/toast';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { useDocumentTypeMetadataTypes, useDocumentTypeSaveMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { type DocumentTypeNewMetadataType } from '../models/documentTypeMetadataType';
 import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 import { useHashListParams } from '../util/listParamsHash';
+import { AppToast } from '../components/AppToast';
 
 const DOCUMENT_TYPE_LIST_DEFAULT_PARAMS: ListParams = { sf: 'name' };
 
@@ -159,7 +159,7 @@ export function ListDocumentTypes() {
         <Column body={actionTemplate} headerClassName="w-9rem" />
       </DataTable>
     </Card>
-    <Toast ref={toast} />
+    <AppToast ref={toast} />
     <ConfirmDialog />
     </>
   );

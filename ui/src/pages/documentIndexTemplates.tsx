@@ -17,7 +17,7 @@ import { TreeTable } from 'primereact/treetable';
 import { Dropdown } from 'primereact/dropdown';
 import type { TreeNode } from 'primereact/treenode';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
-import { Toast } from 'primereact/toast';
+import { AppToast } from '../components/AppToast';
 
 const MAX_DOCUMENT_INDEX_TEMPLATES = 200;
 
@@ -120,7 +120,7 @@ export function ListDocumentIndexTemplates() {
         <Column body={actionTemplate} headerClassName="w-9rem" />
       </TreeTable>
     </Card>
-    <Toast ref={toast} />
+    <AppToast ref={toast} />
     <ConfirmDialog />
     </>
   );

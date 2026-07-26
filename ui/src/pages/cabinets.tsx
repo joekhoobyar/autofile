@@ -16,8 +16,8 @@ import { TreeTable } from 'primereact/treetable';
 import { TreeSelect } from 'primereact/treeselect';
 import type { TreeNode } from 'primereact/treenode';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
-import { Toast } from 'primereact/toast';
 import { createSlugRules, normalizeSlug } from '../util/slugValidation';
+import { AppToast } from '../components/AppToast';
 
 export function ListCabinets() {
   const toast = useRef(null);
@@ -167,7 +167,7 @@ export function ListCabinets() {
         <Column body={actionTemplate} headerClassName="w-9rem" />
       </TreeTable>
     </Card>
-    <Toast ref={toast} />
+    <AppToast ref={toast} />
     <ConfirmDialog />
     </>
   );

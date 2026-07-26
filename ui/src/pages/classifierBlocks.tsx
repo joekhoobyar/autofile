@@ -9,7 +9,7 @@ import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
 import { Checkbox } from 'primereact/checkbox';
 import { Message } from 'primereact/message';
-import { Toast } from 'primereact/toast';
+import { type Toast } from 'primereact/toast';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import { classNames } from 'primereact/utils';
 import CodeMirror from '@uiw/react-codemirror';
@@ -24,6 +24,7 @@ import { useClassifierBlock, useClassifierBlocks, useDeleteClassifierBlock, useR
 import { useId } from '../util';
 import { defaultClassifierRules, rulesToYaml, yamlToRules } from '../util/classifierRulesYaml';
 import { useHashListParams } from '../util/listParamsHash';
+import { AppToast } from '../components/AppToast';
 
 const yamlEditorExtensions = [yamlLanguage(), keymap.of([indentWithTab]), EditorView.lineWrapping];
 const REORDER_SUCCESS_MS = 1200;
@@ -246,7 +247,7 @@ export function ListClassifierBlocks() {
           <Column body={actionTemplate} headerClassName="w-9rem" />
         </DataTable>
       </Card>
-      <Toast ref={toast} />
+      <AppToast ref={toast} />
       <ConfirmDialog />
     </>
   );

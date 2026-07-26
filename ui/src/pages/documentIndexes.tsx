@@ -17,10 +17,11 @@ import { useDeleteDocumentIndex, useDocumentIndex, useDocumentIndexes, useRebuil
 import { type DocumentIndex } from '../models/documentIndex';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
-import { Toast } from 'primereact/toast';
+import { type Toast } from 'primereact/toast';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 import { useHashListParams } from '../util/listParamsHash';
+import { AppToast } from '../components/AppToast';
 
 const DOCUMENT_INDEX_LIST_DEFAULT_PARAMS: ListParams = { sf: 'name' };
 
@@ -189,7 +190,7 @@ export function ListDocumentIndexes() {
         <Column body={actionTemplate} headerClassName="w-13rem" />
       </DataTable>
     </Card>
-    <Toast ref={toast} />
+    <AppToast ref={toast} />
     <ConfirmDialog />
     </>
   );

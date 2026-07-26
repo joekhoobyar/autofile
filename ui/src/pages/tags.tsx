@@ -15,11 +15,11 @@ import { useTag, useTags, useSaveTag, useDeleteTag } from '../queries/useTags';
 import { type Tag } from '../models/tag';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
-import { Toast } from 'primereact/toast';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import { ColorPicker } from 'primereact/colorpicker';
 import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 import { useHashListParams } from '../util/listParamsHash';
+import { AppToast } from '../components/AppToast';
 
 const TAG_LIST_DEFAULT_PARAMS: ListParams = { sf: 'name' };
 
@@ -166,7 +166,7 @@ export function ListTags() {
         <Column body={actionTemplate} headerClassName="w-9rem" />
       </DataTable>
     </Card>
-    <Toast ref={toast} />
+    <AppToast ref={toast} />
     <ConfirmDialog />
     </>
   );

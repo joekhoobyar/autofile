@@ -13,12 +13,13 @@ import { Message } from 'primereact/message';
 import { ProgressBar } from 'primereact/progressbar';
 import { Skeleton } from 'primereact/skeleton';
 import { Tag } from 'primereact/tag';
-import { Toast } from 'primereact/toast';
+import { type Toast } from 'primereact/toast';
 import { Tooltip } from 'primereact/tooltip';
 import { classNames } from 'primereact/utils';
 import { format } from 'date-fns';
 
 import { API_HOST, HttpError, apiFetch, apiUrl, getAccessToken } from '../api';
+import { AppToast } from '../components/AppToast';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { type DocumentFile } from '../models/documentFile';
 import { useDocument } from '../queries/useDocuments';
@@ -476,7 +477,7 @@ export function UploadDocumentFile() {
   return (
     <DocumentViewLayout documentId={documentId}>
       <Card title={`Add File${document?.title ? `: ${document.title}` : ''}`}>
-        <Toast ref={toast}></Toast>
+        <AppToast ref={toast} />
 
         <div className="flex justify-content-end mb-3">
           <Button
