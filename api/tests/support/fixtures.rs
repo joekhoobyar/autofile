@@ -275,6 +275,8 @@ pub async fn insert_document_file(
             document_files::filename.eq(filename),
             document_files::content_type.eq::<Option<String>>(Some("application/pdf".to_string())),
             document_files::size.eq(42_i64),
+            document_files::checksum_sha256
+                .eq("0000000000000000000000000000000000000000000000000000000000000000"),
             document_files::created_by.eq(user_id),
             document_files::updated_by.eq(user_id),
             document_files::pages.eq(1_i32),
