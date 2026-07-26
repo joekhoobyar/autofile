@@ -18,7 +18,6 @@ import { Message } from 'primereact/message';
 import { useId } from '../util';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { useDocumentTypeMetadataTypes, useDocumentTypeSaveMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
-import { type DocumentTypeNewMetadataType } from '../models/documentTypeMetadataType';
 import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 import { useHashListParams } from '../util/listParamsHash';
 import { AppToast } from '../components/AppToast';
@@ -200,11 +199,7 @@ function DocumentTypeForm({ data }: Readonly<{ data?: Partial<DocumentType> }>) 
   const saveDocumentType = useSaveDocumentType();
   const { data: documentTypeMetadataTypes } = useDocumentTypeMetadataTypes(data?.id);
   const { data: metadataTypesMap, isLoading: isLoadingMetadataTypes } = useMetadataTypesMap('id');
-  const [metadataSaveRequest, setMetadataSaveRequest] = useState<{
-    documentTypeId: number;
-    payload: DocumentTypeNewMetadataType[];
-  } | null>(null);
-  const saveMetadataTypes = useDocumentTypeSaveMetadataTypes(data?.id ?? metadataSaveRequest?.documentTypeId ?? 0);
+  const saveMetadataTypes = useDocumentTypeSaveMetadataTypes();
   const navigate = useNavigate();
   const selectedMetadataTypeIds = useMemo(
     () => documentTypeMetadataTypes?.map((item) => item.metadata_type_id) ?? [],
@@ -257,31 +252,6 @@ function DocumentTypeForm({ data }: Readonly<{ data?: Partial<DocumentType> }>) 
     reset(formValues);
   }, [formValues, isDirty, reset]);
 
-  useEffect(() => {
-    if (!metadataSaveRequest) return;
-    let cancelled = false;
-
-    const run = async () => {
-      try {
-        await saveMetadataTypes.mutateAsync(metadataSaveRequest.payload);
-        if (!cancelled) {
-          setMetadataSaveRequest(null);
-          navigate('/document-types');
-        }
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) {
-          setMetadataSaveRequest(null);
-        }
-      }
-    };
-
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [metadataSaveRequest, navigate, saveMetadataTypes]);
-
   const submitter = async (data: DocumentTypeFormValues) => {
     const { metadata_type_ids, metadata_type_required, ...documentTypeData } = data;
     const savedDocumentType = await saveDocumentType.mutateAsync(documentTypeData);
@@ -293,13 +263,11 @@ function DocumentTypeForm({ data }: Readonly<{ data?: Partial<DocumentType> }>) 
       required: metadata_type_required?.[metadata_type_id] ?? false,
     }));
 
-    if (documentTypeData.id) {
-      await saveMetadataTypes.mutateAsync(payload);
-      navigate('/document-types');
-      return;
+    if (documentTypeData.id || payload.length > 0) {
+      await saveMetadataTypes.mutateAsync({ documentTypeId, payload });
     }
 
-    setMetadataSaveRequest({ documentTypeId, payload });
+    navigate('/document-types');
   };
 
   // PrimeReact-friendly error helper

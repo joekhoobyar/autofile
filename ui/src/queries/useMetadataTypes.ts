@@ -15,14 +15,19 @@ export function useDocumentTypeMetadataTypes(document_type_id: string | number |
   });
 }
 
-export function useDocumentTypeSaveMetadataTypes(document_type_id: string | number): UseMutationResult<DocumentTypeMetadataType[], HttpError, DocumentTypeNewMetadataType[]> {
+type DocumentTypeSaveMetadataTypesInput = {
+  documentTypeId: string | number;
+  payload: DocumentTypeNewMetadataType[];
+};
+
+export function useDocumentTypeSaveMetadataTypes(): UseMutationResult<DocumentTypeMetadataType[], HttpError, DocumentTypeSaveMetadataTypesInput> {
   const qc = useQueryClient();
 
-  return useMutation<DocumentTypeMetadataType[], HttpError, DocumentTypeNewMetadataType[]>({
+  return useMutation<DocumentTypeMetadataType[], HttpError, DocumentTypeSaveMetadataTypesInput>({
     mutationFn: async (input) => {
-      return apiMutate<DocumentTypeMetadataType[], DocumentTypeNewMetadataType[]>(`api/v1/document-types-metadata-types/${document_type_id}`, {
+      return apiMutate<DocumentTypeMetadataType[], DocumentTypeNewMetadataType[]>(`api/v1/document-types-metadata-types/${input.documentTypeId}`, {
         method: "POST",
-        body: input,
+        body: input.payload,
       });
     },
 
