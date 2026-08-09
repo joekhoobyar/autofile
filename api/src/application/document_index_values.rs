@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use bb8::PooledConnection;
 use diesel::prelude::*;
-use diesel::sql_types::{BigInt, Bool, Nullable, Text};
+use diesel::sql_types::{Array, BigInt, Bool, Nullable, Text};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
@@ -21,6 +23,63 @@ struct DocumentIndexValueRow {
     parent_id: Option<i64>,
     #[diesel(sql_type = Bool)]
     is_leaf: bool,
+}
+
+#[derive(Debug, QueryableByName)]
+struct DocumentIndexValueDocumentCountRow {
+    #[diesel(sql_type = BigInt)]
+    root_id: i64,
+    #[diesel(sql_type = BigInt)]
+    document_count: i64,
+}
+
+pub async fn count_document_index_value_documents(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_index_id: i64,
+    value_ids: &[i64],
+) -> Result<HashMap<i64, i64>, ApiError> {
+    if value_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let rows = diesel::sql_query(
+        r#"
+        WITH RECURSIVE descendants AS (
+            SELECT v.id AS root_id, v.id AS value_id
+            FROM document_index_values v
+            WHERE v.id = ANY($1) AND v.document_index_id = $2
+
+            UNION ALL
+
+            SELECT d.root_id, child.id
+            FROM descendants d
+            JOIN document_index_values child ON child.parent_id = d.value_id
+            WHERE child.document_index_id = $2
+        )
+        SELECT
+            d.root_id,
+            COUNT(DISTINCT did.document_id) AS document_count
+        FROM descendants d
+        LEFT JOIN document_index_documents did
+            ON did.document_index_value_id = d.value_id
+        GROUP BY d.root_id
+        "#,
+    )
+    .bind::<Array<BigInt>, _>(value_ids)
+    .bind::<BigInt, _>(document_index_id)
+    .load::<DocumentIndexValueDocumentCountRow>(db)
+    .await
+    .map_err(|e| {
+        ApiError::new(
+            diesel_to_http(e),
+            "Failed to count document_index_value documents",
+        )
+    })?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| (row.root_id, row.document_count))
+        .collect())
 }
 
 pub async fn list_document_index_value_ancestors(

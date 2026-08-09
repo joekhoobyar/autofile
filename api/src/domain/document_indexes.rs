@@ -60,3 +60,14 @@ pub struct DocumentIndexValue {
     pub parent_id: Option<i64>,
     pub is_leaf: bool,
 }
+
+#[derive(Debug, Serialize, PartialEq)]
+pub struct DocumentIndexValueView {
+    pub id: i64,
+    pub value: String,
+    pub document_index_id: i64,
+    pub document_index_template_id: i64,
+    pub parent_id: Option<i64>,
+    pub is_leaf: bool,
+    pub document_count: i64,
+}

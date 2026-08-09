@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
-use crate::application::document_index_values::list_document_index_value_ancestors;
-use crate::domain::document_indexes::DocumentIndexValue;
+use crate::application::document_index_values::{
+    count_document_index_value_documents, list_document_index_value_ancestors,
+};
+use crate::domain::document_indexes::{DocumentIndexValue, DocumentIndexValueView};
 use crate::schema::document_index_values;
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
@@ -50,7 +52,7 @@ pub async fn list(
     DbConn(mut db): DbConn,
     Path(document_index_id): Path<i64>,
     Query(params): Query<ListDocumentIndexValuesQuery>,
-) -> Result<Json<ResourceList<DocumentIndexValue>>, ApiError> {
+) -> Result<Json<ResourceList<DocumentIndexValueView>>, ApiError> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
@@ -122,13 +124,29 @@ pub async fn list(
         )),
     };
 
-    let items = query
+    let values = query
         .limit(per_page)
         .offset(offset)
         .select(DocumentIndexValue::as_select())
         .load::<DocumentIndexValue>(&mut db)
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_index_values"))?;
+
+    let value_ids: Vec<i64> = values.iter().map(|value| value.id).collect();
+    let document_counts =
+        count_document_index_value_documents(&mut db, document_index_id, &value_ids).await?;
+    let items = values
+        .into_iter()
+        .map(|value| DocumentIndexValueView {
+            document_count: document_counts.get(&value.id).copied().unwrap_or(0),
+            id: value.id,
+            value: value.value,
+            document_index_id: value.document_index_id,
+            document_index_template_id: value.document_index_template_id,
+            parent_id: value.parent_id,
+            is_leaf: value.is_leaf,
+        })
+        .collect();
 
     Ok(Json(ResourceList {
         total,

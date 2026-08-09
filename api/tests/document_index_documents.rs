@@ -1,6 +1,7 @@
 mod support;
 
 use autofile_api::application::document_index_documents::rebuild_document_index_inner;
+use autofile_api::application::document_index_values::count_document_index_value_documents;
 use autofile_api::schema::{document_index_documents, document_index_values};
 use diesel::prelude::*;
 use diesel_async::AsyncPgConnection;
@@ -339,4 +340,89 @@ async fn rebuild_document_index_removes_stale_leaf_when_branch_becomes_empty() {
         list_index_documents(&mut db, 1).await,
         Vec::<(i64, String)>::new()
     );
+}
+
+#[tokio::test]
+async fn document_index_value_counts_distinct_documents_across_descendant_leaves() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(&mut db, 1, "tester", "tester@example.com").await;
+    insert_document_type(&mut db, 100, "invoice", "Invoice", 1).await;
+    insert_document(&mut db, 1, "Alpha", 100, 1).await;
+    insert_document(&mut db, 2, "Beta", 100, 1).await;
+    insert_document_index(&mut db, 1, "main-index", "Main Index", 1).await;
+    insert_document_index_template(&mut db, 1, 1, "root", false, None, 1).await;
+    insert_document_index_template(&mut db, 2, 1, "first", true, Some(1), 1).await;
+    insert_document_index_template(&mut db, 3, 1, "second", true, Some(1), 1).await;
+    insert_document_index_template(&mut db, 4, 1, "empty", true, Some(1), 1).await;
+    insert_document_index_value(&mut db, 10, 1, 1, "root", None, false).await;
+    insert_document_index_value(&mut db, 11, 1, 2, "first", Some(10), true).await;
+    insert_document_index_value(&mut db, 12, 1, 3, "second", Some(10), true).await;
+    insert_document_index_value(&mut db, 13, 1, 4, "empty", Some(10), true).await;
+    insert_document_index_document(&mut db, 11, 1).await;
+    insert_document_index_document(&mut db, 12, 1).await;
+    insert_document_index_document(&mut db, 12, 2).await;
+
+    let counts = count_document_index_value_documents(&mut db, 1, &[10, 11, 12, 13])
+        .await
+        .expect("document counts should load");
+
+    assert_eq!(counts.get(&10), Some(&2));
+    assert_eq!(counts.get(&11), Some(&1));
+    assert_eq!(counts.get(&12), Some(&2));
+    assert_eq!(counts.get(&13), Some(&0));
+}
+
+#[tokio::test]
+async fn document_index_value_counts_reflect_membership_removal() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(&mut db, 1, "tester", "tester@example.com").await;
+    insert_document_type(&mut db, 100, "invoice", "Invoice", 1).await;
+    insert_document(&mut db, 1, "Alpha", 100, 1).await;
+    insert_document(&mut db, 2, "Beta", 100, 1).await;
+    insert_document_index(&mut db, 1, "main-index", "Main Index", 1).await;
+    insert_document_index_template(&mut db, 1, 1, "root", false, None, 1).await;
+    insert_document_index_template(&mut db, 2, 1, "leaf", true, Some(1), 1).await;
+    insert_document_index_value(&mut db, 10, 1, 1, "root", None, false).await;
+    insert_document_index_value(&mut db, 11, 1, 2, "leaf", Some(10), true).await;
+    insert_document_index_document(&mut db, 11, 1).await;
+    insert_document_index_document(&mut db, 11, 2).await;
+
+    diesel::delete(
+        document_index_documents::table
+            .filter(document_index_documents::document_index_value_id.eq(11))
+            .filter(document_index_documents::document_id.eq(1)),
+    )
+    .execute(&mut db)
+    .await
+    .expect("membership delete should succeed");
+
+    let counts = count_document_index_value_documents(&mut db, 1, &[10, 11])
+        .await
+        .expect("document counts should load");
+    assert_eq!(counts.get(&10), Some(&1));
+    assert_eq!(counts.get(&11), Some(&1));
+
+    diesel::delete(
+        document_index_documents::table
+            .filter(document_index_documents::document_index_value_id.eq(11)),
+    )
+    .execute(&mut db)
+    .await
+    .expect("membership delete should succeed");
+
+    let counts = count_document_index_value_documents(&mut db, 1, &[10, 11])
+        .await
+        .expect("document counts should load");
+    assert_eq!(counts.get(&10), Some(&0));
+    assert_eq!(counts.get(&11), Some(&0));
 }

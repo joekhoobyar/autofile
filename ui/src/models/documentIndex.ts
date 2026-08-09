@@ -33,6 +33,10 @@ export interface DocumentIndexValue {
     parent_id?: number
 }
 
+export interface DocumentIndexValueView extends DocumentIndexValue {
+    document_count: number
+}
+
 export interface DocumentIndexValueListParams {
   page?: number;
   per_page?: number;

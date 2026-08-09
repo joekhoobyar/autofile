@@ -95,6 +95,7 @@ export function ListDocumentIndexValues() {
             onSort={onSort} sortField={listParams.sf} sortOrder={listParams.sd === true ? -1 : 1}
           >
           <Column field="value" header="Value" body={valueTemplate} sortable></Column>
+          <Column field="document_count" header="Documents"></Column>
         </DataTable>
       </Card>
     </div>
