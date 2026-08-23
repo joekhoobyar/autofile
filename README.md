@@ -134,6 +134,24 @@ npm run lint
 
 The project uses Docker Buildx Bake through `docker-bake.hcl`.
 
+The API image is built on two reusable base images:
+
+- `autofile-api-rust-base`: Rust toolchain, native build dependencies, and `cargo-chef`.
+- `autofile-api-runtime-base`: runtime document-processing dependencies such as LibreOffice, Pandoc, Poppler, Tesseract, WeasyPrint, TeX, and `tini`.
+
+Build and push both API base images:
+
+```bash
+make image TARGET=base
+```
+
+Build and push just one base image:
+
+```bash
+make image TARGET=autofile-api-rust-base
+make image TARGET=autofile-api-runtime-base
+```
+
 Build and push the default ad-hoc image set:
 
 ```bash
@@ -154,7 +172,9 @@ The release group publishes these tags for each image:
 - the release tag, for example `v0.2.0`
 - the Git SHA
 
-By default, the bake file points at the Harbor registry configured in `docker-bake.hcl`. The GitHub release workflow overrides the image repositories to GHCR.
+By default, the bake file publishes images to GHCR under `ghcr.io/joekhoobyar`. Override the repo variables if you want to publish to another registry.
+
+Final API builds use `BASE_TAG=latest` by default for both API base images.
 
 ## 🏷️ Releases
 
@@ -176,7 +196,7 @@ Tag-triggered release builds push:
 - `ghcr.io/joekhoobyar/autofile-ui:<tag>`
 - `ghcr.io/joekhoobyar/autofile-ui:<git-sha>`
 
-Manual workflow dispatch builds ad-hoc images and pushes only the Git SHA tags.
+Manual workflow dispatch can build ad-hoc app images, both API base images, or either API base image individually. Ad-hoc app builds push only the Git SHA tags.
 
 ## 📄 License
 

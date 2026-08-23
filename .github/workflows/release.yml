@@ -5,6 +5,16 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      target:
+        description: "What to build"
+        type: choice
+        default: adhoc
+        options:
+          - adhoc
+          - base
+          - rust-base
+          - runtime-base
 
 permissions:
   contents: read
@@ -23,20 +33,34 @@ jobs:
         id: build-vars
         shell: bash
         run: |
-          owner="${GITHUB_REPOSITORY_OWNER,,}"
           bake_group="adhoc"
           release_tag="dev"
 
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             bake_group="release"
             release_tag="${GITHUB_REF_NAME}"
+          else
+            case "${{ inputs.target }}" in
+              adhoc|base)
+                bake_group="${{ inputs.target }}"
+                ;;
+              rust-base)
+                bake_group="autofile-api-rust-base"
+                ;;
+              runtime-base)
+                bake_group="autofile-api-runtime-base"
+                ;;
+              *)
+                echo "Unsupported manual build target: ${{ inputs.target }}" >&2
+                exit 1
+                ;;
+            esac
           fi
 
           echo "GIT_SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=${release_tag}" >> "$GITHUB_ENV"
           echo "BUILD_CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
-          echo "API_REPO=ghcr.io/${owner}/autofile-api" >> "$GITHUB_ENV"
-          echo "UI_REPO=ghcr.io/${owner}/autofile-ui" >> "$GITHUB_ENV"
+          echo "BASE_TAG=latest" >> "$GITHUB_ENV"
           echo "bake_group=${bake_group}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU

@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1.7
+
+FROM debian:trixie-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG cachebust=20260419
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --profile minimal --default-toolchain stable
+
+RUN cargo install cargo-chef
+
+LABEL org.opencontainers.image.title="Autofile API Rust Base" \
+      org.opencontainers.image.description="Rust build base image for Autofile API" \
+      org.opencontainers.image.source="https://github.com/joekhoobyar/autofile" \
+      org.opencontainers.image.url="https://github.com/joekhoobyar/autofile" \
+      org.opencontainers.image.documentation="https://github.com/joekhoobyar/autofile" \
+      org.opencontainers.image.vendor="Joe Khoobyar" \
+      org.opencontainers.image.licenses="AGPL-3.0-only"

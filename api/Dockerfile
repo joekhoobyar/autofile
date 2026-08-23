@@ -2,36 +2,17 @@
 
 ARG BUILDPLATFORM
 ARG TARGETPLATFORM
+ARG RUST_BASE_IMAGE=ghcr.io/joekhoobyar/autofile-api-rust-base:latest
+ARG API_RUNTIME_BASE_IMAGE=ghcr.io/joekhoobyar/autofile-api-runtime-base:latest
 
-FROM debian:trixie-slim AS rust-base
-
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    build-essential \
-    pkg-config \
-    libssl-dev \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-ARG cachebust=20260419
-ENV RUSTUP_HOME=/usr/local/rustup \
-    CARGO_HOME=/usr/local/cargo \
-    PATH=/usr/local/cargo/bin:$PATH
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
-    sh -s -- -y --profile minimal --default-toolchain stable
-
-RUN cargo install cargo-chef
-
-FROM rust-base AS planner
+FROM ${RUST_BASE_IMAGE} AS planner
 
 WORKDIR /app
 COPY api/Cargo.toml api/Cargo.lock ./
 RUN mkdir -p src && printf 'fn main() {}\n' > src/main.rs
 RUN cargo chef prepare --recipe-path recipe.json
 
-FROM rust-base AS builder
+FROM ${RUST_BASE_IMAGE} AS builder
 
 ARG TARGETPLATFORM
 
@@ -54,38 +35,7 @@ RUN --mount=type=cache,id=autofile-cargo-registry-${TARGETPLATFORM},target=/usr/
     cargo build --release \
     && cp /app/target/release/autofile-api /app/autofile-api
 
-FROM debian:trixie-slim AS runtime
-
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    tzdata \
-    libpq5 \
-    imagemagick \
-    libreoffice \
-    pandoc \
-    poppler-utils \
-    tesseract-ocr \
-    weasyprint \
-    texlive-latex-base \
-    texlive-xetex \
-    fonts-dejavu \
-    fonts-liberation \
-    lmodern \
-    texlive-fonts-recommended \
-    tini \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN command -v magick \
- && command -v soffice \
- && command -v pandoc \
- && command -v pdftocairo \
- && command -v pdftotext \
- && command -v pdfinfo \
- && command -v tesseract \
- && command -v weasyprint \
- && command -v pdflatex \
- && command -v xelatex
+FROM ${API_RUNTIME_BASE_IMAGE} AS runtime
 
 RUN useradd -m -u 1000 -s /bin/bash appuser
 

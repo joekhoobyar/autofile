@@ -1,0 +1,42 @@
+# syntax=docker/dockerfile:1.7
+
+FROM debian:trixie-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    tzdata \
+    libpq5 \
+    imagemagick \
+    libreoffice \
+    pandoc \
+    poppler-utils \
+    tesseract-ocr \
+    weasyprint \
+    texlive-latex-base \
+    texlive-xetex \
+    fonts-dejavu \
+    fonts-liberation \
+    lmodern \
+    texlive-fonts-recommended \
+    tini \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN command -v magick \
+ && command -v soffice \
+ && command -v pandoc \
+ && command -v pdftocairo \
+ && command -v pdftotext \
+ && command -v pdfinfo \
+ && command -v tesseract \
+ && command -v weasyprint \
+ && command -v pdflatex \
+ && command -v xelatex
+
+LABEL org.opencontainers.image.title="Autofile API Runtime Base" \
+      org.opencontainers.image.description="Runtime dependency base image for Autofile API" \
+      org.opencontainers.image.source="https://github.com/joekhoobyar/autofile" \
+      org.opencontainers.image.url="https://github.com/joekhoobyar/autofile" \
+      org.opencontainers.image.documentation="https://github.com/joekhoobyar/autofile" \
+      org.opencontainers.image.vendor="Joe Khoobyar" \
+      org.opencontainers.image.licenses="AGPL-3.0-only"
