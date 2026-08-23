@@ -154,13 +154,17 @@ body {
 }
 .side-nav-item:hover { background: var(--surface-hover); }
 .side-nav-item.is-active { background: var(--highlight-bg); font-weight: 600; }
-.side-nav-logout {
+.side-nav-secondary {
   margin-top: auto;
+}
+.side-nav-secondary,
+.side-nav-logout {
   font-size: 0.82rem;
   color: var(--text-color-secondary);
   justify-content: center;
   text-align: center;
 }
+.side-nav-logout { margin-top: 0; }
 
 
 /*

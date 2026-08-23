@@ -61,6 +61,12 @@ export function SideNav() {
         })}
       </div>
       <NavLink
+        to="/about"
+        className={({ isActive }) => `side-nav-item side-nav-secondary ${isActive ? 'is-active' : ''}`}
+      >
+        About
+      </NavLink>
+      <NavLink
         to="/logout"
         className={`side-nav-item side-nav-logout ${isLogoutActive ? 'is-active' : ''}`}
       >
