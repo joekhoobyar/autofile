@@ -61,6 +61,22 @@ body {
   margin: 0;
 }
 
+.aut-about-license-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.aut-license-text {
+  max-height: 70vh;
+  overflow: auto;
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .aut-document-view-menu-mobile {
   display: none;
   justify-content: flex-end;
