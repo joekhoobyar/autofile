@@ -1,9 +1,7 @@
-name: Build
+name: Release
 
 on:
   push:
-    branches:
-      - main
     tags:
       - "v*"
   workflow_dispatch:
@@ -22,12 +20,23 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Prepare build variables
+        id: build-vars
         shell: bash
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"
+          bake_group="adhoc"
+          release_tag="dev"
+
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            bake_group="release"
+            release_tag="${GITHUB_REF_NAME}"
+          fi
+
           echo "GIT_SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=${release_tag}" >> "$GITHUB_ENV"
           echo "API_REPO=ghcr.io/${owner}/autofile-api" >> "$GITHUB_ENV"
           echo "UI_REPO=ghcr.io/${owner}/autofile-ui" >> "$GITHUB_ENV"
+          echo "bake_group=${bake_group}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -46,5 +55,5 @@ jobs:
         uses: docker/bake-action@v6
         with:
           files: docker-bake.hcl
-          targets: default
+          targets: ${{ steps.build-vars.outputs.bake_group }}
           push: true

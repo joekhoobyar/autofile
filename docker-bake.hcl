@@ -2,8 +2,8 @@ variable "GIT_SHA" {
   default = "dev"
 }
 
-variable "DATE_TAG" {
-  default = formatdate("YYYYMMDD", timestamp())
+variable "RELEASE_TAG" {
+  default = "dev"
 }
 
 variable "API_REPO" {
@@ -22,10 +22,6 @@ target "_common" {
 target "autofile-api" {
   inherits   = ["_common"]
   dockerfile = "api/Dockerfile"
-  tags = [
-    "${API_REPO}:latest",
-    "${API_REPO}:${DATE_TAG}-${GIT_SHA}"
-  ]
   cache-from = [
     "type=registry,ref=${API_REPO}:buildcache"
   ]
@@ -34,13 +30,25 @@ target "autofile-api" {
   ]
 }
 
+target "autofile-api-release" {
+  inherits = ["autofile-api"]
+  tags = [
+    "${API_REPO}:latest",
+    "${API_REPO}:${RELEASE_TAG}",
+    "${API_REPO}:${GIT_SHA}"
+  ]
+}
+
+target "autofile-api-adhoc" {
+  inherits = ["autofile-api"]
+  tags = [
+    "${API_REPO}:${GIT_SHA}"
+  ]
+}
+
 target "autofile-ui" {
   inherits   = ["_common"]
   dockerfile = "ui/Dockerfile"
-  tags = [
-    "${UI_REPO}:latest",
-    "${UI_REPO}:${DATE_TAG}-${GIT_SHA}"
-  ]
   cache-from = [
     "type=registry,ref=${UI_REPO}:buildcache"
   ]
@@ -49,6 +57,30 @@ target "autofile-ui" {
   ]
 }
 
+target "autofile-ui-release" {
+  inherits = ["autofile-ui"]
+  tags = [
+    "${UI_REPO}:latest",
+    "${UI_REPO}:${RELEASE_TAG}",
+    "${UI_REPO}:${GIT_SHA}"
+  ]
+}
+
+target "autofile-ui-adhoc" {
+  inherits = ["autofile-ui"]
+  tags = [
+    "${UI_REPO}:${GIT_SHA}"
+  ]
+}
+
+group "release" {
+  targets = ["autofile-api-release", "autofile-ui-release"]
+}
+
+group "adhoc" {
+  targets = ["autofile-api-adhoc", "autofile-ui-adhoc"]
+}
+
 group "default" {
-  targets = ["autofile-api", "autofile-ui"]
+  targets = ["adhoc"]
 }
