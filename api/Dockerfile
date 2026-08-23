@@ -19,20 +19,14 @@ ARG TARGETPLATFORM
 WORKDIR /app
 COPY --from=planner /app/recipe.json ./recipe.json
 
-RUN --mount=type=cache,id=autofile-cargo-registry-${TARGETPLATFORM},target=/usr/local/cargo/registry,sharing=locked \
-    --mount=type=cache,id=autofile-cargo-git-${TARGETPLATFORM},target=/usr/local/cargo/git,sharing=locked \
-    --mount=type=cache,id=autofile-target-${TARGETPLATFORM},target=/app/target,sharing=locked \
-    cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
 
 COPY api/Cargo.toml api/Cargo.lock ./
 COPY api/diesel.toml ./
 COPY api/src ./src
 COPY api/migrations ./migrations
 
-RUN --mount=type=cache,id=autofile-cargo-registry-${TARGETPLATFORM},target=/usr/local/cargo/registry,sharing=locked \
-    --mount=type=cache,id=autofile-cargo-git-${TARGETPLATFORM},target=/usr/local/cargo/git,sharing=locked \
-    --mount=type=cache,id=autofile-target-${TARGETPLATFORM},target=/app/target,sharing=locked \
-    cargo build --release \
+RUN cargo build --release \
     && cp /app/target/release/autofile-api /app/autofile-api
 
 FROM ${API_RUNTIME_BASE_IMAGE} AS runtime
