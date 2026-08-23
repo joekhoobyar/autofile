@@ -7,7 +7,7 @@ The project is built as two containers:
 - `autofile-api`: Rust/Axum API, background workers, PostgreSQL migrations, S3 file storage, and document processing tools.
 - `autofile-ui`: React/Vite frontend served by nginx.
 
-## Features
+## ✨ Features
 
 - Upload and manage documents and document files.
 - Organize documents with cabinets and tags.
@@ -18,7 +18,7 @@ The project is built as two containers:
 - Process document previews, text, OCR, and thumbnails through background jobs.
 - Manage users with JWT/cookie-based authentication.
 
-## Tech Stack
+## 🧰 Tech Stack
 
 - API: Rust, Axum, Tokio, Diesel, Diesel Async, Apalis
 - UI: React, TypeScript, Vite, PrimeReact, TanStack Query
@@ -26,7 +26,7 @@ The project is built as two containers:
 - Local services: Docker Compose, MinIO
 - Images: Docker Buildx/Bake, multi-platform `linux/amd64` and `linux/arm64`
 
-## Quick Start
+## 🚀 Quick Start
 
 The easiest way to run Autofile locally is Docker Compose from the repository root:
 
@@ -52,7 +52,7 @@ password: minioadmin
 
 The `minio-init` service creates the local bucket `autofile-documents` automatically.
 
-## Create the First User
+## 👤 Create the First User
 
 After the API is running, create a user through the registration endpoint:
 
@@ -69,7 +69,7 @@ curl -i -X POST "http://localhost:8000/api/v1/auth/register" \
 
 Then open the UI at `http://localhost:5173` and sign in.
 
-## Configuration
+## ⚙️ Configuration
 
 The API is configured with environment variables.
 
@@ -88,7 +88,7 @@ The API is configured with environment variables.
 | `ALLOWED_ORIGINS` | No | `http://localhost:5173` | Comma-separated CORS origins. |
 | `RUST_LOG` | No | Rust tracing default | Logging filter, for example `info`. |
 
-## Development
+## 🛠️ Development
 
 ### API
 
@@ -130,7 +130,7 @@ cd ui
 npm run lint
 ```
 
-## Container Images
+## 📦 Container Images
 
 The project uses Docker Buildx Bake through `docker-bake.hcl`.
 
@@ -156,7 +156,7 @@ The release group publishes these tags for each image:
 
 By default, the bake file points at the Harbor registry configured in `docker-bake.hcl`. The GitHub release workflow overrides the image repositories to GHCR.
 
-## Releases
+## 🏷️ Releases
 
 GitHub Actions builds and pushes images from `.github/workflows/release.yml`.
 
@@ -178,6 +178,6 @@ Tag-triggered release builds push:
 
 Manual workflow dispatch builds ad-hoc images and pushes only the Git SHA tags.
 
-## License
+## 📄 License
 
 Autofile is licensed under the GNU Affero General Public License v3.0 only. See [LICENSE](LICENSE).
