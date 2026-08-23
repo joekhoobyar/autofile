@@ -6,6 +6,10 @@ variable "RELEASE_TAG" {
   default = "dev"
 }
 
+variable "BUILD_CREATED" {
+  default = formatdate("YYYY-MM-DD'T'hh:mm:ss'Z'", timestamp())
+}
+
 variable "API_REPO" {
   default = "harbor.k8s.khoobyar.name/joekhoobyar/autofile-api"
 }
@@ -37,6 +41,12 @@ target "autofile-api-release" {
     "${API_REPO}:${RELEASE_TAG}",
     "${API_REPO}:${GIT_SHA}"
   ]
+  labels = {
+    "org.opencontainers.image.created"  = BUILD_CREATED
+    "org.opencontainers.image.revision" = GIT_SHA
+    "org.opencontainers.image.version"  = RELEASE_TAG
+    "org.opencontainers.image.ref.name" = RELEASE_TAG
+  }
 }
 
 target "autofile-api-adhoc" {
@@ -44,6 +54,12 @@ target "autofile-api-adhoc" {
   tags = [
     "${API_REPO}:${GIT_SHA}"
   ]
+  labels = {
+    "org.opencontainers.image.created"  = BUILD_CREATED
+    "org.opencontainers.image.revision" = GIT_SHA
+    "org.opencontainers.image.version"  = GIT_SHA
+    "org.opencontainers.image.ref.name" = GIT_SHA
+  }
 }
 
 target "autofile-ui" {
@@ -64,6 +80,12 @@ target "autofile-ui-release" {
     "${UI_REPO}:${RELEASE_TAG}",
     "${UI_REPO}:${GIT_SHA}"
   ]
+  labels = {
+    "org.opencontainers.image.created"  = BUILD_CREATED
+    "org.opencontainers.image.revision" = GIT_SHA
+    "org.opencontainers.image.version"  = RELEASE_TAG
+    "org.opencontainers.image.ref.name" = RELEASE_TAG
+  }
 }
 
 target "autofile-ui-adhoc" {
@@ -71,6 +93,12 @@ target "autofile-ui-adhoc" {
   tags = [
     "${UI_REPO}:${GIT_SHA}"
   ]
+  labels = {
+    "org.opencontainers.image.created"  = BUILD_CREATED
+    "org.opencontainers.image.revision" = GIT_SHA
+    "org.opencontainers.image.version"  = GIT_SHA
+    "org.opencontainers.image.ref.name" = GIT_SHA
+  }
 }
 
 group "release" {

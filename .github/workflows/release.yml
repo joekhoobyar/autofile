@@ -34,6 +34,7 @@ jobs:
 
           echo "GIT_SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=${release_tag}" >> "$GITHUB_ENV"
+          echo "BUILD_CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
           echo "API_REPO=ghcr.io/${owner}/autofile-api" >> "$GITHUB_ENV"
           echo "UI_REPO=ghcr.io/${owner}/autofile-ui" >> "$GITHUB_ENV"
           echo "bake_group=${bake_group}" >> "$GITHUB_OUTPUT"
