@@ -67,11 +67,18 @@ body {
   gap: 0.35rem;
 }
 
+.aut-about-license-row .p-button {
+  margin-left: 1rem;
+}
+
 .aut-license-text {
   max-height: 70vh;
   overflow: auto;
-  margin: 0;
+  margin: 0 auto;
+  max-width: 100%;
+  width: fit-content;
   white-space: pre-wrap;
+  text-align: left;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.9rem;
   line-height: 1.45;
@@ -420,7 +427,7 @@ ul.aut-about-details {
     margin-bottom: 0.55rem;
   }
 
-  span {
+  li > span {
     display: inline-block;
     min-width: 10rem;
     color: var(--text-color-secondary);

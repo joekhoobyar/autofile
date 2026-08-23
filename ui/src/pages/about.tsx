@@ -56,7 +56,7 @@ export function About() {
         header="Autofile License"
         visible={licenseVisible}
         onHide={() => setLicenseVisible(false)}
-        style={{ width: "min(900px, 95vw)" }}
+        style={{ width: "min(760px, 95vw)" }}
       >
         {license.isError && <Message severity="error" text={license.error.message} />}
         {license.isLoading && <div>Loading</div>}
