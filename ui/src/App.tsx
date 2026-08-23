@@ -30,6 +30,7 @@ import { EditClassifierBlock, ListClassifierBlocks, NewClassifierBlock } from '.
 import { DocumentClassifierTest } from './pages/documentClassifierTest.tsx';
 import { DocumentTemplateTest } from './pages/documentTemplateTest.tsx';
 import { EditUser, ListUsers, ViewUser } from './pages/users.tsx';
+import { About } from './pages/about.tsx';
 
 export function SideNav() {
   const auth = useAuth();
@@ -211,6 +212,10 @@ const router = createBrowserRouter([
           { path: ':id', element: <ViewUser/> },
           { path: ':id/edit', element: <EditUser/> },
         ],
+      },
+      {
+        path: 'about',
+        element: <About />,
       }
     ],
   },

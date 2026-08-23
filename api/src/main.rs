@@ -200,6 +200,7 @@ async fn main() {
 
     let api_v1 = Router::new()
         .route("/health/ready", get(health_ready))
+        .nest("/about", api::about::routes())
         .nest("/auth", api::auth::routes())
         .nest("/cabinets", api::cabinets::routes())
         .nest("/cabinets", api::cabinet_documents::routes())

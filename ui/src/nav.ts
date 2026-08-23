@@ -29,6 +29,7 @@ export const NAV: NavItem[] = [
   { key: "metadata-types", label: "Metadata Types", icon: "pi pi-database", to: "/metadata-types", matchPrefix: true },
   { key: "tags", label: "Tags", icon: "pi pi-tags", to: "/tags", matchPrefix: true },
   { key: "users", label: "Users", icon: "pi pi-users", to: "/users", matchPrefix: true },
+  { key: "about", label: "About", icon: "pi pi-info-circle", to: "/about" },
 ];
 
 // useRouteResourceLabel.ts

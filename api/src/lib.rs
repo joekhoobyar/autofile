@@ -4,6 +4,7 @@ use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 
 pub mod schema;
 pub mod api {
+    pub mod about;
     pub mod auth;
     pub mod cabinet_documents;
     pub mod cabinets;
