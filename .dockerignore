@@ -1,4 +1,6 @@
 *
+!LICENSE
+
 !api/
 !api/Cargo.toml
 !api/Cargo.lock

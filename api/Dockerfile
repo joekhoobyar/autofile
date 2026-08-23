@@ -18,6 +18,7 @@ COPY --from=planner /app/recipe.json ./recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 
 COPY api/Cargo.toml api/Cargo.lock ./
+COPY LICENSE ../
 COPY api/diesel.toml ./
 COPY api/src ./src
 COPY api/migrations ./migrations
