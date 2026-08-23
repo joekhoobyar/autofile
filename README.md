@@ -152,13 +152,15 @@ make image TARGET=autofile-api-rust-base
 make image TARGET=autofile-api-runtime-base
 ```
 
+Builds are single-platform. By default, Bake uses `ARCH=amd64`, which maps to `linux/amd64`; CI also builds with `ARCH=arm64` on a native ARM64 runner.
+
 Build and push the default ad-hoc image set:
 
 ```bash
 make image
 ```
 
-The Makefile tags ad-hoc images with the short Git SHA. If the working tree is dirty, it appends `-dirty`.
+The Makefile tags ad-hoc images with the short Git SHA and architecture suffix, for example `<git-sha>-amd64`. If the working tree is dirty, it appends `-dirty` before the architecture suffix.
 
 Build a release image set manually:
 
@@ -166,19 +168,21 @@ Build a release image set manually:
 RELEASE_TAG=v0.2.0 make image TARGET=release
 ```
 
-The release group publishes these tags for each image:
+The release group publishes architecture-specific tags for each image:
 
-- `latest`
-- the release tag, for example `v0.2.0`
-- the Git SHA
+- `latest-amd64` or `latest-arm64`
+- the release tag plus architecture suffix, for example `v0.2.0-amd64`
+- the Git SHA plus architecture suffix
 
 By default, the bake file publishes images to GHCR under `ghcr.io/joekhoobyar`. Override the repo variables if you want to publish to another registry.
 
-Final API builds use `BASE_TAG=latest` by default for both API base images.
+Final API builds use `BASE_TAG=latest` by default for both API base images, resolved as architecture-specific base tags such as `latest-amd64` or `latest-arm64`.
 
 ## 🏷️ Releases
 
 GitHub Actions builds and pushes images from `.github/workflows/release.yml`.
+
+The workflow builds `amd64` and `arm64` images on native GitHub-hosted runners, then publishes multi-architecture manifest tags in a final job.
 
 Release builds run when a Git tag matching `v*` is pushed:
 
@@ -196,7 +200,7 @@ Tag-triggered release builds push:
 - `ghcr.io/joekhoobyar/autofile-ui:<tag>`
 - `ghcr.io/joekhoobyar/autofile-ui:<git-sha>`
 
-Manual workflow dispatch can build ad-hoc app images, both API base images, or either API base image individually. Ad-hoc app builds push only the Git SHA tags.
+Manual workflow dispatch can build ad-hoc app images, both API base images, or either API base image individually. Ad-hoc app builds push architecture-specific Git SHA tags and a final multi-architecture Git SHA manifest tag.
 
 ## 📄 License
 

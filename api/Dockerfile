@@ -1,7 +1,5 @@
 # syntax=docker/dockerfile:1.7
 
-ARG BUILDPLATFORM
-ARG TARGETPLATFORM
 ARG RUST_BASE_IMAGE=ghcr.io/joekhoobyar/autofile-api-rust-base:latest
 ARG API_RUNTIME_BASE_IMAGE=ghcr.io/joekhoobyar/autofile-api-runtime-base:latest
 
@@ -13,8 +11,6 @@ RUN mkdir -p src && printf 'fn main() {}\n' > src/main.rs
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM ${RUST_BASE_IMAGE} AS builder
-
-ARG TARGETPLATFORM
 
 WORKDIR /app
 COPY --from=planner /app/recipe.json ./recipe.json
