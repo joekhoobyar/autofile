@@ -30,6 +30,7 @@ nav:
       - Metadata: concepts/metadata.md
       - Indexes: concepts/indexes.md
       - Classifiers: concepts/classifiers.md
+      - Classifier Blocks: concepts/classifier-blocks.md
   - Administration:
       - Configuration: admin/configuration.md
       - Storage: admin/storage.md
@@ -37,6 +38,7 @@ nav:
   - Development: development/index.md
   - Reference:
       - API: reference/api.md
+      - Classifier Rules YAML: reference/classifier-rules-yaml.md
 
 markdown_extensions:
   - admonition

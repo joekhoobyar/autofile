@@ -8,6 +8,7 @@ Autofile needs a public documentation site so users can install, configure, and 
 - Publish the documentation site to GitHub Pages from the `main` branch.
 - Configure the custom domain `autofile.dev` for the generated site.
 - Add initial docs for getting started, core concepts, administration, development, and API reference orientation.
+- Add detailed documentation for the classifier block system, including user-facing behavior and the full supported YAML rule syntax.
 - Document that Autofile is relatively stable, but still alpha software.
 
 ## Capabilities

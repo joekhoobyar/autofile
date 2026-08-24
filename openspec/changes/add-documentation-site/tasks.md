@@ -9,6 +9,8 @@
 - [x] Add `mkdocs.yml` configured for MkDocs Material.
 - [x] Add `requirements-docs.txt` for docs dependencies.
 - [x] Add initial Markdown documentation under `docs/`.
+- [x] Add detailed classifier block user documentation.
+- [x] Add classifier rules YAML syntax reference.
 - [x] Add `docs/CNAME` for `autofile.dev`.
 
 ## 3. Deployment

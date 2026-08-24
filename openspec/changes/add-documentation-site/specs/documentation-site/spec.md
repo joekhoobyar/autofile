@@ -20,6 +20,22 @@ The documentation site SHALL include initial pages for getting started, core pro
 - **WHEN** a user opens the navigation menu
 - **THEN** the user can access Getting Started, Concepts, Administration, Development, and Reference sections
 
+### Requirement: Classifier Block Documentation
+
+The documentation site SHALL explain classifier block behavior and fully document the supported classifier rules YAML syntax.
+
+#### Scenario: Understand classifier execution
+
+- **GIVEN** a user needs to configure classifier blocks
+- **WHEN** the user reads the classifier block documentation
+- **THEN** the user can understand block ordering, matching, actions, child rules, and `continue_after_match` behavior
+
+#### Scenario: Write classifier YAML
+
+- **GIVEN** a user needs to manually edit classifier rules YAML
+- **WHEN** the user reads the YAML reference
+- **THEN** the user can identify the required top-level fields, pattern syntax, action keys, snippet replacement syntax, and supported modifiers
+
 ### Requirement: GitHub Pages Deployment
 
 Autofile SHALL publish the documentation site to GitHub Pages from the `main` branch using GitHub Actions.
