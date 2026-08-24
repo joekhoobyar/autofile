@@ -2,6 +2,8 @@
 
 Autofile is a self-hosted document management application. It stores document files in S3-compatible object storage, keeps structured document metadata in PostgreSQL, and provides a React web UI backed by a Rust API.
 
+For installation guides, concepts, configuration, and API reference, see the full documentation at [autofile.dev](https://autofile.dev/).
+
 The project is built as two containers:
 
 - `autofile-api`: Rust/Axum API, background workers, PostgreSQL migrations, S3 file storage, and document processing tools.
