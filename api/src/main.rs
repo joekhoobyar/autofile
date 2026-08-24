@@ -16,7 +16,7 @@ use diesel_async::{
 use redis::AsyncCommands;
 use tokio::signal;
 use tokio::sync::watch;
-use tokio::time::{Duration, timeout};
+use tokio::time::{Duration, sleep, timeout};
 
 use apalis::layers::WorkerBuilderExt;
 use apalis::layers::retry::RetryPolicy;
@@ -54,15 +54,9 @@ async fn main() {
     // Get database URL from environment
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
-    // Create bb8 connection pool for diesel-async
-    let config = AsyncDieselConnectionManager::<AsyncPgConnection>::new(&database_url);
-    let db_pool = bb8::Pool::builder()
-        .build(config)
-        .await
-        .expect("Failed to create database connection pool");
+    let db_pool = create_db_pool_with_retry(&database_url).await;
 
-    // Run migrations
-    run_migrations(&database_url).await;
+    run_migrations_with_retry(&database_url).await;
 
     // Initialize S3 client
     let s3_endpoint = std::env::var("AWS_ENDPOINT_URL_S3").ok();
@@ -268,6 +262,53 @@ async fn check_redis(redis_url: &str) -> anyhow::Result<()> {
     timeout(Duration::from_secs(3), conn.ping::<String>()).await??;
 
     Ok(())
+}
+
+async fn create_db_pool_with_retry(database_url: &str) -> bb8::Pool<AsyncPgConnection> {
+    let mut attempt = 1;
+
+    loop {
+        let config = AsyncDieselConnectionManager::<AsyncPgConnection>::new(database_url);
+
+        match bb8::Pool::builder()
+            .connection_timeout(Duration::from_secs(5))
+            .build(config)
+            .await
+        {
+            Ok(pool) => {
+                tracing::info!(attempt, "Database connection pool created");
+                return pool;
+            }
+            Err(err) => {
+                tracing::warn!(
+                    attempt,
+                    error = %err,
+                    "Database connection pool unavailable; retrying in 5 seconds"
+                );
+                sleep(Duration::from_secs(5)).await;
+                attempt += 1;
+            }
+        }
+    }
+}
+
+async fn run_migrations_with_retry(database_url: &str) {
+    let mut attempt = 1;
+
+    loop {
+        match run_migrations(database_url).await {
+            Ok(()) => return,
+            Err(err) => {
+                tracing::warn!(
+                    attempt,
+                    error = %err,
+                    "Database migrations failed; retrying in 5 seconds"
+                );
+                sleep(Duration::from_secs(5)).await;
+                attempt += 1;
+            }
+        }
+    }
 }
 
 async fn health_ready(DbConn(mut conn): DbConn) -> Result<Json<ReadyResponse>, ApiError> {

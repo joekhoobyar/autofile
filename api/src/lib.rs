@@ -1,5 +1,6 @@
 use std::sync::OnceLock;
 
+use anyhow::Context;
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 
 pub mod schema;
@@ -64,20 +65,24 @@ pub use shared::app_state::AppState;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
-pub async fn run_migrations(database_url: &str) {
+pub async fn run_migrations(database_url: &str) -> anyhow::Result<()> {
     let database_url = database_url.to_string();
 
     tokio::task::spawn_blocking(move || {
         let mut conn = <diesel::PgConnection as diesel::Connection>::establish(&database_url)
-            .expect("Failed to establish connection for migrations");
+            .context("failed to establish connection for migrations")?;
 
         conn.run_pending_migrations(MIGRATIONS)
-            .expect("Failed to run migrations");
+            .map_err(|err| anyhow::anyhow!("failed to run migrations: {err}"))?;
 
         tracing::info!("Migrations completed successfully");
+
+        Ok::<(), anyhow::Error>(())
     })
     .await
-    .expect("Migration task panicked");
+    .context("migration task panicked")??;
+
+    Ok(())
 }
 
 static IS_PRODUCTION: OnceLock<bool> = OnceLock::new();

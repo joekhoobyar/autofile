@@ -24,7 +24,9 @@ impl TestDatabase {
             .expect("postgres port should be mapped");
         let database_url = format!("postgres://postgres:postgres@127.0.0.1:{port}/postgres");
 
-        run_migrations(&database_url).await;
+        run_migrations(&database_url)
+            .await
+            .expect("migrations should run");
 
         let config = AsyncDieselConnectionManager::<AsyncPgConnection>::new(database_url.clone());
         let pool = bb8::Pool::builder()
