@@ -21,7 +21,7 @@ Disabled blocks are ignored.
 
 ## Execution Order
 
-Classifier blocks run in ascending order by their `order` field. If two blocks have the same order, Autofile uses the block `id` as a tie-breaker.
+Classifier blocks run in ascending order by their `order` field.
 
 The Classifiers page shows the block order and allows reordering when the list is sorted by order ascending.
 
