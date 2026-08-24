@@ -18,8 +18,8 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 LABEL org.opencontainers.image.title="Autofile UI" \
       org.opencontainers.image.description="Autofile web UI" \
       org.opencontainers.image.source="https://github.com/joekhoobyar/autofile" \
-      org.opencontainers.image.url="https://github.com/joekhoobyar/autofile" \
-      org.opencontainers.image.documentation="https://github.com/joekhoobyar/autofile" \
+      org.opencontainers.image.url="https://autofile.dev/" \
+      org.opencontainers.image.documentation="https://autofile.dev/" \
       org.opencontainers.image.vendor="Joe Khoobyar" \
       org.opencontainers.image.licenses="AGPL-3.0-only"
 

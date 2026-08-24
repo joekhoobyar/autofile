@@ -39,8 +39,8 @@ EXPOSE 8000
 LABEL org.opencontainers.image.title="Autofile API" \
       org.opencontainers.image.description="Autofile backend API service" \
       org.opencontainers.image.source="https://github.com/joekhoobyar/autofile" \
-      org.opencontainers.image.url="https://github.com/joekhoobyar/autofile" \
-      org.opencontainers.image.documentation="https://github.com/joekhoobyar/autofile" \
+      org.opencontainers.image.url="https://autofile.dev/" \
+      org.opencontainers.image.documentation="https://autofile.dev/" \
       org.opencontainers.image.vendor="Joe Khoobyar" \
       org.opencontainers.image.licenses="AGPL-3.0-only"
 
