@@ -1,0 +1,53 @@
+site_name: Autofile
+site_url: https://autofile.dev/
+site_description: Documentation for Autofile, a self-hosted document management application.
+repo_url: https://github.com/joekhoobyar/autofile
+repo_name: joekhoobyar/autofile
+docs_dir: docs
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - search.suggest
+    - search.highlight
+  palette:
+    - scheme: default
+      primary: blue grey
+      accent: indigo
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Quick Start: getting-started/quick-start.md
+      - Create the First User: getting-started/first-user.md
+  - Concepts:
+      - Documents: concepts/documents.md
+      - Organization: concepts/organization.md
+      - Metadata: concepts/metadata.md
+      - Indexes: concepts/indexes.md
+      - Classifiers: concepts/classifiers.md
+  - Administration:
+      - Configuration: admin/configuration.md
+      - Storage: admin/storage.md
+      - Background Jobs: admin/background-jobs.md
+  - Development: development/index.md
+  - Reference:
+      - API: reference/api.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
