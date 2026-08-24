@@ -70,12 +70,6 @@ pub enum ClassifierModifier {
     TaxYear { from: String, to: u32 },
     #[serde(rename = "currency")]
     Currency { from: String, to: u32 },
-    #[serde(rename = "sprintf")]
-    Sprintf {
-        from: String,
-        to: u32,
-        format: String,
-    },
     #[serde(rename = "zero_pad")]
     ZeroPad {
         from: String,

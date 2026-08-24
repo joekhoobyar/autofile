@@ -12,7 +12,6 @@ use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use regex::{Captures, Regex, RegexBuilder};
-use sprintf::sprintf;
 
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::document_metadatas::{NewDocumentMetadata, document_metadatas_upsert};
@@ -907,7 +906,6 @@ fn modifier_kind(modifier: &ClassifierModifier) -> &'static str {
         ClassifierModifier::PrevMonth { .. } => "prev_month",
         ClassifierModifier::TaxYear { .. } => "tax_year",
         ClassifierModifier::Currency { .. } => "currency",
-        ClassifierModifier::Sprintf { .. } => "sprintf",
         ClassifierModifier::ZeroPad { .. } => "zero_pad",
         ClassifierModifier::Replace { .. } => "replace",
         ClassifierModifier::AlnumSanitize { .. } => "alnum_sanitize",
@@ -976,10 +974,6 @@ fn apply_modifier(
         ClassifierModifier::Currency { from, to } => {
             let value = apply_replacements(from, snippets);
             Ok(Some((*to, mod_currency(&value))))
-        }
-        ClassifierModifier::Sprintf { from, to, format } => {
-            let value = apply_replacements(from, snippets);
-            Ok(Some((*to, mod_sprintf(&value, format)?)))
         }
         ClassifierModifier::ZeroPad { from, to, length } => {
             let value = apply_replacements(from, snippets);
@@ -1107,21 +1101,6 @@ fn mod_month_number(value: &str) -> Option<String> {
         "classification: modifier: month_number"
     );
     result
-}
-
-fn mod_sprintf(value: &str, fmt: &str) -> Result<String, String> {
-    tracing::debug!(value, fmt, "classification: modifier: sprintf");
-    let mut v = value;
-    let re = Regex::new(r"^0+([1-9])").unwrap();
-    if let Some(caps) = re.captures(value) {
-        if let Some(m) = caps.get(1) {
-            v = m.as_str();
-        }
-    }
-
-    sprintf!(fmt, v)
-        .map(|value| value.replace(" ", "0"))
-        .map_err(|err| err.to_string())
 }
 
 fn mod_zeropad(value: &str, length: usize) -> String {
@@ -1688,36 +1667,6 @@ mod tests {
         );
 
         assert_eq!(snippets.get(&2), Some(&"1234".to_string()));
-    }
-
-    #[test]
-    fn modifier_sprintf_formats_and_zero_pads() {
-        let snippets = apply_modifier_for_test(
-            ClassifierModifier::Sprintf {
-                from: "\\1".to_string(),
-                to: 2,
-                format: "%4s".to_string(),
-            },
-            &[(1, "007")],
-            &[],
-        );
-
-        assert_eq!(snippets.get(&2), Some(&"0007".to_string()));
-    }
-
-    #[test]
-    fn modifier_sprintf_returns_error_for_invalid_format() {
-        let snippets = HashMap::from([(1, "7".to_string())]);
-        let computed_actions = HashMap::new();
-        let modifier = ClassifierModifier::Sprintf {
-            from: "\\1".to_string(),
-            to: 2,
-            format: "%q".to_string(),
-        };
-
-        let result = apply_modifier(&snippets, &modifier, &computed_actions);
-
-        assert!(result.is_err());
     }
 
     #[test]
