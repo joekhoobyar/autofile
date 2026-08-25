@@ -4,6 +4,8 @@
 
 Autofile is a self-hosted document management application. It stores document files in S3-compatible object storage, keeps structured metadata in PostgreSQL, and provides a React web UI backed by a Rust API.
 
+![document grid basic](assets/document-grid-basic.png){ align=left width="640" style="margin: 0 1.25rem 1rem 0;" }
+
 !!! note "Alpha software"
     Autofile is relatively stable, but it is still alpha software. Expect breaking changes as installation, administration, and document-processing workflows continue to mature.
 
