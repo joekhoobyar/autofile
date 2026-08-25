@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 
 import { Card } from 'primereact/card';
 import { Checkbox } from 'primereact/checkbox';
@@ -1267,6 +1267,8 @@ export function EditDocumentProperties() {
       document_type_id: doc?.document_type_id ?? null,
     },
   });
+  const selectedDocumentTypeId = useWatch({ control, name: 'document_type_id' });
+  const isDocumentTypeChanged = !!doc && selectedDocumentTypeId !== doc.document_type_id;
 
   const submitter = async (values: DocumentPropertiesFormValues) => {
     await saveDocument.mutateAsync({
@@ -1329,6 +1331,13 @@ export function EditDocumentProperties() {
                 )}
               />
               {errors.document_type_id?.message && <small className="p-error">{String(errors.document_type_id.message)}</small>}
+              {isDocumentTypeChanged && (
+                <Message
+                  className="mt-2"
+                  severity="warn"
+                  text="Changing the document type permanently removes stored metadata fields that are not associated with the new type. Fields shared by both types are retained. Review the associations before saving."
+                />
+              )}
             </div>
 
             <div className="col-12">
