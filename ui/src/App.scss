@@ -264,6 +264,11 @@ body {
   border-width: 0;
 }
 
+.aut-documents-card .p-card-content {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
 .aut-documents-data-view .p-paginator {
   display: flex;
   align-items: center;

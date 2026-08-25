@@ -760,6 +760,11 @@ export function ListDocuments() {
             <label htmlFor="documents-select-all">Select all</label>
           </div>
           <DataViewLayoutOptions layout={layout} onChange={(e) => setLayout(e.value as 'list' | 'grid')} />
+          <DocumentActions
+            documentIds={Array.from(selectedIds)}
+            onAfterAction={() => setSelectedIds(new Set())}
+            includeNewDocument
+          />
         </div>
       </div>
     );
@@ -856,15 +861,7 @@ export function ListDocuments() {
 
   const mainContent = (
     <>
-    <DocumentActions
-        documentIds={Array.from(selectedIds)}
-        onAfterAction={() => setSelectedIds(new Set())}
-        includeNewDocument
-        buttonClassName="mt-3 mr-5"
-        buttonStyle={{ float: 'right' }}
-      />
-
-    <Card title="Documents">
+    <Card className="aut-documents-card">
       <DataView className="aut-documents-data-view" value={data?.items ?? []}
           loading={isPending || isFetching}
           lazy
