@@ -1,7 +1,7 @@
 {
   "name": "autofile-ui",
+  "version": "0.2.4",
   "private": true,
-  "version": "0.2.2",
   "author": "Joe Khoobyar",
   "license": "AGPL-3.0-only",
   "type": "module",
