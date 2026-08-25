@@ -2,6 +2,9 @@
 
 Document indexes organize documents into browseable groups generated from document properties and metadata. For example, an index can group documents by correspondent, by issue year and month, or by a combination of both.
 
+![document index values](../assets/document-index-values-basic.png){ align=left width="100%" style="margin: 0 0 1rem 0;" }
+![document index values](../assets/document-index-docs-basic.png){ align=left width="100%" style="margin: 0 0 1rem 0;" }
+
 ## How Indexes Work
 
 An index consists of three parts:
@@ -10,7 +13,7 @@ An index consists of three parts:
 - **Index templates** describe how to generate each level of the hierarchy.
 - **Index values** are the rendered groups that users browse.
 
-Templates form a tree. A template with no parent creates the first level, and a template with a parent creates the next level beneath it. A template marked **Is Leaf** ends a branch and associates matching documents with the rendered value.
+Templates form a tree. A template with no parent creates the root level, and a template with the root as its parent creates the next level beneath it, and so on. The tree can have multiple root levels. A template marked **Is Leaf** ends a branch and associates matching documents with the rendered value.
 
 For example, an index with a year template and a child month template can produce this hierarchy:
 
@@ -24,7 +27,7 @@ For example, an index with a year template and a child month template can produc
 
 The year template is not a leaf because users continue from a year into its months. The month template is a leaf because selecting a month opens its documents.
 
-Every usable branch must reach a template marked **Is Leaf**. Autofile does not save a partial path when a branch ends without a leaf.
+Every usable branch must reach a template marked **Is Leaf**. Autofile will not save a partial path when a branch ends without a leaf.
 
 ## Create An Index
 
@@ -216,7 +219,7 @@ To see where one document appears, open the document and select **Indexes**. The
 
 If expected values or documents are missing:
 
-- Test every template against an affected document using **Template Test**.
+- Test every template against an affected document using the **Template Test** document action.
 - Confirm metadata keys use slugs such as `correspondent` and `issue_date`, not display names such as `Correspondent` and `Issue Date`.
 - Confirm every branch ends at a template marked **Is Leaf**.
 - Confirm child templates have the intended **Parent Template**.
