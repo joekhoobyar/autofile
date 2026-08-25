@@ -43,10 +43,7 @@ async fn main() {
     // Redis storage (queue) for background jobs.
     let redis_url = std::env::var("REDIS_URL")
         .unwrap_or_else(|_| "redis://127.0.0.1:6379/?connect_timeout=2&timeout=2".to_string());
-    check_redis(&redis_url).await.expect("Redis not reachable");
-    let redis_conn = apalis_redis::connect(redis_url.clone())
-        .await
-        .expect("Could not connect to Redis");
+    let redis_conn = create_redis_connection_with_retry(&redis_url).await;
     let fast_storage: RedisStorage<FastJob> = RedisStorage::new(redis_conn.clone());
     let medium_storage: RedisStorage<MediumJob> = RedisStorage::new(redis_conn.clone());
     let slow_storage: RedisStorage<SlowJob> = RedisStorage::new(redis_conn);
@@ -264,6 +261,38 @@ async fn check_redis(redis_url: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+async fn create_redis_connection_with_retry(redis_url: &str) -> apalis_redis::ConnectionManager {
+    let mut attempt = 1;
+
+    loop {
+        match check_redis(redis_url).await {
+            Ok(()) => match apalis_redis::connect(redis_url.to_string()).await {
+                Ok(conn) => {
+                    tracing::info!(attempts = attempt, "Redis connection created");
+                    return conn;
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        attempt,
+                        error = %err,
+                        "Redis connection unavailable; retrying in 5 seconds"
+                    );
+                }
+            },
+            Err(err) => {
+                tracing::warn!(
+                    attempt,
+                    error = %err,
+                    "Redis not reachable; retrying in 5 seconds"
+                );
+            }
+        }
+
+        sleep(Duration::from_secs(5)).await;
+        attempt += 1;
+    }
+}
+
 async fn create_db_pool_with_retry(database_url: &str) -> bb8::Pool<AsyncPgConnection> {
     let mut attempt = 1;
 
@@ -276,7 +305,7 @@ async fn create_db_pool_with_retry(database_url: &str) -> bb8::Pool<AsyncPgConne
             .await
         {
             Ok(pool) => {
-                tracing::info!(attempt, "Database connection pool created");
+                tracing::info!(attempts = attempt, "Database connection pool created");
                 return pool;
             }
             Err(err) => {
