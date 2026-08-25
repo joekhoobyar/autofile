@@ -80,9 +80,6 @@ The name, description, data type, and Lookup choices can be edited. The slug rem
 
 A Metadata Type can be deleted only when no document metadata values still reference it. Remove or migrate those values first. Deleting an unused Metadata Type also removes its associations with Document Types.
 
-!!! warning "Document values are not deleted automatically"
-    Despite the current confirmation-dialog wording, the API does not cascade deletion to existing document metadata. Deletion fails while document values reference the Metadata Type.
-
 ## Use Metadata Slugs
 
 Document responses and templates key metadata by slug. For example, the display name **Issue Date** might use the slug `issue_date`:

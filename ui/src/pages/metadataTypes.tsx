@@ -72,7 +72,7 @@ export function ListMetadataTypes() {
 
   const confirmDeleteMetadataType = (c: MetadataType) => {
     confirmDialog({
-      message: 'Are you sure want to delete this metadata type?  All related document metadata will be deleted.',
+      message: 'Are you sure you want to delete this metadata type? Deletion will fail if any document metadata values still reference it.',
       header: `Delete: ${c.name}`,
       icon: 'pi pi-trash',
       defaultFocus: 'reject',
