@@ -67,7 +67,7 @@ Use an output expression to turn a document value into an index value:
 {{ doc.title }}
 ```
 
-Metadata is a map keyed by metadata type slug. Bracket notation makes the key explicit:
+[Document metadata](document-metadata.md) is a map keyed by [Metadata Type](metadata-types.md) slug. Bracket notation makes the key explicit:
 
 ```jinja
 {{ doc.metadata["correspondent"] }}

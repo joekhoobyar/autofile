@@ -40,7 +40,11 @@ nav:
   - Concepts:
       - Documents: concepts/documents.md
       - Organization: concepts/organization.md
-      - Metadata: concepts/metadata.md
+      - Metadata:
+          - Overview: concepts/metadata.md
+          - Document Types: concepts/document-types.md
+          - Metadata Types: concepts/metadata-types.md
+          - Document Metadata: concepts/document-metadata.md
       - Indexes: concepts/indexes.md
       - Classifiers: concepts/classifiers.md
       - Classifier Blocks: concepts/classifier-blocks.md

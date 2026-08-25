@@ -9,11 +9,13 @@ curl -i -X POST "http://localhost:8000/api/v1/auth/register" \
     "username": "admin@example.com",
     "email": "admin@example.com",
     "display_name": "Admin",
-    "password": "changeme123"
+    "password": "changeme1234"
   }'
 ```
 
 Then open the UI at `http://localhost:5173` and sign in with the new account.
+
+The API requires passwords to contain at least 12 characters.
 
 !!! warning "Use a stronger password"
     The example password is only for local development. Use a strong password for any shared or persistent environment.

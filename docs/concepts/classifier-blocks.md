@@ -88,7 +88,12 @@ Actions are string key-value pairs. Some action keys have special meanings.
 | Any key that does not start with `_` | Upserts document metadata by metadata type slug. |
 | Unknown key starting with `_` | Ignored. |
 
-The referenced document type, tag, cabinet, and metadata type slugs must already exist. Unknown tag and cabinet slugs are skipped. Unknown metadata slugs are logged and skipped.
+The referenced [Document Type](document-types.md), tag, cabinet, and [Metadata Type](metadata-types.md) slugs must already exist. Unknown tag and cabinet slugs are skipped. Unknown metadata slugs are logged and skipped.
+
+Classifier metadata must be associated with the resulting Document Type. Date and Lookup values must also pass the same validation as values entered on the document's [Metadata page](document-metadata.md). Invalid values for known fields fail classification rather than being skipped.
+
+!!! warning "Classifier updates are not atomic"
+    Classifier actions are persisted in stages. A title, Document Type, tag, or cabinet change may already have been saved if a later metadata value fails validation. Review the document after correcting a failed classifier run.
 
 ## Computed Actions
 

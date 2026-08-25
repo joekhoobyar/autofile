@@ -12,7 +12,7 @@ Autofile is a self-hosted document management application. It stores document fi
 ## What Autofile Provides
 
 - Upload and manage document files.
-- Define document types and metadata types.
+- Define [document types and metadata types](concepts/metadata.md).
 - Organize documents with cabinets, tags and metadata.
 - Process previews, text, OCR, and thumbnails quickly in the background.
 - Automatically build document [indexes](concepts/indexes.md) with dynamic templates (using [Minijinja](https://docs.rs/minijinja/latest/minijinja/syntax/)).
@@ -23,6 +23,8 @@ Autofile is a self-hosted document management application. It stores document fi
 
 - [Quick Start](getting-started/quick-start.md)
 - [Create the First User](getting-started/first-user.md)
+- [Metadata](concepts/metadata.md)
+- [Indexes](concepts/indexes.md)
 - [Configuration](admin/configuration.md)
 - [Development](development/index.md)
 - [API Reference](reference/api.md)
