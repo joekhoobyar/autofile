@@ -1,5 +1,18 @@
 const apiHostFromEnv = import.meta.env.VITE_API_HOST?.trim();
-export const API_HOST = apiHostFromEnv ? apiHostFromEnv.replace(/\/+$/, "") : "";
+
+function defaultApiHost(): string {
+  if (typeof window === "undefined") return "";
+
+  const { protocol, hostname } = window.location;
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") {
+    const apiHostname = hostname === "::1" ? "[::1]" : hostname;
+    return `${protocol}//${apiHostname}:8000`;
+  }
+
+  return "";
+}
+
+export const API_HOST = (apiHostFromEnv || defaultApiHost()).replace(/\/+$/, "");
 
 export function apiUrl(path: string): string {
   return `${API_HOST}/${path.replace(/^\/+/, "")}`;

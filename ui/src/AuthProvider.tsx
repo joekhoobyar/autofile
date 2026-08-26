@@ -1,7 +1,7 @@
 // AuthProvider.tsx
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { API_HOST, setAccessToken } from "./api";
+import { apiUrl, setAccessToken } from "./api";
 import { AuthContext, roleFromAccessToken, type AuthState, type UserRole } from "./auth";
 
 export function AuthProvider({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -9,7 +9,7 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
     queryKey: ["auth", "bootstrap"],
     queryFn: async () => {
       // call refresh to see if we have a session cookie
-      const resp = await fetch(`${API_HOST}/api/v1/auth/refresh`, { method: "POST", credentials: "include" });
+      const resp = await fetch(apiUrl("api/v1/auth/refresh"), { method: "POST", credentials: "include" });
       if (!resp.ok) throw new Error("not logged in");
       const data = (await resp.json()) as { access_token: string };
       setAccessToken(data.access_token);

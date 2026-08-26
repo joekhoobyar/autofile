@@ -18,7 +18,7 @@ import { Tooltip } from 'primereact/tooltip';
 import { classNames } from 'primereact/utils';
 import { format } from 'date-fns';
 
-import { API_HOST, HttpError, apiFetch, apiUrl, getAccessToken } from '../api';
+import { HttpError, apiFetch, apiUrl, getAccessToken } from '../api';
 import { AppToast } from '../components/AppToast';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { type DocumentFile } from '../models/documentFile';
@@ -560,7 +560,7 @@ export function ListDocumentFiles() {
         method: 'POST',
       });
       const link = window.document.createElement('a');
-      link.href = `${API_HOST}/${ticket.url}`;
+      link.href = apiUrl(ticket.url);
       link.download = file.filename;
       window.document.body.appendChild(link);
       link.click();
