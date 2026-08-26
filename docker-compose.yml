@@ -61,7 +61,7 @@ services:
     build:
       context: .
       dockerfile: api/Dockerfile
-    image: autofile-api:latest
+    image: ghcr.io/joekhoobyar/autofile-api:latest
     depends_on:
       redis:
         condition: service_healthy
@@ -89,7 +89,7 @@ services:
     build:
       context: .
       dockerfile: ui/Dockerfile
-    image: autofile-ui:latest
+    image: ghcr.io/joekhoobyar/autofile-ui:latest
     depends_on:
       api:
         condition: service_started
