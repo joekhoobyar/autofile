@@ -70,7 +70,7 @@ async fn main() {
     if let Some(endpoint) = s3_endpoint.as_deref() {
         s3_client_config = s3_client_config
             .endpoint_url(endpoint)
-            .force_path_style(true); // Required for minio
+            .force_path_style(true); // Required for local S3-compatible endpoints.
     }
     let s3_client = aws_sdk_s3::Client::from_conf(s3_client_config.build());
     let s3_bucket = std::env::var("S3_BUCKET").expect("S3_BUCKET must be set");

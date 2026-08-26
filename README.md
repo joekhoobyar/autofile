@@ -16,7 +16,7 @@ The project is built as two containers:
 - Define document types and metadata types.
 - Build document indexes and index templates.
 - Run classifier blocks for document classification workflows.
-- Store files in S3-compatible storage such as MinIO.
+- Store files in S3-compatible storage such as RustFS.
 - Process document previews, text, OCR, and thumbnails through background jobs.
 - Manage users with JWT/cookie-based authentication.
 
@@ -25,7 +25,7 @@ The project is built as two containers:
 - API: Rust, Axum, Tokio, Diesel, Diesel Async, Apalis
 - UI: React, TypeScript, Vite, PrimeReact, TanStack Query
 - Data: PostgreSQL, Redis, S3-compatible object storage
-- Local services: Docker Compose, MinIO
+- Local services: Docker Compose, RustFS
 - Images: Docker Buildx/Bake, multi-platform `linux/amd64` and `linux/arm64`
 
 ## 🚀 Quick Start
@@ -40,19 +40,19 @@ This starts:
 
 - PostgreSQL on the internal Compose network
 - Redis on the internal Compose network
-- MinIO at `http://localhost:9000`
-- MinIO console at `http://localhost:9001`
+- RustFS at `http://localhost:9000`
+- RustFS console at `http://localhost:9001`
 - API at `http://localhost:8000`
 - UI at `http://localhost:5173`
 
-MinIO uses the default local credentials from `docker-compose.yml`:
+RustFS uses the default local credentials from `docker-compose.yml`:
 
 ```text
-username: minioadmin
-password: minioadmin
+username: autofile-dev-access
+password: autofile-dev-secret
 ```
 
-The `minio-init` service creates the local bucket `autofile-documents` automatically.
+The `rustfs-init` service creates the local bucket `autofile-documents` automatically.
 
 ## 👤 Create the First User
 
@@ -81,9 +81,9 @@ The API is configured with environment variables.
 | `BIND_ADDR` | No | `0.0.0.0:8000` | API bind address. |
 | `DATABASE_URL` | Yes | none | PostgreSQL connection string. |
 | `REDIS_URL` | No | `redis://127.0.0.1:6379/?connect_timeout=2&timeout=2` | Redis connection string for background jobs. |
-| `AWS_ENDPOINT_URL_S3` | No | AWS default | S3 endpoint override. Required for MinIO. |
-| `AWS_ACCESS_KEY_ID` | Yes for MinIO/local | none | S3 access key. |
-| `AWS_SECRET_ACCESS_KEY` | Yes for MinIO/local | none | S3 secret key. |
+| `AWS_ENDPOINT_URL_S3` | No | AWS default | S3 endpoint override. Required for RustFS. |
+| `AWS_ACCESS_KEY_ID` | Yes for RustFS/local | none | S3 access key. |
+| `AWS_SECRET_ACCESS_KEY` | Yes for RustFS/local | none | S3 secret key. |
 | `AWS_REGION` | Usually | AWS SDK default | S3 region. |
 | `S3_BUCKET` | Yes | none | Bucket for document files. |
 | `JWT_SECRET` | Yes | none | Secret used to sign JWTs. Use a strong value in production. |

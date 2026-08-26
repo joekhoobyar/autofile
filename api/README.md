@@ -21,7 +21,7 @@ This starts:
 - `api` (this service)
 - `redis`
 - `postgres`
-- `minio` (plus a one-shot `minio-init` job to create bucket `autofile`)
+- `rustfs` (plus a one-shot `rustfs-init` job to create bucket `autofile-documents`)
 
 ### User Registration
 
@@ -53,5 +53,5 @@ cargo test
 - **Web Framework**: Axum 0.8 with Tower middleware
 - **Database**: PostgreSQL with Diesel-async and bb8 connection pooling
 - **Authentication**: JWT tokens with Argon2 password hashing
-- **File Storage**: AWS S3 (or MinIO) for document storage
+- **File Storage**: AWS S3-compatible storage for document storage
 - **Serialization**: Serde for JSON handling

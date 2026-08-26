@@ -4,7 +4,7 @@ Autofile stores document file bytes in S3-compatible object storage and stores d
 
 ## S3-Compatible Storage
 
-Autofile uses an S3-compatible API to store documents. For local development, Docker Compose runs MinIO and configures the API with `AWS_ENDPOINT_URL_S3`.
+Autofile uses an S3-compatible API to store documents. For local development, Docker Compose runs RustFS and configures the API with `AWS_ENDPOINT_URL_S3`.
 
 ## Local Bucket
 
@@ -14,9 +14,9 @@ The Docker Compose stack creates this bucket automatically:
 autofile-documents
 ```
 
-## MinIO Settings
+## RustFS Settings
 
-For local Compose, the API uses path-style requests because they are required by MinIO in this setup.
+For local Compose, the API uses path-style requests for the local RustFS endpoint.
 
 ## Backups
 

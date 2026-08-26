@@ -10,21 +10,21 @@ This starts:
 
 - PostgreSQL on the internal Compose network.
 - Redis on the internal Compose network.
-- MinIO at `http://localhost:9000`.
-- MinIO console at `http://localhost:9001`.
+- RustFS at `http://localhost:9000`.
+- RustFS console at `http://localhost:9001`.
 - API at `http://localhost:8000`.
 - UI at `http://localhost:5173`.
 
-## MinIO Credentials
+## RustFS Credentials
 
-The local MinIO service uses the default credentials from `docker-compose.yml`:
+The local RustFS service uses the default credentials from `docker-compose.yml`:
 
 ```text
-username: minioadmin
-password: minioadmin
+username: autofile-dev-access
+password: autofile-dev-secret
 ```
 
-The `minio-init` service creates the local bucket `autofile-documents` automatically.
+The `rustfs-init` service creates the local bucket `autofile-documents` automatically.
 
 ## Next Step
 

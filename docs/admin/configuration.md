@@ -8,9 +8,9 @@ The API is configured with environment variables.
 | `BIND_ADDR` | No | `0.0.0.0:8000` | API bind address. |
 | `DATABASE_URL` | Yes | none | PostgreSQL connection string. |
 | `REDIS_URL` | No | `redis://127.0.0.1:6379/?connect_timeout=2&timeout=2` | Redis connection string for background jobs. |
-| `AWS_ENDPOINT_URL_S3` | No | AWS default | S3 endpoint override. Required for MinIO. |
-| `AWS_ACCESS_KEY_ID` | Yes for MinIO/local | none | S3 access key. |
-| `AWS_SECRET_ACCESS_KEY` | Yes for MinIO/local | none | S3 secret key. |
+| `AWS_ENDPOINT_URL_S3` | No | AWS default | S3 endpoint override. Required for RustFS. |
+| `AWS_ACCESS_KEY_ID` | Yes for RustFS/local | none | S3 access key. |
+| `AWS_SECRET_ACCESS_KEY` | Yes for RustFS/local | none | S3 secret key. |
 | `AWS_REGION` | Usually | AWS SDK default | S3 region. |
 | `S3_BUCKET` | Yes | none | Bucket for document files. |
 | `JWT_SECRET` | Yes | none | Secret used to sign JWTs. Use a strong value in production. |
