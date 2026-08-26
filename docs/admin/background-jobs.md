@@ -4,7 +4,7 @@ Autofile uses Redis-backed background jobs for document processing work.
 
 ## Redis
 
-The API connects to Redis through `REDIS_URL`. Docker Compose provides a Redis service automatically.
+The API connects to Redis through `REDIS_URL`. The Docker Compose stack provides a Redis service automatically.
 
 ## Job Queues
 
@@ -12,7 +12,7 @@ The API starts in-process workers for fast, medium, and slow jobs. These queues 
 
 ## Processing Work
 
-Background jobs can handle work such as preview generation, text extraction, OCR, thumbnails, and document page processing.
+Background jobs handle work such as preview generation, text extraction, OCR, thumbnails, and document page processing.
 
 ## Operations
 
