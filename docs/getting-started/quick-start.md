@@ -3,7 +3,7 @@
 The easiest way to run Autofile locally is Docker Compose from the repository root.
 
 ```bash
-docker compose up --build
+docker compose up
 ```
 
 This starts:
