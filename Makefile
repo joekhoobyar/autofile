@@ -35,8 +35,12 @@ version-bump:
 		echo "VERSION must be semver: MAJOR.MINOR.PATCH" >&2; \
 		exit 1; \
 	fi; \
+	command -v yq >/dev/null || { \
+		echo "yq is required to update charts/autofile/Chart.yaml" >&2; \
+		exit 1; \
+	}; \
 	NEW_VERSION="$$new_version" perl -0pi -e 's/(^version = ")[^"]+(")/$$1$$ENV{NEW_VERSION}$$2/m' api/Cargo.toml; \
-	NEW_VERSION="$$new_version" perl -0pi -e 's/(\[\[package\]\]\nname = "autofile-api"\nversion = ")[^"]+(")/$$1$$ENV{NEW_VERSION}$$2/' api/Cargo.lock; \
-	NEW_VERSION="$$new_version" perl -0pi -e 's/("name": "autofile-ui",\n\s+"version": ")[^"]+(")/$$1$$ENV{NEW_VERSION}$$2/' ui/package.json; \
-	NEW_VERSION="$$new_version" perl -0pi -e 's/("name": "autofile-ui",\n\s+"version": ")[^"]+(")/$$1$$ENV{NEW_VERSION}$$2/g' ui/package-lock.json; \
+	cargo update --manifest-path api/Cargo.toml --package autofile-api --offline; \
+	npm --prefix ui version "$$new_version" --no-git-tag-version; \
+	NEW_VERSION="$$new_version" yq -i '.version = strenv(NEW_VERSION) | .appVersion = "v" + strenv(NEW_VERSION)' charts/autofile/Chart.yaml; \
 	echo "Bumped version: $$current_version -> $$new_version"
