@@ -1,0 +1,146 @@
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+
+existingSecret: ""
+secrets:
+  REDIS_URL: "redis://:changeme@valkey:6379/0"
+  JWT_SECRET: "changeme"
+  AWS_ACCESS_KEY_ID: "autofile-dev-access"
+  AWS_SECRET_ACCESS_KEY: "autofile-dev-secret"
+
+database:
+  mode: cnpg
+  url: ""
+  cnpg:
+    name: autofile-postgresql
+    annotations: {}
+    labels: {}
+    spec:
+      imageName: ghcr.io/cloudnative-pg/postgresql:18
+      instances: 1
+      storage:
+        size: 5Gi
+      bootstrap:
+        initdb:
+          database: autofile
+          owner: autofile
+
+objectStorage:
+  mode: rustfs
+  bucket: autofile-documents
+  rustfs:
+    existingSecret: &rustfsExistingSecret autofile-rustfs-secret
+    accessKey: ""
+    secretKey: ""
+  initContainer:
+    image:
+      repository: amazon/aws-cli
+      tag: latest
+      pullPolicy: IfNotPresent
+
+api:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/joekhoobyar/autofile-api
+  service:
+    type: ClusterIP
+    port: 80
+    annotations: {}
+  env:
+    APP_MODE: development
+    BIND_ADDR: 0.0.0.0:8000
+    RUST_LOG: info
+    AWS_REGION: us-east-1
+    ALLOWED_ORIGINS: ""
+  extraEnv: []
+  startupProbe:
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 30
+  livenessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  readinessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  resources: {}
+
+ui:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/joekhoobyar/autofile-ui
+  service:
+    type: ClusterIP
+    port: 80
+    annotations: {}
+  livenessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  readinessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  resources: {}
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name:
+
+podSecurityContext:
+  fsGroup: 1000
+securityContext:
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+  tls: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+valkey:
+  enabled: true
+  auth:
+    enabled: true
+    usersExistingSecret: "{{ .Release.Name }}-valkey-users"
+    aclUsers:
+      default:
+        password: ""
+        permissions: "~* &* +@all"
+
+rustfs:
+  enabled: true
+  mode:
+    standalone:
+      enabled: true
+    distributed:
+      enabled: false
+  ingress:
+    enabled: false
+  secret:
+    existingSecret: *rustfsExistingSecret

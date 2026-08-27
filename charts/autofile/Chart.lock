@@ -1,0 +1,9 @@
+dependencies:
+- name: valkey
+  repository: https://valkey.io/valkey-helm/
+  version: 0.11.0
+- name: rustfs
+  repository: https://charts.rustfs.com
+  version: 1.0.0-rc.3
+digest: sha256:87384321450b45a7d7a34ea19e15c7d4be0af37c0ec6f4925b1d692633ad028d
+generated: "2026-08-26T22:38:04.274185-04:00"

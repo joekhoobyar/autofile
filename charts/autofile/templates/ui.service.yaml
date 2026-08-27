@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "autofile.ui.fullname" . }}
+  labels:
+    {{- include "autofile.labels" . | nindent 4 }}
+  {{- with .Values.ui.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.ui.service.type }}
+  selector:
+    {{- include "autofile.ui.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      protocol: TCP
+      port: {{ .Values.ui.service.port }}
+      targetPort: http

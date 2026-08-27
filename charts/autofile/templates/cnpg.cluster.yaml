@@ -1,0 +1,17 @@
+{{- if eq .Values.database.mode "cnpg" }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Values.database.cnpg.name }}
+  labels:
+    {{- include "autofile.labels" . | nindent 4 }}
+    {{- with .Values.database.cnpg.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.database.cnpg.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- toYaml .Values.database.cnpg.spec | nindent 2 }}
+{{- end }}

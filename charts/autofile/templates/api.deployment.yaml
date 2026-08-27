@@ -1,0 +1,140 @@
+{{- include "autofile.validateDatabase" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "autofile.api.fullname" . }}
+  labels:
+    {{- include "autofile.labels" . | nindent 4 }}
+  annotations:
+    reloader.stakater.com/auto: 'true'
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "autofile.api.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "autofile.api.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "autofile.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if include "autofile.objectStorage.isRustFS" . }}
+      initContainers:
+        - name: create-object-storage-bucket
+          image: {{ .Values.objectStorage.initContainer.image.repository }}:{{ .Values.objectStorage.initContainer.image.tag }}
+          imagePullPolicy: {{ .Values.objectStorage.initContainer.image.pullPolicy }}
+          env:
+            - name: AWS_ENDPOINT_URL_S3
+              value: {{ include "autofile.objectStorage.endpointURL" . | quote }}
+            - name: S3_BUCKET
+              value: {{ .Values.objectStorage.bucket | quote }}
+            - name: AWS_REGION
+              value: {{ .Values.api.env.AWS_REGION | quote }}
+            - name: AWS_EC2_METADATA_DISABLED
+              value: "true"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "autofile.secretName" . }}
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "autofile.secretName" . }}
+                  key: AWS_SECRET_ACCESS_KEY
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              until aws --endpoint-url "$AWS_ENDPOINT_URL_S3" s3api list-buckets >/dev/null 2>&1; do sleep 1; done
+              aws --endpoint-url "$AWS_ENDPOINT_URL_S3" s3api create-bucket --bucket "$S3_BUCKET" 2>/dev/null || true
+      {{- end }}
+      containers:
+        - name: api
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.api.image.repository }}:{{ include "autofile.api.imageTag" . }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy | default "IfNotPresent" }}
+          env:
+            - name: APP_MODE
+              value: {{ .Values.api.env.APP_MODE | quote }}
+            - name: BIND_ADDR
+              value: {{ .Values.api.env.BIND_ADDR | quote }}
+            - name: RUST_LOG
+              value: {{ .Values.api.env.RUST_LOG | quote }}
+            - name: S3_BUCKET
+              value: {{ .Values.objectStorage.bucket | quote }}
+            - name: AWS_REGION
+              value: {{ .Values.api.env.AWS_REGION | quote }}
+            {{- if include "autofile.objectStorage.endpointURL" . }}
+            - name: AWS_ENDPOINT_URL_S3
+              value: {{ include "autofile.objectStorage.endpointURL" . | quote }}
+            {{- end }}
+            {{- if .Values.api.env.ALLOWED_ORIGINS }}
+            - name: ALLOWED_ORIGINS
+              value: {{ .Values.api.env.ALLOWED_ORIGINS | quote }}
+            {{- end }}
+            {{- if eq .Values.database.mode "cnpg" }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "autofile.database.cnpgAppSecretName" . }}
+                  key: uri
+            {{- end }}
+            {{- with .Values.api.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ include "autofile.secretName" . }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /api/v1/health/ready
+              port: http
+            initialDelaySeconds: {{ .Values.api.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.api.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.api.startupProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.api.startupProbe.successThreshold }}
+            failureThreshold: {{ .Values.api.startupProbe.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health/ready
+              port: http
+            initialDelaySeconds: {{ .Values.api.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.api.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.api.livenessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.api.livenessProbe.successThreshold }}
+            failureThreshold: {{ .Values.api.livenessProbe.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/ready
+              port: http
+            initialDelaySeconds: {{ .Values.api.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.api.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.api.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.api.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.api.readinessProbe.failureThreshold }}
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
