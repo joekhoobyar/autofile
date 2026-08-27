@@ -199,6 +199,8 @@ jobs:
       - name: Package chart
         shell: bash
         run: |
+          helm repo add valkey https://valkey.io/valkey-helm/
+          helm repo add rustfs https://charts.rustfs.com
           helm dependency build charts/autofile
           helm package charts/autofile --destination /tmp/charts
 
