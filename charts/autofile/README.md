@@ -1,11 +1,12 @@
 # Autofile Helm Chart
 
-This chart deploys Autofile's API and UI, with optional bundled Valkey and RustFS dependencies.
+This chart deploys Autofile's API and UI, with optional bundled Valkey, RustFS, and CloudNativePG resources.
 
 By default, the chart installs:
 
 - Autofile API Deployment, Service, ServiceAccount, and environment Secret
 - Autofile UI Deployment and Service
+- A CloudNativePG `Cluster` resource
 - Valkey through the `valkey` dependency
 - RustFS through the `rustfs` dependency
 - A parent-managed Valkey users Secret with a generated default-user password
@@ -16,7 +17,7 @@ By default, the chart installs:
 
 - Kubernetes cluster
 - Helm 3
-- A PostgreSQL database reachable from the API
+- The CloudNativePG operator for the default `database.mode=cnpg`, or an external PostgreSQL database reachable from the API when using `database.mode=external`
 - A default StorageClass, or RustFS storage values configured for your cluster
 
 ## Install
@@ -27,7 +28,7 @@ Update dependencies before installing from a checkout:
 helm dependency update charts/autofile
 ```
 
-Install with the default bundled Valkey and RustFS dependencies:
+Install with the default CNPG database and bundled Valkey and RustFS dependencies:
 
 ```bash
 helm install autofile charts/autofile
@@ -42,9 +43,11 @@ helm upgrade autofile charts/autofile
 Validate locally:
 
 ```bash
-helm lint charts/autofile
-helm template autofile charts/autofile
+helm lint charts/autofile --set database.mode=external --set database.url=postgres://user:pass@db:5432/autofile
+helm template autofile charts/autofile --api-versions postgresql.cnpg.io/v1/Cluster
 ```
+
+The default `database.mode=cnpg` validates that the CloudNativePG `Cluster` API is available. For offline renders, pass `--api-versions postgresql.cnpg.io/v1/Cluster`; when rendering against a cluster, Helm discovers this from an installed CloudNativePG operator.
 
 ## Object Storage Modes
 
@@ -57,6 +60,15 @@ Autofile stores document files in S3-compatible object storage. The chart-level 
 | `s3` | AWS S3 is used. Static AWS credentials are optional and are emitted only when both `secrets.AWS_ACCESS_KEY_ID` and `secrets.AWS_SECRET_ACCESS_KEY` are non-empty. |
 
 For `rustfs` mode, keep `rustfs.enabled=true`. For `external` or `s3`, set `rustfs.enabled=false` unless you intentionally want to deploy RustFS without using it for Autofile.
+
+## Database Modes
+
+The chart-level `database.mode` controls how PostgreSQL is wired into the API.
+
+| Mode | Behavior |
+| --- | --- |
+| `cnpg` | Default. The chart creates a CloudNativePG `Cluster` resource from `database.cnpg.*`, and the API reads `DATABASE_URL` from the generated Secret named `<database.cnpg.name>-app`, key `uri`. |
+| `external` | The chart does not create a database. `database.url` is required and is stored in the API Secret as `DATABASE_URL`, unless `existingSecret` is set. |
 
 ## Generated Credentials
 
@@ -92,12 +104,19 @@ Offline `helm template` runs cannot read live cluster Secrets, so generated cred
 
 ## Common Examples
 
-### Default Bundled RustFS And Valkey
+### Default CNPG Database With Bundled RustFS And Valkey
 
 ```bash
 helm install autofile charts/autofile \
-  --set secrets.DATABASE_URL='postgres://postgres:postgres@postgresql:5432/autofile' \
   --set secrets.JWT_SECRET='replace-me'
+```
+
+### External Database
+
+```yaml
+database:
+  mode: external
+  url: postgres://user:password@postgres.example.com:5432/autofile
 ```
 
 ### External S3-Compatible Storage
@@ -203,12 +222,22 @@ ingress:
 
 | Parameter | Default | Description |
 | --- | --- | --- |
-| `existingSecret` | `""` | Existing Secret containing API environment secrets. When set, `api.secret.yaml` is not rendered. |
-| `secrets.DATABASE_URL` | `postgres://postgres:postgres@postgresql:5432/autofile` | PostgreSQL connection URL used when `existingSecret` is not set. |
+| `existingSecret` | `""` | Existing Secret containing API environment secrets. When set, `api.secret.yaml` is not rendered. For `database.mode=external`, this Secret must contain `DATABASE_URL`. |
 | `secrets.REDIS_URL` | `redis://:changeme@valkey:6379/0` | Redis URL fallback when bundled authenticated Valkey is not active. |
 | `secrets.JWT_SECRET` | `changeme` | JWT signing secret. Replace for any real deployment. |
 | `secrets.AWS_ACCESS_KEY_ID` | `autofile-dev-access` | AWS access key for `external` mode, or for `s3` mode when both AWS credential values are non-empty. |
 | `secrets.AWS_SECRET_ACCESS_KEY` | `autofile-dev-secret` | AWS secret key for `external` mode, or for `s3` mode when both AWS credential values are non-empty. |
+
+### Database
+
+| Parameter | Default | Description |
+| --- | --- | --- |
+| `database.mode` | `cnpg` | Database wiring mode: `cnpg` or `external`. |
+| `database.url` | `""` | PostgreSQL connection URL required when `database.mode=external`. Rendered into the API Secret as `DATABASE_URL` when `existingSecret` is not set. |
+| `database.cnpg.name` | `autofile-postgresql` | CloudNativePG `Cluster` resource name. The API reads CNPG's generated URI from Secret `<database.cnpg.name>-app`, key `uri`. |
+| `database.cnpg.annotations` | `{}` | Annotations added to the CloudNativePG `Cluster`. |
+| `database.cnpg.labels` | `{}` | Additional labels added to the CloudNativePG `Cluster`. |
+| `database.cnpg.spec` | PostgreSQL 18, 1 instance, 5Gi storage | CloudNativePG `Cluster` spec rendered as-is. |
 
 ### Object Storage
 

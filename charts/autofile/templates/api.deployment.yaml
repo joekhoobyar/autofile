@@ -1,3 +1,4 @@
+{{- include "autofile.validateDatabase" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -78,6 +79,13 @@ spec:
             {{- if .Values.api.env.ALLOWED_ORIGINS }}
             - name: ALLOWED_ORIGINS
               value: {{ .Values.api.env.ALLOWED_ORIGINS | quote }}
+            {{- end }}
+            {{- if eq .Values.database.mode "cnpg" }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "autofile.database.cnpgAppSecretName" . }}
+                  key: uri
             {{- end }}
             {{- with .Values.api.extraEnv }}
             {{- toYaml . | nindent 12 }}

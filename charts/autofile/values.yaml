@@ -5,11 +5,27 @@ imagePullSecrets: []
 
 existingSecret: ""
 secrets:
-  DATABASE_URL: "postgres://postgres:postgres@postgresql:5432/autofile"
   REDIS_URL: "redis://:changeme@valkey:6379/0"
   JWT_SECRET: "changeme"
   AWS_ACCESS_KEY_ID: "autofile-dev-access"
   AWS_SECRET_ACCESS_KEY: "autofile-dev-secret"
+
+database:
+  mode: cnpg
+  url: ""
+  cnpg:
+    name: autofile-postgresql
+    annotations: {}
+    labels: {}
+    spec:
+      imageName: ghcr.io/cloudnative-pg/postgresql:18
+      instances: 1
+      storage:
+        size: 5Gi
+      bootstrap:
+        initdb:
+          database: autofile
+          owner: autofile
 
 objectStorage:
   mode: rustfs

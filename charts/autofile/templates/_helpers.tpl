@@ -71,6 +71,28 @@ app.kubernetes.io/component: ui
 {{ .Values.existingSecret | default (printf "%s-env" (include "autofile.fullname" .)) }}
 {{- end -}}
 
+{{- define "autofile.database.cnpgAppSecretName" -}}
+{{ printf "%s-app" .Values.database.cnpg.name }}
+{{- end -}}
+
+{{- define "autofile.validateDatabase" -}}
+{{- if not (has .Values.database.mode (list "cnpg" "external")) -}}
+{{- fail "database.mode must be one of: cnpg, external" -}}
+{{- end -}}
+{{- if and (eq .Values.database.mode "external") (empty .Values.database.url) -}}
+{{- fail "database.url is required when database.mode=external" -}}
+{{- end -}}
+{{- if and (eq .Values.database.mode "cnpg") (empty .Values.database.cnpg.name) -}}
+{{- fail "database.cnpg.name is required when database.mode=cnpg" -}}
+{{- end -}}
+{{- if and (eq .Values.database.mode "cnpg") (empty .Values.database.cnpg.spec) -}}
+{{- fail "database.cnpg.spec is required when database.mode=cnpg" -}}
+{{- end -}}
+{{- if and (eq .Values.database.mode "cnpg") (not (.Capabilities.APIVersions.Has "postgresql.cnpg.io/v1/Cluster")) -}}
+{{- fail "database.mode=cnpg requires the CloudNativePG operator to be installed" -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "autofile.valkey.enabledWithAuth" -}}
 {{- if and .Values.valkey.enabled .Values.valkey.auth.enabled .Values.valkey.auth.usersExistingSecret -}}
 true
