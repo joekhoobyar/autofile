@@ -22,22 +22,45 @@ By default, the chart installs:
 
 ## Install
 
+Install the published OCI chart from GHCR:
+
+```bash
+CHART_VERSION="<chart-version>"
+helm install autofile oci://ghcr.io/joekhoobyar/charts/autofile \
+  --version "${CHART_VERSION}"
+```
+
+Upgrade an existing release, or install it if it does not exist:
+
+```bash
+CHART_VERSION="<chart-version>"
+helm upgrade --install autofile oci://ghcr.io/joekhoobyar/charts/autofile \
+  --version "${CHART_VERSION}"
+```
+
+Pass custom values with `-f`:
+
+```bash
+CHART_VERSION="<chart-version>"
+helm upgrade --install autofile oci://ghcr.io/joekhoobyar/charts/autofile \
+  --version "${CHART_VERSION}" \
+  -f values.yaml
+```
+
+If the GHCR package is private, authenticate first with `helm registry login ghcr.io`.
+
+## Local Development
+
 Update dependencies before installing from a checkout:
 
 ```bash
 helm dependency update charts/autofile
 ```
 
-Install with the default CNPG database and bundled Valkey and RustFS dependencies:
+Install from a checkout with the default CNPG database and bundled Valkey and RustFS dependencies:
 
 ```bash
 helm install autofile charts/autofile
-```
-
-Upgrade an existing release:
-
-```bash
-helm upgrade autofile charts/autofile
 ```
 
 Validate locally:
