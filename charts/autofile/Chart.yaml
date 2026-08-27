@@ -16,3 +16,7 @@ dependencies:
     version: 0.11.0
     repository: https://valkey.io/valkey-helm/
     condition: valkey.enabled
+  - name: rustfs
+    version: 1.0.0-rc.3
+    repository: https://charts.rustfs.com
+    condition: rustfs.enabled

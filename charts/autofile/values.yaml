@@ -11,6 +11,19 @@ secrets:
   AWS_ACCESS_KEY_ID: "autofile-dev-access"
   AWS_SECRET_ACCESS_KEY: "autofile-dev-secret"
 
+objectStorage:
+  mode: rustfs
+  bucket: autofile-documents
+  rustfs:
+    existingSecret: &rustfsExistingSecret autofile-rustfs-secret
+    accessKey: ""
+    secretKey: ""
+  initContainer:
+    image:
+      repository: amazon/aws-cli
+      tag: latest
+      pullPolicy: IfNotPresent
+
 api:
   replicaCount: 1
   image:
@@ -23,10 +36,9 @@ api:
     APP_MODE: development
     BIND_ADDR: 0.0.0.0:8000
     RUST_LOG: info
-    S3_BUCKET: autofile-documents
     AWS_REGION: us-east-1
-    AWS_ENDPOINT_URL_S3: ""
     ALLOWED_ORIGINS: ""
+  extraEnv: []
   startupProbe:
     initialDelaySeconds: 0
     periodSeconds: 10
@@ -103,3 +115,15 @@ valkey:
     aclUsers:
       default:
         permissions: "~* &* +@all"
+
+rustfs:
+  enabled: true
+  mode:
+    standalone:
+      enabled: true
+    distributed:
+      enabled: false
+  ingress:
+    enabled: false
+  secret:
+    existingSecret: *rustfsExistingSecret

@@ -23,6 +23,37 @@ spec:
       serviceAccountName: {{ include "autofile.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if include "autofile.objectStorage.isRustFS" . }}
+      initContainers:
+        - name: create-object-storage-bucket
+          image: {{ .Values.objectStorage.initContainer.image.repository }}:{{ .Values.objectStorage.initContainer.image.tag }}
+          imagePullPolicy: {{ .Values.objectStorage.initContainer.image.pullPolicy }}
+          env:
+            - name: AWS_ENDPOINT_URL_S3
+              value: {{ include "autofile.objectStorage.endpointURL" . | quote }}
+            - name: S3_BUCKET
+              value: {{ .Values.objectStorage.bucket | quote }}
+            - name: AWS_REGION
+              value: {{ .Values.api.env.AWS_REGION | quote }}
+            - name: AWS_EC2_METADATA_DISABLED
+              value: "true"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "autofile.secretName" . }}
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "autofile.secretName" . }}
+                  key: AWS_SECRET_ACCESS_KEY
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              until aws --endpoint-url "$AWS_ENDPOINT_URL_S3" s3api list-buckets >/dev/null 2>&1; do sleep 1; done
+              aws --endpoint-url "$AWS_ENDPOINT_URL_S3" s3api create-bucket --bucket "$S3_BUCKET" 2>/dev/null || true
+      {{- end }}
       containers:
         - name: api
           securityContext:
@@ -37,16 +68,19 @@ spec:
             - name: RUST_LOG
               value: {{ .Values.api.env.RUST_LOG | quote }}
             - name: S3_BUCKET
-              value: {{ .Values.api.env.S3_BUCKET | quote }}
+              value: {{ .Values.objectStorage.bucket | quote }}
             - name: AWS_REGION
               value: {{ .Values.api.env.AWS_REGION | quote }}
-            {{- if .Values.api.env.AWS_ENDPOINT_URL_S3 }}
+            {{- if include "autofile.objectStorage.endpointURL" . }}
             - name: AWS_ENDPOINT_URL_S3
-              value: {{ .Values.api.env.AWS_ENDPOINT_URL_S3 | quote }}
+              value: {{ include "autofile.objectStorage.endpointURL" . | quote }}
             {{- end }}
             {{- if .Values.api.env.ALLOWED_ORIGINS }}
             - name: ALLOWED_ORIGINS
               value: {{ .Values.api.env.ALLOWED_ORIGINS | quote }}
+            {{- end }}
+            {{- with .Values.api.extraEnv }}
+            {{- toYaml . | nindent 12 }}
             {{- end }}
           envFrom:
             - secretRef:

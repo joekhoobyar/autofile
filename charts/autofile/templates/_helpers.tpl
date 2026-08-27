@@ -123,3 +123,92 @@ true
 {{- .Values.secrets.REDIS_URL -}}
 {{- end -}}
 {{- end -}}
+
+{{- define "autofile.objectStorage.isRustFS" -}}
+{{- if and .Values.rustfs.enabled (eq .Values.objectStorage.mode "rustfs") -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{- define "autofile.rustfs.fullname" -}}
+{{- if .Values.rustfs.fullnameOverride -}}
+{{- .Values.rustfs.fullnameOverride | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- $name := default "rustfs" .Values.rustfs.nameOverride -}}
+{{- if contains $name .Release.Name -}}
+{{- .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "autofile.rustfs.endpointURL" -}}
+{{- printf "http://%s-svc:%v" (include "autofile.rustfs.fullname" .) (.Values.rustfs.service.endpoint.port | default 9000) -}}
+{{- end -}}
+
+{{- define "autofile.objectStorage.endpointURL" -}}
+{{- if include "autofile.objectStorage.isRustFS" . -}}
+{{- include "autofile.rustfs.endpointURL" . -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "autofile.rustfs.secretName" -}}
+{{- .Values.objectStorage.rustfs.existingSecret -}}
+{{- end -}}
+
+{{- define "autofile.rustfs.accessKey" -}}
+{{- if .Values.objectStorage.rustfs.accessKey -}}
+{{- .Values.objectStorage.rustfs.accessKey -}}
+{{- else -}}
+{{- $secretName := include "autofile.rustfs.secretName" . -}}
+{{- $accessKey := randAlphaNum 32 -}}
+{{- $existingSecret := lookup "v1" "Secret" .Release.Namespace $secretName -}}
+{{- if and $existingSecret $existingSecret.data (hasKey $existingSecret.data "RUSTFS_ACCESS_KEY") -}}
+{{- $accessKey = (index $existingSecret.data "RUSTFS_ACCESS_KEY" | b64dec) -}}
+{{- end -}}
+{{- $_ := set .Values.objectStorage.rustfs "accessKey" $accessKey -}}
+{{- $accessKey -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "autofile.rustfs.secretKey" -}}
+{{- if .Values.objectStorage.rustfs.secretKey -}}
+{{- .Values.objectStorage.rustfs.secretKey -}}
+{{- else -}}
+{{- $secretName := include "autofile.rustfs.secretName" . -}}
+{{- $secretKey := randAlphaNum 64 -}}
+{{- $existingSecret := lookup "v1" "Secret" .Release.Namespace $secretName -}}
+{{- if and $existingSecret $existingSecret.data (hasKey $existingSecret.data "RUSTFS_SECRET_KEY") -}}
+{{- $secretKey = (index $existingSecret.data "RUSTFS_SECRET_KEY" | b64dec) -}}
+{{- end -}}
+{{- $_ := set .Values.objectStorage.rustfs "secretKey" $secretKey -}}
+{{- $secretKey -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "autofile.awsAccessKeyID" -}}
+{{- if include "autofile.objectStorage.isRustFS" . -}}
+{{- include "autofile.rustfs.accessKey" . -}}
+{{- else -}}
+{{- .Values.secrets.AWS_ACCESS_KEY_ID -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "autofile.awsSecretAccessKey" -}}
+{{- if include "autofile.objectStorage.isRustFS" . -}}
+{{- include "autofile.rustfs.secretKey" . -}}
+{{- else -}}
+{{- .Values.secrets.AWS_SECRET_ACCESS_KEY -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "autofile.awsCredentialsEnabled" -}}
+{{- if include "autofile.objectStorage.isRustFS" . -}}
+true
+{{- else if eq .Values.objectStorage.mode "external" -}}
+true
+{{- else if and (eq .Values.objectStorage.mode "s3") .Values.secrets.AWS_ACCESS_KEY_ID .Values.secrets.AWS_SECRET_ACCESS_KEY -}}
+true
+{{- end -}}
+{{- end -}}
