@@ -100,8 +100,9 @@ true
 {{- end -}}
 
 {{- define "autofile.valkey.defaultPassword" -}}
-{{- if .Values._autofileValkeyDefaultPassword -}}
-{{- .Values._autofileValkeyDefaultPassword -}}
+{{- $defaultUser := index .Values.valkey.auth.aclUsers "default" | default dict -}}
+{{- if $defaultUser.password -}}
+{{- $defaultUser.password -}}
 {{- else -}}
 {{- $secretName := include "autofile.valkey.usersSecretName" . -}}
 {{- $passwordKey := include "autofile.valkey.defaultPasswordKey" . -}}
@@ -110,7 +111,7 @@ true
 {{- if and $existingSecret $existingSecret.data (hasKey $existingSecret.data $passwordKey) -}}
 {{- $password = (index $existingSecret.data $passwordKey | b64dec) -}}
 {{- end -}}
-{{- $_ := set .Values "_autofileValkeyDefaultPassword" $password -}}
+{{- $_ := set $defaultUser "password" $password -}}
 {{- $password -}}
 {{- end -}}
 {{- end -}}

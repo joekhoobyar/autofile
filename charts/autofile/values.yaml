@@ -114,6 +114,7 @@ valkey:
     usersExistingSecret: "{{ .Release.Name }}-valkey-users"
     aclUsers:
       default:
+        password: ""
         permissions: "~* &* +@all"
 
 rustfs:
