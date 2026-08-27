@@ -1,4 +1,4 @@
-# Quick Start
+# Docker Compose Quick Start
 
 The easiest way to run Autofile locally is Docker Compose from the repository root.
 

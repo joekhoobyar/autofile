@@ -47,8 +47,6 @@ helm upgrade --install autofile oci://ghcr.io/joekhoobyar/charts/autofile \
   -f values.yaml
 ```
 
-If the GHCR package is private, authenticate first with `helm registry login ghcr.io`.
-
 ## Local Development
 
 Update dependencies before installing from a checkout:

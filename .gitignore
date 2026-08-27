@@ -4,5 +4,6 @@ charts/*/charts/**
 
 # Local development environment
 test-values.yaml
+site/**
 .envrc
 *.log

@@ -35,7 +35,9 @@ theme:
 nav:
   - Home: index.md
   - Getting Started:
-      - Quick Start: getting-started/quick-start.md
+      - Installation: getting-started/installation.md
+      - Helm: getting-started/helm.md
+      - Docker Compose: getting-started/quick-start.md
       - Create the First User: getting-started/first-user.md
   - Concepts:
       - Documents: concepts/documents.md

@@ -28,13 +28,30 @@ The project is built as two containers:
 - Local services: Docker Compose, RustFS
 - Images: Docker Buildx/Bake, multi-platform `linux/amd64` and `linux/arm64`
 
-## 🚀 Quick Start
+## 🚀 Installation
 
-The easiest way to run Autofile locally is Docker Compose from the repository root:
+Autofile supports two installation methods:
+
+- Helm for Kubernetes deployments.
+- Docker Compose for local development and evaluation.
+
+Install the published Helm chart from GHCR:
+
+```bash
+CHART_VERSION="<chart-version>"
+helm upgrade --install autofile oci://ghcr.io/joekhoobyar/charts/autofile \
+  --version "${CHART_VERSION}"
+```
+
+Run locally with Docker Compose from the repository root:
 
 ```bash
 docker compose up
 ```
+
+For complete installation instructions, see [Installation](https://autofile.dev/getting-started/installation/).
+
+## 🐳 Docker Compose Quick Start
 
 This starts:
 
