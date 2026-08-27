@@ -38,9 +38,7 @@ Autofile supports two installation methods:
 Install the published Helm chart from GHCR:
 
 ```bash
-CHART_VERSION="<chart-version>"
-helm upgrade --install autofile oci://ghcr.io/joekhoobyar/charts/autofile \
-  --version "${CHART_VERSION}"
+helm upgrade --install autofile oci://ghcr.io/joekhoobyar/charts/autofile
 ```
 
 Run locally with Docker Compose from the repository root:

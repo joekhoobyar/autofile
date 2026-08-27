@@ -22,29 +22,37 @@ By default, the chart installs:
 
 ## Install
 
-Install the published OCI chart from GHCR:
+Install the latest published OCI chart from GHCR:
 
 ```bash
-CHART_VERSION="<chart-version>"
-helm install autofile oci://ghcr.io/joekhoobyar/charts/autofile \
-  --version "${CHART_VERSION}"
+helm install autofile oci://ghcr.io/joekhoobyar/charts/autofile
 ```
 
 Upgrade an existing release, or install it if it does not exist:
 
 ```bash
-CHART_VERSION="<chart-version>"
-helm upgrade --install autofile oci://ghcr.io/joekhoobyar/charts/autofile \
-  --version "${CHART_VERSION}"
+helm upgrade --install autofile oci://ghcr.io/joekhoobyar/charts/autofile
 ```
 
 Pass custom values with `-f`:
 
 ```bash
-CHART_VERSION="<chart-version>"
 helm upgrade --install autofile oci://ghcr.io/joekhoobyar/charts/autofile \
-  --version "${CHART_VERSION}" \
   -f values.yaml
+```
+
+For repeatable installs, pin `--version` to a published chart version. Discover the latest published version with:
+
+```bash
+helm show chart oci://ghcr.io/joekhoobyar/charts/autofile
+```
+
+Then install that version explicitly:
+
+```bash
+HELM_CHART_VERSION="$(helm show chart oci://ghcr.io/joekhoobyar/charts/autofile | yq '.version')"
+helm upgrade --install autofile oci://ghcr.io/joekhoobyar/charts/autofile \
+  --version "${HELM_CHART_VERSION}"
 ```
 
 ## Local Development
