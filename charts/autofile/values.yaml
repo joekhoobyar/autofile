@@ -1,0 +1,105 @@
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+
+existingSecret: ""
+secrets:
+  DATABASE_URL: "postgres://postgres:postgres@postgresql:5432/autofile"
+  REDIS_URL: "redis://:changeme@valkey:6379/0"
+  JWT_SECRET: "changeme"
+  AWS_ACCESS_KEY_ID: "autofile-dev-access"
+  AWS_SECRET_ACCESS_KEY: "autofile-dev-secret"
+
+api:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/joekhoobyar/autofile-api
+  service:
+    type: ClusterIP
+    port: 80
+    annotations: {}
+  env:
+    APP_MODE: development
+    BIND_ADDR: 0.0.0.0:8000
+    RUST_LOG: info
+    S3_BUCKET: autofile-documents
+    AWS_REGION: us-east-1
+    AWS_ENDPOINT_URL_S3: ""
+    ALLOWED_ORIGINS: ""
+  startupProbe:
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 30
+  livenessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  readinessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  resources: {}
+
+ui:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/joekhoobyar/autofile-ui
+  service:
+    type: ClusterIP
+    port: 80
+    annotations: {}
+  livenessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  readinessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  resources: {}
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name:
+
+podSecurityContext:
+  fsGroup: 1000
+securityContext:
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+  tls: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+valkey:
+  enabled: true
+  auth:
+    enabled: true
+    usersExistingSecret: "{{ .Release.Name }}-valkey-users"
+    aclUsers:
+      default:
+        permissions: "~* &* +@all"

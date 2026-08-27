@@ -1,0 +1,18 @@
+apiVersion: v2
+name: autofile
+description: Autofile API and UI deployment
+type: application
+version: 0.2.5
+appVersion: v0.2.5
+keywords:
+  - edms
+  - dms
+  - autofile
+maintainers:
+  - name: joekhoobyar
+    email: fourheads@gmail.com
+dependencies:
+  - name: valkey
+    version: 0.11.0
+    repository: https://valkey.io/valkey-helm/
+    condition: valkey.enabled

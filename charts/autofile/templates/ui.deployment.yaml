@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "autofile.ui.fullname" . }}
+  labels:
+    {{- include "autofile.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.ui.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "autofile.ui.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "autofile.ui.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: ui
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.ui.image.repository }}:{{ include "autofile.ui.imageTag" . }}"
+          imagePullPolicy: {{ .Values.ui.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: {{ .Values.ui.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.ui.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.ui.livenessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.ui.livenessProbe.successThreshold }}
+            failureThreshold: {{ .Values.ui.livenessProbe.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: {{ .Values.ui.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.ui.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.ui.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.ui.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.ui.readinessProbe.failureThreshold }}
+          resources:
+            {{- toYaml .Values.ui.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
