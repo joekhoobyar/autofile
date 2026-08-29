@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Controller, useForm, useWatch } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { DataTable, type DataTableRowReorderEvent, type DataTableStateEvent } from 'primereact/datatable';
@@ -12,26 +12,24 @@ import { Message } from 'primereact/message';
 import { type Toast } from 'primereact/toast';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import { classNames } from 'primereact/utils';
-import CodeMirror from '@uiw/react-codemirror';
-import { yaml as yamlLanguage } from '@codemirror/lang-yaml';
-import { indentWithTab } from '@codemirror/commands';
-import { EditorView, keymap } from '@codemirror/view';
-import { vscodeDark } from '@uiw/codemirror-theme-vscode';
-
 import type { ListParams } from '../api';
-import { type ClassifierBlock } from '../models/classifierBlock';
-import { useClassifierBlock, useClassifierBlocks, useDeleteClassifierBlock, useReorderClassifierBlock, useSaveClassifierBlock } from '../queries/useClassifierBlocks';
+import { type ClassifierBlock, type ClassifierRules } from '../models/classifierBlock';
+import { useClassifierBlock, useClassifierBlocks, useDeleteClassifierBlock, useReorderClassifierBlock, useSaveClassifierBlock, validateClassifierRules } from '../queries/useClassifierBlocks';
 import { useId } from '../util';
-import { defaultClassifierRules, rulesToYaml, yamlToRules } from '../util/classifierRulesYaml';
+import { defaultClassifierRules } from '../util/classifierRulesYaml';
 import { useHashListParams } from '../util/listParamsHash';
 import { AppToast } from '../components/AppToast';
+import { ClassifierRulesEditor } from '../components/classifier/ClassifierRulesEditor';
 
-const yamlEditorExtensions = [yamlLanguage(), keymap.of([indentWithTab]), EditorView.lineWrapping];
 const REORDER_SUCCESS_MS = 1200;
 const CLASSIFIER_BLOCK_LIST_DEFAULT_PARAMS: ListParams = { sf: 'order' };
 
-type ClassifierBlockFormValues = Partial<ClassifierBlock> & {
-  rulesYaml: string;
+type ClassifierBlockFormValues = {
+  id?: number;
+  name: string;
+  description: string;
+  enabled: boolean;
+  rules: ClassifierRules;
 };
 
 export function ListClassifierBlocks() {
@@ -287,34 +285,29 @@ export function NewClassifierBlock() {
 function ClassifierBlockForm({ data }: Readonly<{ data?: Partial<ClassifierBlock> }>) {
   const saveClassifierBlock = useSaveClassifierBlock();
   const navigate = useNavigate();
+  const [rulesValid, setRulesValid] = useState(false);
+  const [rulesSubmitError, setRulesSubmitError] = useState<string | null>(null);
   const formValues = useMemo(() => ({
-    ...data,
+    id: data?.id,
+    name: data?.name ?? '',
     description: data?.description ?? '',
     enabled: data?.enabled ?? true,
-    rulesYaml: rulesToYaml(data?.rules ?? defaultClassifierRules),
+    rules: data?.rules ?? structuredClone(defaultClassifierRules),
   }), [data]);
   const {
     control,
     handleSubmit,
     reset,
-    setValue,
     formState: { errors, isSubmitting, isValid, isDirty },
   } = useForm<ClassifierBlockFormValues>({
     mode: 'onChange',
     defaultValues: {
+      name: '',
       enabled: true,
       description: '',
-      rulesYaml: rulesToYaml(defaultClassifierRules),
+      rules: structuredClone(defaultClassifierRules),
     },
   });
-
-  const rulesYaml = useWatch({
-    control,
-    name: 'rulesYaml',
-  }) ?? '';
-
-  const parsedRules = useMemo(() => yamlToRules(rulesYaml), [rulesYaml]);
-  const rulesError = parsedRules.error ?? null;
 
   useEffect(() => {
     if (isDirty) return;
@@ -322,8 +315,10 @@ function ClassifierBlockForm({ data }: Readonly<{ data?: Partial<ClassifierBlock
   }, [formValues, isDirty, reset]);
 
   const submitter = async (formData: ClassifierBlockFormValues) => {
-    const parsed = yamlToRules(formData.rulesYaml);
-    if (!parsed.value) {
+    setRulesSubmitError(null);
+    const validation = await validateClassifierRules(formData.rules);
+    if (!validation.valid) {
+      setRulesSubmitError(validation.issues[0]?.message ?? 'Invalid classifier rules');
       return;
     }
 
@@ -332,7 +327,7 @@ function ClassifierBlockForm({ data }: Readonly<{ data?: Partial<ClassifierBlock
       name: formData.name,
       description: formData.description || undefined,
       enabled: formData.enabled,
-      rules: parsed.value,
+      rules: formData.rules,
     }, {
       onSuccess: () => {
         navigate('/classifier-blocks');
@@ -342,27 +337,6 @@ function ClassifierBlockForm({ data }: Readonly<{ data?: Partial<ClassifierBlock
 
   const errMsg = (name: keyof ClassifierBlockFormValues) =>
     errors[name]?.message ? String(errors[name]?.message) : null;
-
-  const handleFormatYaml = () => {
-    const parsed = yamlToRules(rulesYaml);
-    if (!parsed.value) {
-      return;
-    }
-
-    setValue('rulesYaml', rulesToYaml(parsed.value), {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
-  };
-
-  const handleResetTemplate = () => {
-    setValue('rulesYaml', rulesToYaml(defaultClassifierRules), {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
-  };
 
   return (
     <form onSubmit={handleSubmit(submitter)}>
@@ -421,51 +395,25 @@ function ClassifierBlockForm({ data }: Readonly<{ data?: Partial<ClassifierBlock
           {errMsg('description') && <small className="p-error">{errMsg('description')}</small>}
         </div>
 
-        <div className="col-12">
-          <div className="flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-            <label htmlFor="rulesYaml" className="font-medium block mb-0">Rules</label>
-            <div className="flex flex-nowrap align-items-center gap-2">
-              <Button type="button" label="Format" icon="pi pi-align-left" severity="secondary" text onClick={handleFormatYaml} disabled={!!rulesError} />
-              {!data?.id && <Button type="button" label="Reset" icon="pi pi-refresh" severity="secondary" text onClick={handleResetTemplate} />}
-            </div>
-          </div>
-
-          <Message severity="info" text="Edit classifier rules as YAML. They will be validated and saved as JSON." className="mb-3" />
-
-          <Controller name="rulesYaml" control={control}
-            rules={{
-              required: 'Rules are required',
-            }}
+        <div className="col-12 mt-3">
+          <Controller name="rules" control={control}
             render={({ field }) => (
-              <CodeMirror
-                id="rulesYaml"
-                value={field.value ?? ''}
-                height="40rem"
-                theme={vscodeDark}
-                extensions={yamlEditorExtensions}
-                basicSetup={{
-                  lineNumbers: true,
-                  foldGutter: true,
-                  highlightActiveLine: true,
-                  highlightActiveLineGutter: true,
-                }}
-                onChange={(value) => field.onChange(value)}
-                className={classNames('aut-yaml-editor', { 'is-invalid': !!errors.rulesYaml || !!rulesError })}
-                placeholder="continue_after_match: false\nmatch_patterns: []\nmatch_actions: {}\nchild_rules: []"
+              <ClassifierRulesEditor
+                value={field.value}
+                onChange={(rules) => field.onChange(rules)}
+                onValidationChange={setRulesValid}
               />
             )}
           />
-          {errMsg('rulesYaml') && <small className="p-error block mt-2">{errMsg('rulesYaml')}</small>}
-          {rulesError && <small className="p-error block mt-2">{rulesError}</small>}
         </div>
       </div>
 
       <div className="text-end">
-        {saveClassifierBlock.isError && (
-          <Message className="float-start" severity="error" text={saveClassifierBlock.error.message} />
+        {(saveClassifierBlock.isError || rulesSubmitError) && (
+          <Message className="float-start" severity="error" text={rulesSubmitError ?? saveClassifierBlock.error?.message ?? 'Save failed'} />
         )}
 
-        <Button label="Save" type="submit" icon="pi pi-check" raised disabled={!isDirty || !isValid || isSubmitting || !!rulesError} />
+        <Button label="Save" type="submit" icon="pi pi-check" raised disabled={!isDirty || !isValid || isSubmitting || !rulesValid} />
         <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" raised onClick={() => navigate('/classifier-blocks')} />
       </div>
     </form>

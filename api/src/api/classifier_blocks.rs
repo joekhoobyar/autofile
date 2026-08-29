@@ -4,6 +4,9 @@ use crate::application::classifier_blocks::{
     UpdateClassifierBlockInput, create_classifier_block, delete_classifier_block,
     reorder_classifier_block, update_classifier_block,
 };
+use crate::application::classifier_rule_validation::{
+    ClassifierRulesValidation, validate_classifier_rules,
+};
 use crate::domain::classifier_blocks::{ClassifierBlock, ClassifierRules};
 use crate::schema::classifier_blocks;
 use crate::shared::app_state::AppState;
@@ -139,6 +142,13 @@ async fn reorder(
     Ok(Json(reordered))
 }
 
+async fn validate_rules(
+    _user: AuthUser,
+    Json(rules): Json<ClassifierRules>,
+) -> Json<ClassifierRulesValidation> {
+    Json(validate_classifier_rules(&rules))
+}
+
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -240,6 +250,7 @@ pub async fn list(
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(list).post(create))
+        .route("/validate", post(validate_rules))
         .route("/{id}", get(get_by_id).patch(update).delete(delete))
         .route("/{id}/reorder", post(reorder))
 }

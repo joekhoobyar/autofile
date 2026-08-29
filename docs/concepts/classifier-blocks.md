@@ -118,7 +118,7 @@ match_patterns:
       source: scanned-mail
 ```
 
-The block matches if any listed pattern matches. A pattern can contain text, metadata, or both.
+The block matches if any listed pattern matches. At least one top-level pattern is required, and every parent or child pattern must contain text, metadata, or both.
 
 Text patterns are regular expressions matched against the document text. Matching is case-insensitive and multiline.
 
@@ -150,7 +150,7 @@ For this pattern:
 text: "Invoice Number[: ]+([A-Z0-9-]+)"
 ```
 
-The first capture group is available as `\1`. Actions can insert snippets into values:
+The first capture group is available as `\1`. The structured editor shows available captures as insertable buttons. Child actions can insert snippets into values:
 
 ```yaml
 actions:
@@ -158,6 +158,8 @@ actions:
 ```
 
 In YAML double-quoted strings, write `\1` as `"\\1"`. In YAML single-quoted strings, write it as `'\1'`.
+
+These snippets are replacements applied after a child pattern matches, not regex backreferences. Rust regular expressions do not support using `\1` inside the text pattern itself.
 
 Modifiers can create additional snippets. For example, this rule captures `7`, pads it to four digits, and stores `0007`:
 

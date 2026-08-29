@@ -5,7 +5,7 @@ export interface ClassifierPattern {
 
 export type ClassifierModifier =
   | { type: 'metadata'; to: number; slug: string }
-  | { type: 'month_number'; from: number; to: number }
+  | { type: 'month_number'; from: string; to: number }
   | { type: 'month_end'; from: string; to: number }
   | { type: 'month_start'; from: string; to: number }
   | { type: 'next_day'; from: string; to: number }
@@ -13,8 +13,7 @@ export type ClassifierModifier =
   | { type: 'next_month'; from: string; to: number }
   | { type: 'prev_month'; from: string; to: number }
   | { type: 'tax_year'; from: string; to: number }
-  | { type: 'currency'; from: number; to: number }
-  | { type: 'sprintf'; from: number; to: number; format: string }
+  | { type: 'currency'; from: string; to: number }
   | { type: 'zero_pad'; from: string; to: number; length: number }
   | { type: 'replace'; from: string; to: number }
   | { type: 'alnum_sanitize'; from: string; to: number }

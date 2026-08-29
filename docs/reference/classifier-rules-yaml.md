@@ -1,6 +1,6 @@
 # Classifier Rules YAML Reference
 
-Classifier block rules are edited as YAML in the UI and saved as JSON by the API. This page documents the YAML syntax supported by the Rust API.
+Classifier block rules are edited with the structured UI and saved as JSON by the API. Advanced YAML mode supports direct editing and import of the same rule structure.
 
 !!! warning "Unsupported syntax"
     Do not use a `sprintf` modifier. It is not supported by the API.
@@ -11,7 +11,8 @@ Every classifier block rule document has this shape:
 
 ```yaml
 continue_after_match: false
-match_patterns: []
+match_patterns:
+  - text: "Invoice"
 match_actions: {}
 child_rules: []
 ```
@@ -19,7 +20,7 @@ child_rules: []
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `continue_after_match` | boolean | No | Whether classification continues to later blocks after this block matches. Defaults to `false`. |
-| `match_patterns` | array | Yes | Top-level patterns that decide whether the block matches. An empty array matches every document. |
+| `match_patterns` | nonempty array | Yes | OR-based top-level patterns that decide whether the block matches. |
 | `match_actions` | object | Yes | String key-value actions applied when the block matches. |
 | `child_rules` | array | Yes | Child rules evaluated after the block matches. |
 
@@ -40,7 +41,7 @@ metadata:
 
 If both `text` and `metadata` are present, both must match.
 
-If a pattern has neither `text` nor `metadata`, it matches.
+Every parent and child pattern must contain nonblank `text` or at least one `metadata` condition. Rules are validated when they are created or updated.
 
 ## Text Matching
 
@@ -85,13 +86,7 @@ match_patterns:
       document_source: email
 ```
 
-An empty array matches every document:
-
-```yaml
-match_patterns: []
-```
-
-Use empty `match_patterns` carefully. It is best suited for global cleanup or rules that depend entirely on child rules.
+At least one pattern is required. Use a broad but explicit text or metadata condition when a block should apply to many documents.
 
 ## Actions
 
@@ -172,6 +167,10 @@ actions:
 ```
 
 If a referenced snippet does not exist, it is replaced with an empty string.
+
+Snippet replacements are not regular-expression backreferences. Use capture groups such as `([0-9]+)` in the child pattern, then insert `\1` in child action values or string-valued modifier `from` fields. Do not put `\1` in the regular expression itself; Rust regular expressions do not support backreferences.
+
+The structured editor displays available captures and modifier outputs as insertable `\N` buttons. A button inserts the replacement at the current cursor position.
 
 YAML escaping matters:
 

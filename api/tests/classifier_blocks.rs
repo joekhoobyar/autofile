@@ -6,6 +6,7 @@ use autofile_api::application::classifier_blocks::{
     reorder_classifier_block, update_classifier_block,
 };
 use autofile_api::application::documents::get_document_view;
+use autofile_api::domain::classifier_blocks::ClassifierPattern;
 use autofile_api::schema::classifier_blocks;
 use diesel::prelude::*;
 use diesel_async::AsyncPgConnection;
@@ -217,7 +218,14 @@ async fn create_classifier_block_appends_to_end_of_ordered_list() {
         "New Block".to_string(),
         Some("Added in test".to_string()),
         true,
-        build_rules(false, vec![], &[]),
+        build_rules(
+            false,
+            vec![ClassifierPattern {
+                text: Some("Invoice".to_string()),
+                metadata: None,
+            }],
+            &[],
+        ),
     )
     .await
     .expect("create should succeed");
@@ -299,7 +307,14 @@ async fn update_classifier_block_updates_selected_fields_without_changing_order(
             name: Some("Updated Block".to_string()),
             description: Some("Updated description".to_string()),
             enabled: Some(false),
-            rules: Some(build_rules(false, vec![], &[("status", "updated")])),
+            rules: Some(build_rules(
+                false,
+                vec![ClassifierPattern {
+                    text: Some("Updated".to_string()),
+                    metadata: None,
+                }],
+                &[("status", "updated")],
+            )),
         },
     )
     .await
@@ -352,4 +367,85 @@ async fn update_classifier_block_returns_not_found_for_missing_block() {
         list_block_orders(&mut db).await,
         vec![(1, 1), (2, 2), (3, 3)]
     );
+}
+
+#[tokio::test]
+async fn create_classifier_block_rejects_rules_without_match_patterns() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(&mut db, 1, "tester", "tester@example.com").await;
+
+    let err = create_classifier_block(
+        &mut db,
+        1,
+        "Invalid Block".to_string(),
+        None,
+        true,
+        build_rules(false, vec![], &[]),
+    )
+    .await
+    .expect_err("create should fail");
+
+    assert_eq!(err.status, 422);
+    assert!(
+        err.message
+            .contains("At least one match pattern is required")
+    );
+    assert!(list_block_orders(&mut db).await.is_empty());
+}
+
+#[tokio::test]
+async fn update_classifier_block_rejects_empty_patterns_but_allows_other_updates() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(&mut db, 1, "tester", "tester@example.com").await;
+    insert_user(&mut db, 42, "updater", "updater@example.com").await;
+    seed_classifier_blocks(&mut db, 1).await;
+
+    let invalid = update_classifier_block(
+        &mut db,
+        42,
+        1,
+        UpdateClassifierBlockInput {
+            name: None,
+            description: None,
+            enabled: None,
+            rules: Some(build_rules(
+                false,
+                vec![ClassifierPattern {
+                    text: Some("".to_string()),
+                    metadata: None,
+                }],
+                &[],
+            )),
+        },
+    )
+    .await
+    .expect_err("rules update should fail");
+    assert_eq!(invalid.status, 422);
+
+    let updated = update_classifier_block(
+        &mut db,
+        42,
+        1,
+        UpdateClassifierBlockInput {
+            name: Some("Legacy Block".to_string()),
+            description: None,
+            enabled: None,
+            rules: None,
+        },
+    )
+    .await
+    .expect("non-rules update should preserve legacy rules");
+
+    assert_eq!(updated.name, "Legacy Block");
+    assert!(updated.rules.0.match_patterns.is_empty());
 }

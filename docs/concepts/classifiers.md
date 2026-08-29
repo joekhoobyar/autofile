@@ -2,10 +2,9 @@
 
 Classifiers help Autofile recognize documents and apply structured updates automatically. They are useful when documents contain predictable text, labels, account numbers, dates, vendor names, or other values that can be detected with rules.
 
-Autofile currently exposes classifiers as ordered classifier blocks. Each block contains YAML rules that describe when the block matches and what actions it should compute.
+Autofile exposes classifiers as ordered classifier blocks. Each block contains structured rules that describe when the block matches and what actions it should compute.
 
-!!! note "Manual YAML editing"
-    Classifier blocks currently require editing a YAML configuration snippet. The syntax is powerful, but it is also exact. See the [classifier rules YAML reference](../reference/classifier-rules-yaml.md) before writing production rules.
+The classifier editor provides visual controls for patterns, metadata conditions, actions, child rules, capture replacements, and modifier pipelines. Advanced YAML mode remains available for direct editing and import. See the [classifier rules YAML reference](../reference/classifier-rules-yaml.md) when reviewing the serialized format.
 
 ## What Classifiers Can Do
 

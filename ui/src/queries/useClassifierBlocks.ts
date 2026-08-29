@@ -1,12 +1,32 @@
 import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query';
 
 import { apiFetch, apiFetchList, HttpError, apiMutate, type ListParams, type ResourceInput, type ResourceList } from '../api';
-import { type ClassifierBlock } from '../models/classifierBlock';
+import { type ClassifierBlock, type ClassifierRules } from '../models/classifierBlock';
 
 export type ClassifierBlockInput = ResourceInput<ClassifierBlock>;
 export type ClassifierBlockReorderInput = { id: number; order: number };
+export type ClassifierRulesValidationIssue = { path: string; code: string; message: string };
+export type ClassifierPatternValidation = { path: string; capture_count: number };
+export type ClassifierRulesValidation = {
+  valid: boolean;
+  issues: ClassifierRulesValidationIssue[];
+  patterns: ClassifierPatternValidation[];
+};
 
 const REORDER_FEEDBACK_MIN_MS = 250;
+
+export function validateClassifierRules(rules: ClassifierRules): Promise<ClassifierRulesValidation> {
+  return apiMutate<ClassifierRulesValidation, ClassifierRules>('api/v1/classifier-blocks/validate', {
+    method: 'POST',
+    body: rules,
+  });
+}
+
+export function useValidateClassifierRules(): UseMutationResult<ClassifierRulesValidation, HttpError, ClassifierRules> {
+  return useMutation<ClassifierRulesValidation, HttpError, ClassifierRules>({
+    mutationFn: validateClassifierRules,
+  });
+}
 
 export function useClassifierBlocks(params: ListParams): UseQueryResult<ResourceList<ClassifierBlock>, HttpError> {
   return useQuery({
