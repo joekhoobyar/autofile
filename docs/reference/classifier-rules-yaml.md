@@ -2,9 +2,6 @@
 
 Classifier block rules are edited with the structured UI and saved as JSON by the API. Advanced YAML mode supports direct editing and import of the same rule structure.
 
-!!! warning "Unsupported syntax"
-    Do not use a `sprintf` modifier. It is not supported by the API.
-
 ## Top-Level Schema
 
 Every classifier block rule document has this shape:
