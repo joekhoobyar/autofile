@@ -11,8 +11,7 @@ Every classifier block rule document has this shape:
 
 ```yaml
 continue_after_match: false
-match_patterns:
-  - text: "Invoice"
+match_patterns: []
 match_actions: {}
 child_rules: []
 ```
@@ -20,7 +19,7 @@ child_rules: []
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `continue_after_match` | boolean | No | Whether classification continues to later blocks after this block matches. Defaults to `false`. |
-| `match_patterns` | nonempty array | Yes | OR-based top-level patterns that decide whether the block matches. |
+| `match_patterns` | array | Yes | OR-based top-level patterns that decide whether the block matches. An empty array matches every document. |
 | `match_actions` | object | Yes | String key-value actions applied when the block matches. |
 | `child_rules` | array | Yes | Child rules evaluated after the block matches. |
 
@@ -41,7 +40,7 @@ metadata:
 
 If both `text` and `metadata` are present, both must match.
 
-Every parent and child pattern must contain nonblank `text` or at least one `metadata` condition. Rules are validated when they are created or updated.
+Empty patterns are allowed. A pattern with no text and no metadata matches every document that reaches it.
 
 ## Text Matching
 
@@ -77,7 +76,7 @@ When matching metadata, Autofile checks computed actions first. If a computed ac
 
 ## Match Patterns
 
-`match_patterns` is an array of patterns. The block matches if any pattern matches.
+`match_patterns` is an array of patterns. The block matches if any pattern matches. If the array is empty, the block matches every document.
 
 ```yaml
 match_patterns:
@@ -86,7 +85,7 @@ match_patterns:
       document_source: email
 ```
 
-At least one pattern is required. Use a broad but explicit text or metadata condition when a block should apply to many documents.
+Use an empty array when a block should apply to every document that reaches it.
 
 ## Actions
 
