@@ -11,8 +11,11 @@ use diesel_async::AsyncConnection;
 use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
-use regex::{Captures, Regex, RegexBuilder};
+use regex::{Captures, Regex};
 
+use crate::application::classifier_rule_validation::{
+    compile_classifier_pattern, validate_classifier_rules,
+};
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::document_metadatas::{NewDocumentMetadata, document_metadatas_upsert};
 use crate::application::documents::get_document_view;
@@ -288,6 +291,8 @@ pub async fn create_classifier_block(
     enabled: bool,
     rules: crate::domain::classifier_blocks::ClassifierRules,
 ) -> Result<ClassifierBlock, ApiError> {
+    ensure_valid_classifier_rules(&rules)?;
+
     db.transaction::<_, diesel::result::Error, _>(move |conn| {
         Box::pin(async move {
             diesel::sql_query("LOCK TABLE classifier_blocks IN EXCLUSIVE MODE")
@@ -326,6 +331,10 @@ pub async fn update_classifier_block(
     id: i64,
     input: UpdateClassifierBlockInput,
 ) -> Result<ClassifierBlock, ApiError> {
+    if let Some(rules) = input.rules.as_ref() {
+        ensure_valid_classifier_rules(rules)?;
+    }
+
     diesel::update(classifier_blocks::table.filter(classifier_blocks::id.eq(id)))
         .set((
             input.name.map(|value| classifier_blocks::name.eq(value)),
@@ -751,9 +760,8 @@ fn apply_child_rules(
 
         let mut snippets: HashMap<u32, String> = HashMap::new();
 
-        // We now will extract match groups and apply modifiers.
+        // Extract text captures when present. Metadata-only matches begin with an empty snippet map.
         if let PatternMatch::Text(captures) = matched {
-            // - Extract captured groups into the snippets.
             for (i, cap) in captures.iter().enumerate() {
                 if i > 0
                     && let Some(cap) = cap
@@ -761,25 +769,25 @@ fn apply_child_rules(
                     snippets.insert(i as u32, cap.as_str().to_string());
                 }
             }
+        }
 
-            // - For each modifier in the rule, apply the modifier to the snippets.
-            if let Some(modifiers) = &rule.modifiers {
-                for modifier in modifiers {
-                    match apply_modifier(&snippets, modifier, computed_actions) {
-                        Ok(Some((to, value))) => {
-                            snippets.insert(to, value);
-                        }
-                        Ok(None) => {}
-                        Err(error) => {
-                            tracing::warn!(
-                                document_id = document.id,
-                                classifier_block_id,
-                                modifier_type = modifier_kind(modifier),
-                                ?modifier,
-                                error,
-                                "classification: modifier failed"
-                            );
-                        }
+        // Modifiers can source computed metadata even when the pattern did not contain text.
+        if let Some(modifiers) = &rule.modifiers {
+            for modifier in modifiers {
+                match apply_modifier(&snippets, modifier, computed_actions) {
+                    Ok(Some((to, value))) => {
+                        snippets.insert(to, value);
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        tracing::warn!(
+                            document_id = document.id,
+                            classifier_block_id,
+                            modifier_type = modifier_kind(modifier),
+                            ?modifier,
+                            error,
+                            "classification: modifier failed"
+                        );
                     }
                 }
             }
@@ -875,10 +883,7 @@ fn does_document_match_pattern<'a>(
         );
         // Convert the pattern text to a regex pattern.
         // Test if the document text matches the regex pattern.
-        let reg = RegexBuilder::new(pattern_text)
-            .case_insensitive(true)
-            .multi_line(true)
-            .build()?;
+        let reg = compile_classifier_pattern(pattern_text)?;
         let cap = reg.captures(document_text);
         return match cap {
             None => Ok(PatternMatch::None),
@@ -892,6 +897,21 @@ fn does_document_match_pattern<'a>(
 
     // The document matched
     Ok(PatternMatch::Metadata)
+}
+
+fn ensure_valid_classifier_rules(
+    rules: &crate::domain::classifier_blocks::ClassifierRules,
+) -> Result<(), ApiError> {
+    let validation = validate_classifier_rules(rules);
+    if validation.valid {
+        return Ok(());
+    }
+
+    let issue = &validation.issues[0];
+    Err(ApiError::unprocessable_entity(&format!(
+        "Invalid classifier rules at {}: {}",
+        issue.path, issue.message
+    )))
 }
 
 fn modifier_kind(modifier: &ClassifierModifier) -> &'static str {
@@ -1421,6 +1441,43 @@ mod tests {
             PatternMatch::Text(captures) => assert_eq!(&captures[1], "123"),
             _ => panic!("expected text match"),
         }
+    }
+
+    #[test]
+    fn metadata_modifier_runs_for_metadata_only_child_pattern() {
+        let document = build_document_view(&[]);
+        let mut rules = build_rules(
+            false,
+            vec![ClassifierPattern {
+                text: Some("Invoice".to_string()),
+                metadata: None,
+            }],
+            &[("source", "copied value")],
+        );
+        rules.child_rules.push(ClassifierChildRule {
+            pattern: ClassifierPattern {
+                text: None,
+                metadata: Some(HashMap::from([(
+                    "source".to_string(),
+                    "copied value".to_string(),
+                )])),
+            },
+            modifiers: Some(vec![ClassifierModifier::Metadata {
+                to: 1,
+                slug: "source".to_string(),
+            }]),
+            actions: HashMap::from([("target".to_string(), "\\1".to_string())]),
+        });
+
+        let actions = compute_classification_actions(
+            document.id,
+            &document,
+            "Invoice",
+            &[build_block(1, 1, rules)],
+        )
+        .expect("classification should succeed");
+
+        assert_eq!(actions.get("target"), Some(&"copied value".to_string()));
     }
 
     #[test]

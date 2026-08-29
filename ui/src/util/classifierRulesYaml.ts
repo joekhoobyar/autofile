@@ -4,7 +4,7 @@ import { type ClassifierBlock, type ClassifierModifier, type ClassifierRules } f
 
 export const defaultClassifierRules: ClassifierRules = {
   continue_after_match: false,
-  match_patterns: [],
+  match_patterns: [{ text: '' }],
   match_actions: {},
   child_rules: [],
 };
@@ -27,7 +27,6 @@ const modifierTypes = new Set<ModifierType>([
   'prev_month',
   'tax_year',
   'currency',
-  'sprintf',
   'zero_pad',
   'replace',
   'alnum_sanitize',
@@ -41,7 +40,7 @@ const modifierTypes = new Set<ModifierType>([
 function cloneDefaultRules(): ClassifierRules {
   return {
     continue_after_match: false,
-    match_patterns: [],
+    match_patterns: [{ text: '' }],
     match_actions: {},
     child_rules: [],
   };
@@ -56,7 +55,9 @@ function validateString(value: unknown, path: string): string | null {
 }
 
 function validateNumber(value: unknown, path: string): string | null {
-  return typeof value === 'number' ? null : `${path} must be a number`;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    ? null
+    : `${path} must be a nonnegative integer`;
 }
 
 function validateStringMap(value: unknown, path: string): string | null {
@@ -88,6 +89,12 @@ function validatePattern(value: unknown, path: string): string | null {
     if (metadataError) return metadataError;
   }
 
+  const hasText = typeof value.text === 'string' && value.text.trim().length > 0;
+  const hasMetadata = isRecord(value.metadata) && Object.keys(value.metadata).length > 0;
+  if (!hasText && !hasMetadata) {
+    return `${path} must contain text or at least one metadata condition`;
+  }
+
   return null;
 }
 
@@ -104,7 +111,6 @@ function validateModifier(value: unknown, path: string): string | null {
   switch (type as ModifierType) {
     case 'metadata':
       return validateNumber(value.to, `${path}.to`) ?? validateString(value.slug, `${path}.slug`);
-    case 'sprintf':
     case 'date_format':
       return validateNumber(value.to, `${path}.to`) ?? validateString(value.from, `${path}.from`) ?? validateString(value.format, `${path}.format`);
     case 'zero_pad':
@@ -160,6 +166,10 @@ export function validateClassifierRules(value: unknown): string | null {
 
   if (!Array.isArray(value.match_patterns)) {
     return 'rules.match_patterns must be an array';
+  }
+
+  if (value.match_patterns.length === 0) {
+    return 'rules.match_patterns must contain at least one pattern';
   }
 
   if (value.continue_after_match !== undefined && typeof value.continue_after_match !== 'boolean') {

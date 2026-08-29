@@ -96,6 +96,10 @@ Malformed JSON and invalid path or query input can instead return an Axum framew
 - `/api/v1/tags`
 - `/api/v1/users`
 
+## Classifier Rule Validation
+
+`POST /api/v1/classifier-blocks/validate` accepts a classifier `rules` object and returns semantic validation without saving it. The response includes `valid`, path-addressable `issues`, and a `capture_count` for every valid text pattern. Classifier create and update requests enforce the same validation and return `422 Unprocessable Entity` for invalid rules.
+
 ## Metadata Resources
 
 The metadata model spans four API resources:
