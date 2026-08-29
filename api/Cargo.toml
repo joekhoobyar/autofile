@@ -1,6 +1,6 @@
 [package]
 name = "autofile-api"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Joe Khoobyar"]
 license = "AGPL-3.0-only"
 edition = "2024"
