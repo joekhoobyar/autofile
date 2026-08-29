@@ -627,25 +627,6 @@ function ActionsEditor({
     <div>
       <div className="flex align-items-center justify-content-between gap-2 mb-2">
         <span className="font-medium">Actions</span>
-        <Button
-          type="button"
-          label="Add action"
-          icon="pi pi-plus"
-          severity="secondary"
-          text
-          size="small"
-          onClick={() => onChange(addRecordEntry(actions, optionsForActions.map((option) => option.value)))}
-          disabled={entries.length >= optionsForActions.length}
-        />
-        <Button
-          type="button"
-          label="Add scratch"
-          icon="pi pi-plus"
-          severity="secondary"
-          text
-          size="small"
-          onClick={() => setScratchDialogVisible(true)}
-        />
       </div>
       {entries.length === 0 && <small className="text-600">No actions configured.</small>}
       {entries.map(([key, actionValue]) => (
@@ -686,6 +667,29 @@ function ActionsEditor({
           />
         </div>
       ))}
+      <div className="aut-section-actions">
+        <Button
+          type="button"
+          label="Add action"
+          icon="pi pi-plus"
+          severity="secondary"
+          text
+          size="small"
+          className="aut-inline-button"
+          onClick={() => onChange(addRecordEntry(actions, optionsForActions.map((option) => option.value)))}
+          disabled={entries.length >= optionsForActions.length}
+        />
+        <Button
+          type="button"
+          label="Add scratch"
+          icon="pi pi-plus"
+          severity="secondary"
+          text
+          size="small"
+          className="aut-inline-button"
+          onClick={() => setScratchDialogVisible(true)}
+        />
+      </div>
       <ScratchNameDialog
         visible={scratchDialogVisible}
         existingKeys={Object.keys(actions)}
@@ -954,9 +958,11 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
       <div className="mb-3">
         <div>
           <h3 className="mt-0 mb-1">Rules</h3>
+          <p className="text-600 mt-0">
+            Build matching conditions, transformations, and document actions without editing YAML.
+          </p>
           <p className="text-600 mt-0 mb-0">
-            Build matching conditions, transformations, and document actions without editing YAML.{' '}
-            <button type="button" className="aut-link-button ml-2" onClick={() => setYamlVisible(true)}>
+            <button type="button" className="aut-link-button" onClick={() => setYamlVisible(true)}>
               Edit as YAML instead &raquo;
             </button>
           </p>
