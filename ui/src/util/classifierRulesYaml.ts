@@ -4,7 +4,7 @@ import { type ClassifierBlock, type ClassifierModifier, type ClassifierRules } f
 
 export const defaultClassifierRules: ClassifierRules = {
   continue_after_match: false,
-  match_patterns: [{ text: '' }],
+  match_patterns: [],
   match_actions: {},
   child_rules: [],
 };
@@ -40,7 +40,7 @@ const modifierTypes = new Set<ModifierType>([
 function cloneDefaultRules(): ClassifierRules {
   return {
     continue_after_match: false,
-    match_patterns: [{ text: '' }],
+    match_patterns: [],
     match_actions: {},
     child_rules: [],
   };
@@ -87,12 +87,6 @@ function validatePattern(value: unknown, path: string): string | null {
   if (value.metadata !== undefined && value.metadata !== null) {
     const metadataError = validateStringMap(value.metadata, `${path}.metadata`);
     if (metadataError) return metadataError;
-  }
-
-  const hasText = typeof value.text === 'string' && value.text.trim().length > 0;
-  const hasMetadata = isRecord(value.metadata) && Object.keys(value.metadata).length > 0;
-  if (!hasText && !hasMetadata) {
-    return `${path} must contain text or at least one metadata condition`;
   }
 
   return null;
@@ -166,10 +160,6 @@ export function validateClassifierRules(value: unknown): string | null {
 
   if (!Array.isArray(value.match_patterns)) {
     return 'rules.match_patterns must be an array';
-  }
-
-  if (value.match_patterns.length === 0) {
-    return 'rules.match_patterns must contain at least one pattern';
   }
 
   if (value.continue_after_match !== undefined && typeof value.continue_after_match !== 'boolean') {

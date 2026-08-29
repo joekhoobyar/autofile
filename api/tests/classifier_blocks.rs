@@ -370,7 +370,7 @@ async fn update_classifier_block_returns_not_found_for_missing_block() {
 }
 
 #[tokio::test]
-async fn create_classifier_block_rejects_rules_without_match_patterns() {
+async fn create_classifier_block_accepts_rules_without_match_patterns() {
     let test_db = TestDatabase::new().await;
     let mut db = test_db
         .pool
@@ -379,27 +379,24 @@ async fn create_classifier_block_rejects_rules_without_match_patterns() {
         .expect("db connection should succeed");
     insert_user(&mut db, 1, "tester", "tester@example.com").await;
 
-    let err = create_classifier_block(
+    let block = create_classifier_block(
         &mut db,
         1,
-        "Invalid Block".to_string(),
+        "Global Block".to_string(),
         None,
         true,
         build_rules(false, vec![], &[]),
     )
     .await
-    .expect_err("create should fail");
+    .expect("create should succeed");
 
-    assert_eq!(err.status, 422);
-    assert!(
-        err.message
-            .contains("At least one match pattern is required")
-    );
-    assert!(list_block_orders(&mut db).await.is_empty());
+    assert_eq!(block.name, "Global Block");
+    assert!(block.rules.0.match_patterns.is_empty());
+    assert_eq!(list_block_orders(&mut db).await, vec![(1, 1)]);
 }
 
 #[tokio::test]
-async fn update_classifier_block_rejects_empty_patterns_but_allows_other_updates() {
+async fn update_classifier_block_accepts_empty_patterns() {
     let test_db = TestDatabase::new().await;
     let mut db = test_db
         .pool
@@ -410,7 +407,7 @@ async fn update_classifier_block_rejects_empty_patterns_but_allows_other_updates
     insert_user(&mut db, 42, "updater", "updater@example.com").await;
     seed_classifier_blocks(&mut db, 1).await;
 
-    let invalid = update_classifier_block(
+    let updated = update_classifier_block(
         &mut db,
         42,
         1,
@@ -429,8 +426,10 @@ async fn update_classifier_block_rejects_empty_patterns_but_allows_other_updates
         },
     )
     .await
-    .expect_err("rules update should fail");
-    assert_eq!(invalid.status, 422);
+    .expect("empty pattern update should succeed");
+
+    assert_eq!(updated.rules.0.match_patterns.len(), 1);
+    assert_eq!(updated.rules.0.match_patterns[0].text.as_deref(), Some(""));
 
     let updated = update_classifier_block(
         &mut db,
@@ -440,11 +439,11 @@ async fn update_classifier_block_rejects_empty_patterns_but_allows_other_updates
             name: Some("Legacy Block".to_string()),
             description: None,
             enabled: None,
-            rules: None,
+            rules: Some(build_rules(false, vec![], &[])),
         },
     )
     .await
-    .expect("non-rules update should preserve legacy rules");
+    .expect("empty pattern list update should succeed");
 
     assert_eq!(updated.name, "Legacy Block");
     assert!(updated.rules.0.match_patterns.is_empty());

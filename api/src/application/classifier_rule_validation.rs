@@ -107,16 +107,15 @@ mod tests {
     }
 
     #[test]
-    fn requires_at_least_one_match_pattern() {
+    fn accepts_no_match_patterns() {
         let result = validate_classifier_rules(&rules(Vec::new()));
 
-        assert!(!result.valid);
-        assert_eq!(result.issues[0].path, "match_patterns");
-        assert_eq!(result.issues[0].code, "required");
+        assert!(result.valid);
+        assert!(result.issues.is_empty());
     }
 
     #[test]
-    fn rejects_empty_parent_and_child_patterns() {
+    fn accepts_empty_parent_and_child_patterns() {
         let mut input = rules(vec![ClassifierPattern {
             text: Some("  ".to_string()),
             metadata: None,
@@ -132,10 +131,8 @@ mod tests {
 
         let result = validate_classifier_rules(&input);
 
-        assert!(!result.valid);
-        assert_eq!(result.issues.len(), 2);
-        assert_eq!(result.issues[0].path, "match_patterns[0]");
-        assert_eq!(result.issues[1].path, "child_rules[0].pattern");
+        assert!(result.valid);
+        assert!(result.issues.is_empty());
     }
 
     #[test]

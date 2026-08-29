@@ -977,10 +977,11 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
         <div className="flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
           <div>
             <h4 className="m-0">Match if any pattern matches</h4>
-            <small className="text-600">At least one pattern is required. Text and metadata inside a pattern must all match.</small>
+            <small className="text-600">When no patterns are configured, this block matches every document. Text and metadata inside a pattern must all match.</small>
           </div>
         </div>
 
+        {parentPatterns.length === 0 && <Message severity="info" text="No match patterns. This block will match every document." className="w-full" />}
         {parentPatterns.map((pattern, index) => (
           <RulePanel
             key={index}
@@ -989,7 +990,7 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
               <div className="aut-panel-actions">
                 <Button type="button" icon="pi pi-arrow-up" text aria-label="Move pattern up" tooltip="Move pattern up" tooltipOptions={{ position: 'top' }} disabled={index === 0} onClick={() => onChange({ ...value, match_patterns: moveItem(parentPatterns, index, index - 1) })} />
                 <Button type="button" icon="pi pi-arrow-down" text aria-label="Move pattern down" tooltip="Move pattern down" tooltipOptions={{ position: 'top' }} disabled={index === parentPatterns.length - 1} onClick={() => onChange({ ...value, match_patterns: moveItem(parentPatterns, index, index + 1) })} />
-                <Button type="button" icon="pi pi-trash" severity="danger" text aria-label="Remove pattern" tooltip="Remove pattern" tooltipOptions={{ position: 'top' }} disabled={parentPatterns.length === 1} onClick={() => onChange({ ...value, match_patterns: parentPatterns.filter((_, itemIndex) => itemIndex !== index) })} />
+                <Button type="button" icon="pi pi-trash" severity="danger" text aria-label="Remove pattern" tooltip="Remove pattern" tooltipOptions={{ position: 'top' }} onClick={() => onChange({ ...value, match_patterns: parentPatterns.filter((_, itemIndex) => itemIndex !== index) })} />
               </div>
             )}
           >
