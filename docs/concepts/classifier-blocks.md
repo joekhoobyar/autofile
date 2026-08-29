@@ -140,6 +140,8 @@ Autofile evaluates every child rule in order. Child rules do not stop after the 
 
 Use child rules to extract specific values after a document has already been recognized by the parent block.
 
+Actions whose names start with `_` but are not built-in suggestions are scratch values. Scratch values are not persisted to the document, but they can be matched by later patterns or copied by modifier pipelines. The editor displays them as `Scratch: _name`.
+
 ## Captures And Snippets
 
 When a child rule text pattern uses regular expression capture groups, those captures become snippets.

@@ -116,7 +116,16 @@ All action values must be strings.
 | `_suggested_tags` | Comma-separated tag slugs | Adds the matching tags to the document. |
 | `_suggested_cabinets` | Comma-separated cabinet slugs | Adds the document to the matching cabinets. |
 | Any key that does not start with `_` | Metadata value | Upserts metadata by metadata type slug. |
-| Any other key starting with `_` | Any string | Ignored. |
+| Any other key starting with `_` | Any string | Scratch value. Available to later rules but ignored during persistence. |
+
+Scratch actions are useful for intermediate values that should not be written to the final document:
+
+```yaml
+actions:
+  _normalized_account: "\\1"
+```
+
+Later child rules can match `metadata: { _normalized_account: "123" }`, and the `metadata` modifier can copy `_normalized_account` into a snippet. The structured editor labels these as `Scratch: _normalized_account`.
 
 For comma-separated tag and cabinet lists, whitespace is trimmed and duplicate slugs are ignored.
 

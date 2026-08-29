@@ -387,6 +387,17 @@ body {
   background: var(--surface-card);
 }
 
+.aut-section-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+}
+
+.aut-inline-button {
+  width: auto;
+  flex: 0 0 auto;
+}
+
 .aut-rule-panel {
   margin-top: 0.75rem;
 }
@@ -419,6 +430,23 @@ body {
 }
 
 .aut-panel-title-button:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--primary-color);
+  outline-offset: 3px;
+}
+
+.aut-link-button {
+  width: auto;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.aut-link-button:focus-visible {
   border-radius: 3px;
   outline: 2px solid var(--primary-color);
   outline-offset: 3px;
@@ -546,6 +574,15 @@ body {
 
 .aut-classifier-yaml-dialog {
   width: min(72rem, 95vw);
+}
+
+.aut-scratch-dialog {
+  width: min(34rem, 95vw);
+}
+
+.aut-scratch-key-input .p-inputgroup-addon {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 @media (max-width: 900px) {

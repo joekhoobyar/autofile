@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorState } from '@codemirror/state';
@@ -70,9 +70,20 @@ const specialActionOptions: Option[] = [
   { label: 'Cabinets', value: '_suggested_cabinets' },
 ];
 
-function actionOptions(options?: ClassifierRuleOptions): Option[] {
+const specialActionKeys = new Set(specialActionOptions.map((option) => option.value));
+
+function isScratchKey(value: string): boolean {
+  return value.startsWith('_') && !specialActionKeys.has(value);
+}
+
+function scratchLabel(value: string): string {
+  return `Scratch: ${value}`;
+}
+
+function actionOptions(options?: ClassifierRuleOptions, scratchOptions: Option[] = []): Option[] {
   return [
     ...specialActionOptions,
+    ...scratchOptions,
     ...(options?.metadataTypes.map((metadataType) => ({
       label: `Metadata: ${metadataType.name}`,
       value: metadataType.slug,
@@ -80,17 +91,35 @@ function actionOptions(options?: ClassifierRuleOptions): Option[] {
   ];
 }
 
-function metadataOptions(options?: ClassifierRuleOptions): Option[] {
-  return options?.metadataTypes.map((metadataType) => ({
+function metadataOptions(options?: ClassifierRuleOptions, scratchOptions: Option[] = []): Option[] {
+  return [
+    ...scratchOptions,
+    ...(options?.metadataTypes.map((metadataType) => ({
     label: `Metadata: ${metadataType.name}`,
     value: metadataType.slug,
-  })) ?? [];
+    })) ?? []),
+  ];
 }
 
 function withCurrentOption(options: Option[], value: string, prefix: string): Option[] {
   if (!value || options.some((option) => option.value === value)) return options;
-  const label = value.startsWith('_') ? `Scratch: ${value}` : `${prefix}: ${value} (not found)`;
+  const label = isScratchKey(value) ? scratchLabel(value) : `${prefix}: ${value} (not found)`;
   return [{ label, value }, ...options];
+}
+
+function toScratchKey(name: string): string {
+  const normalized = name.trim().replace(/^_+/, '');
+  return normalized ? `_${normalized}` : '';
+}
+
+function validateScratchKey(key: string, existingKeys: Iterable<string>, currentKey?: string): string | null {
+  if (!key) return 'Scratch name is required';
+  if (!/^_[A-Za-z0-9][A-Za-z0-9_-]*$/.test(key)) {
+    return 'Use letters, numbers, hyphens, or underscores, starting with a letter or number';
+  }
+  if (specialActionKeys.has(key)) return 'That name is reserved for a built-in action';
+  if (key !== currentKey && [...existingKeys].includes(key)) return 'That name is already used here';
+  return null;
 }
 
 function replaceRecordKey(
@@ -149,6 +178,24 @@ function moveItem<T>(items: T[], from: number, to: number): T[] {
   return next;
 }
 
+function scratchOptionsFromRules(rules: ClassifierRules): Option[] {
+  const keys = new Set<string>();
+  const collectRecord = (record?: Record<string, string>) => {
+    Object.keys(record ?? {}).forEach((key) => {
+      if (isScratchKey(key)) keys.add(key);
+    });
+  };
+
+  collectRecord(rules.match_actions);
+  rules.match_patterns.forEach((pattern) => collectRecord(pattern.metadata));
+  rules.child_rules.forEach((rule) => {
+    collectRecord(rule.pattern.metadata);
+    collectRecord(rule.actions);
+  });
+
+  return [...keys].sort().map((key) => ({ label: scratchLabel(key), value: key }));
+}
+
 function RulePanel({
   heading,
   actions,
@@ -195,6 +242,113 @@ function RulePanel({
     >
       {children}
     </Panel>
+  );
+}
+
+function ScratchNameDialog({
+  visible,
+  existingKeys,
+  title,
+  onAdd,
+  onHide,
+}: Readonly<{
+  visible: boolean;
+  existingKeys: string[];
+  title: string;
+  onAdd: (key: string) => void;
+  onHide: () => void;
+}>) {
+  const [name, setName] = useState('');
+  const key = toScratchKey(name);
+  const error = visible ? validateScratchKey(key, existingKeys) : null;
+
+  const hide = () => {
+    setName('');
+    onHide();
+  };
+
+  const add = () => {
+    if (error) return;
+    onAdd(key);
+    hide();
+  };
+
+  return (
+    <Dialog
+      header={title}
+      visible={visible}
+      onHide={hide}
+      className="aut-scratch-dialog"
+      footer={(
+        <>
+          <Button type="button" label="Cancel" severity="secondary" onClick={hide} />
+          <Button type="button" label="Add Scratch" icon="pi pi-check" disabled={!!error} onClick={add} />
+        </>
+      )}
+    >
+      <Message
+        severity="info"
+        text="Scratch values are temporary. They can be matched or copied by later rules but are not written to the document."
+        className="mb-3 w-full"
+      />
+      <label htmlFor="scratchName" className="font-medium block mb-2">Name</label>
+      <div className="p-inputgroup">
+        <span className="p-inputgroup-addon">_</span>
+        <InputText
+          id="scratchName"
+          value={name.replace(/^_+/, '')}
+          onChange={(event) => setName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              add();
+            }
+          }}
+          autoFocus
+          placeholder="invoice_total"
+        />
+      </div>
+      <small className="text-600 block mt-2">Stored as: {key || '_'}</small>
+      {error && <small className="p-error block mt-2">{error}</small>}
+    </Dialog>
+  );
+}
+
+function ScratchKeyInput({
+  actionKey,
+  actions,
+  onRename,
+}: Readonly<{
+  actionKey: string;
+  actions: Record<string, string>;
+  onRename: (key: string) => void;
+}>) {
+  const [draft, setDraft] = useState(actionKey.replace(/^_+/, ''));
+  const nextKey = toScratchKey(draft);
+  const error = validateScratchKey(nextKey, Object.keys(actions), actionKey);
+
+  const commit = () => {
+    if (!error && nextKey !== actionKey) onRename(nextKey);
+  };
+
+  return (
+    <div>
+      <div className="p-inputgroup aut-scratch-key-input">
+        <span className="p-inputgroup-addon">Scratch: _</span>
+        <InputText
+          value={draft}
+          onChange={(event) => setDraft(event.target.value.replace(/^_+/, ''))}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              commit();
+            }
+          }}
+        />
+      </div>
+      {error && <small className="p-error block mt-1">{error}</small>}
+    </div>
   );
 }
 
@@ -256,18 +410,20 @@ function PatternEditor({
   pattern,
   onChange,
   options,
+  scratchOptions,
   issues,
   captureReplacements,
 }: Readonly<{
   pattern: ClassifierPattern;
   onChange: (pattern: ClassifierPattern) => void;
   options?: ClassifierRuleOptions;
+  scratchOptions: Option[];
   issues: string[];
   captureReplacements: boolean;
 }>) {
   const metadata = pattern.metadata ?? {};
   const metadataEntries = Object.entries(metadata);
-  const availableMetadataOptions = metadataOptions(options);
+  const availableMetadataOptions = metadataOptions(options, scratchOptions);
   const singleLineText = (pattern.text ?? '').replace(/[\r\n]+/g, '');
 
   return (
@@ -289,21 +445,8 @@ function PatternEditor({
           : 'Matching is case-insensitive and multiline. Top-level captures are not reused; use child rules to extract values.'}
       </small>
 
-      <div className="flex align-items-center justify-content-between gap-2 mt-3 mb-2">
+      <div className="mt-3 mb-2">
         <span className="font-medium">Metadata conditions</span>
-        <Button
-          type="button"
-          label="Add metadata condition"
-          icon="pi pi-plus"
-          severity="secondary"
-          text
-          size="small"
-          onClick={() => onChange({
-            ...pattern,
-            metadata: addRecordEntry(metadata, availableMetadataOptions.map((option) => option.value)),
-          })}
-          disabled={metadataEntries.length >= availableMetadataOptions.length}
-        />
       </div>
       <small className="text-600 block mb-2">All metadata conditions in this pattern must match exactly.</small>
 
@@ -346,6 +489,23 @@ function PatternEditor({
           </div>
         );
       })}
+
+      <div className="aut-section-actions">
+        <Button
+          type="button"
+          label="Add metadata condition"
+          icon="pi pi-plus"
+          severity="secondary"
+          text
+          size="small"
+          className="aut-inline-button"
+          onClick={() => onChange({
+            ...pattern,
+            metadata: addRecordEntry(metadata, availableMetadataOptions.map((option) => option.value)),
+          })}
+          disabled={availableMetadataOptions.every((option) => Object.hasOwn(metadata, option.value))}
+        />
+      </div>
 
       {issues.map((issue) => <small className="p-error block mt-2" key={issue}>{issue}</small>)}
     </div>
@@ -450,14 +610,17 @@ function ActionsEditor({
   child,
   tokens,
   options,
+  scratchOptions,
 }: Readonly<{
   actions: Record<string, string>;
   onChange: (actions: Record<string, string>) => void;
   child: boolean;
   tokens: number[];
   options?: ClassifierRuleOptions;
+  scratchOptions: Option[];
 }>) {
-  const optionsForActions = actionOptions(options);
+  const [scratchDialogVisible, setScratchDialogVisible] = useState(false);
+  const optionsForActions = actionOptions(options, scratchOptions);
   const entries = Object.entries(actions);
 
   return (
@@ -474,19 +637,36 @@ function ActionsEditor({
           onClick={() => onChange(addRecordEntry(actions, optionsForActions.map((option) => option.value)))}
           disabled={entries.length >= optionsForActions.length}
         />
+        <Button
+          type="button"
+          label="Add scratch"
+          icon="pi pi-plus"
+          severity="secondary"
+          text
+          size="small"
+          onClick={() => setScratchDialogVisible(true)}
+        />
       </div>
       {entries.length === 0 && <small className="text-600">No actions configured.</small>}
       {entries.map(([key, actionValue]) => (
         <div className="aut-editor-row aut-action-row" key={key}>
-          <Dropdown
-            value={key}
-            options={withCurrentOption(optionsForActions, key, 'Action')}
-            optionDisabled={(option: Option) => option.value !== key && Object.hasOwn(actions, option.value)}
-            onChange={(event) => onChange(replaceRecordKey(actions, key, String(event.value ?? '')))}
-            filter
-            editable
-            placeholder="Action"
-          />
+          {isScratchKey(key) ? (
+            <ScratchKeyInput
+              actionKey={key}
+              actions={actions}
+              onRename={(nextKey) => onChange(replaceRecordKey(actions, key, nextKey))}
+            />
+          ) : (
+            <Dropdown
+              value={key}
+              options={withCurrentOption(optionsForActions, key, 'Action')}
+              optionDisabled={(option: Option) => option.value !== key && Object.hasOwn(actions, option.value)}
+              onChange={(event) => onChange(replaceRecordKey(actions, key, String(event.value ?? '')))}
+              filter
+              editable
+              placeholder="Action"
+            />
+          )}
           <ActionValueEditor
             key={key}
             actionKey={key}
@@ -506,6 +686,13 @@ function ActionsEditor({
           />
         </div>
       ))}
+      <ScratchNameDialog
+        visible={scratchDialogVisible}
+        existingKeys={Object.keys(actions)}
+        title="Add Scratch Action"
+        onAdd={(key) => onChange({ ...actions, [key]: '' })}
+        onHide={() => setScratchDialogVisible(false)}
+      />
     </div>
   );
 }
@@ -515,14 +702,16 @@ function ModifierEditor({
   onChange,
   tokens,
   options,
+  scratchOptions,
 }: Readonly<{
   modifier: ClassifierModifier;
   onChange: (modifier: ClassifierModifier) => void;
   tokens: number[];
   options?: ClassifierRuleOptions;
+  scratchOptions: Option[];
 }>) {
   const update = (patch: Record<string, unknown>) => onChange({ ...modifier, ...patch } as ClassifierModifier);
-  const actionSourceOptions = actionOptions(options);
+  const actionSourceOptions = actionOptions(options, scratchOptions);
   const arithmetic = ['add', 'sub', 'mul', 'div'].includes(modifier.type);
 
   return (
@@ -599,25 +788,18 @@ function ModifiersEditor({
   onChange,
   captureCount,
   options,
+  scratchOptions,
 }: Readonly<{
   modifiers: ClassifierModifier[];
   onChange: (modifiers: ClassifierModifier[]) => void;
   captureCount: number;
   options?: ClassifierRuleOptions;
+  scratchOptions: Option[];
 }>) {
   return (
     <div className="mt-3">
-      <div className="flex align-items-center justify-content-between gap-2 mb-2">
+      <div className="mb-2">
         <span className="font-medium">Modifier pipeline</span>
-        <Button
-          type="button"
-          label="Add modifier"
-          icon="pi pi-plus"
-          severity="secondary"
-          text
-          size="small"
-          onClick={() => onChange([...modifiers, defaultModifier('replace')])}
-        />
       </div>
       {modifiers.length === 0 && <small className="text-600">No transformations configured.</small>}
       {modifiers.map((modifier, index) => (
@@ -628,6 +810,7 @@ function ModifiersEditor({
             onChange={(nextModifier) => onChange(modifiers.map((item, itemIndex) => itemIndex === index ? nextModifier : item))}
             tokens={tokenNumbers(captureCount, modifiers, index)}
             options={options}
+            scratchOptions={scratchOptions}
           />
           <div className="aut-row-actions">
             <Button type="button" icon="pi pi-arrow-up" text aria-label="Move modifier up" disabled={index === 0} onClick={() => onChange(moveItem(modifiers, index, index - 1))} />
@@ -636,6 +819,18 @@ function ModifiersEditor({
           </div>
         </div>
       ))}
+      <div className="aut-section-actions">
+        <Button
+          type="button"
+          label="Add modifier"
+          icon="pi pi-plus"
+          severity="secondary"
+          text
+          size="small"
+          className="aut-inline-button"
+          onClick={() => onChange([...modifiers, defaultModifier('replace')])}
+        />
+      </div>
     </div>
   );
 }
@@ -751,16 +946,21 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
   const options = optionsQuery.data;
   const parentPatterns = value.match_patterns;
   const childRules = value.child_rules;
+  const scratchOptions = useMemo(() => scratchOptionsFromRules(value), [value]);
 
   return (
     <div className="aut-classifier-rules-editor">
       <Tooltip target=".aut-classifier-rules-editor .aut-rule-panel-toggler" />
-      <div className="flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+      <div className="mb-3">
         <div>
           <h3 className="mt-0 mb-1">Rules</h3>
-          <p className="text-600 mt-0 mb-0">Build matching conditions, transformations, and document actions without editing YAML.</p>
+          <p className="text-600 mt-0 mb-0">
+            Build matching conditions, transformations, and document actions without editing YAML.{' '}
+            <button type="button" className="aut-link-button ml-2" onClick={() => setYamlVisible(true)}>
+              Edit as YAML instead &raquo;
+            </button>
+          </p>
         </div>
-        <Button type="button" label="Advanced YAML" icon="pi pi-code" severity="secondary" outlined onClick={() => setYamlVisible(true)} />
       </div>
 
       {optionsQuery.isError && <Message severity="warn" text={`Lookup options could not be loaded: ${optionsQuery.error.message}`} className="mb-3 w-full" />}
@@ -772,12 +972,6 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
             <h4 className="m-0">Match if any pattern matches</h4>
             <small className="text-600">At least one pattern is required. Text and metadata inside a pattern must all match.</small>
           </div>
-          <Button
-            type="button"
-            label="Add pattern"
-            icon="pi pi-plus"
-            onClick={() => onChange({ ...value, match_patterns: [...parentPatterns, { text: '' }] })}
-          />
         </div>
 
         {parentPatterns.map((pattern, index) => (
@@ -796,6 +990,7 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
               pattern={pattern}
               onChange={(nextPattern) => onChange({ ...value, match_patterns: parentPatterns.map((item, itemIndex) => itemIndex === index ? nextPattern : item) })}
               options={options}
+              scratchOptions={scratchOptions}
               issues={issuesFor(`match_patterns[${index}]`)}
               captureReplacements={false}
             />
@@ -804,6 +999,15 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
         {validation?.issues
           .filter((issue) => issue.path === 'match_patterns')
           .map((issue) => <small className="p-error block mt-2" key={issue.code}>{issue.message}</small>)}
+        <div className="aut-section-actions">
+          <Button
+            type="button"
+            label="Add pattern"
+            icon="pi pi-plus"
+            className="aut-inline-button"
+            onClick={() => onChange({ ...value, match_patterns: [...parentPatterns, { text: '' }] })}
+          />
+        </div>
       </section>
 
       <section className="aut-rule-section">
@@ -815,6 +1019,7 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
           child={false}
           tokens={[]}
           options={options}
+          scratchOptions={scratchOptions}
         />
       </section>
 
@@ -824,15 +1029,6 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
             <h4 className="m-0">Child rules</h4>
             <small className="text-600">Every matching child rule runs in order.</small>
           </div>
-          <Button
-            type="button"
-            label="Add child rule"
-            icon="pi pi-plus"
-            onClick={() => onChange({
-              ...value,
-              child_rules: [...childRules, { pattern: { text: '' }, modifiers: [], actions: {} }],
-            })}
-          />
         </div>
 
         {childRules.length === 0 && <Message severity="info" text="No child rules. Add one to capture text and compute dynamic action values." className="w-full" />}
@@ -856,6 +1052,7 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
                 pattern={rule.pattern}
                 onChange={(pattern) => onChange({ ...value, child_rules: childRules.map((item, itemIndex) => itemIndex === index ? { ...item, pattern } : item) })}
                 options={options}
+                scratchOptions={scratchOptions}
                 issues={issuesFor(`child_rules[${index}].pattern`)}
                 captureReplacements
               />
@@ -871,6 +1068,7 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
                 onChange={(nextModifiers) => onChange({ ...value, child_rules: childRules.map((item, itemIndex) => itemIndex === index ? { ...item, modifiers: nextModifiers } : item) })}
                 captureCount={captures}
                 options={options}
+                scratchOptions={scratchOptions}
               />
               <div className="mt-4">
                 <ActionsEditor
@@ -879,11 +1077,24 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
                   child
                   tokens={tokenNumbers(captures, modifiers)}
                   options={options}
+                  scratchOptions={scratchOptions}
                 />
               </div>
             </RulePanel>
           );
         })}
+        <div className="aut-section-actions">
+          <Button
+            type="button"
+            label="Add child rule"
+            icon="pi pi-plus"
+            className="aut-inline-button"
+            onClick={() => onChange({
+              ...value,
+              child_rules: [...childRules, { pattern: { text: '' }, modifiers: [], actions: {} }],
+            })}
+          />
+        </div>
       </section>
 
       <section className="aut-rule-section aut-continue-section">
