@@ -69,19 +69,6 @@ fn validate_pattern(
         .text
         .as_deref()
         .filter(|text| !text.trim().is_empty());
-    let has_metadata = pattern
-        .metadata
-        .as_ref()
-        .is_some_and(|metadata| !metadata.is_empty());
-
-    if text.is_none() && !has_metadata {
-        issues.push(ClassifierRulesValidationIssue {
-            path: path.to_string(),
-            code: "empty_pattern",
-            message: "A pattern must contain text or at least one metadata condition".to_string(),
-        });
-        return;
-    }
 
     let Some(text) = text else {
         return;
