@@ -14,7 +14,9 @@ import { InputText } from 'primereact/inputtext';
 import { Message } from 'primereact/message';
 import { MultiSelect } from 'primereact/multiselect';
 import { Panel } from 'primereact/panel';
+import { SplitButton } from 'primereact/splitbutton';
 import { Tooltip } from 'primereact/tooltip';
+import type { MenuItem } from 'primereact/menuitem';
 
 import type {
   ClassifierModifier,
@@ -496,7 +498,7 @@ function PatternEditor({
           label="Add metadata condition"
           icon="pi pi-plus"
           severity="secondary"
-          text
+          outlined
           size="small"
           className="aut-inline-button"
           onClick={() => onChange({
@@ -622,6 +624,15 @@ function ActionsEditor({
   const [scratchDialogVisible, setScratchDialogVisible] = useState(false);
   const optionsForActions = actionOptions(options, scratchOptions);
   const entries = Object.entries(actions);
+  const addActionKeys = optionsForActions.map((option) => option.value);
+  const canAddAction = optionsForActions.some((option) => !Object.hasOwn(actions, option.value));
+  const addActionMenuItems: MenuItem[] = [
+    {
+      label: 'Add scratch',
+      icon: 'pi pi-plus',
+      command: () => setScratchDialogVisible(true),
+    },
+  ];
 
   return (
     <div>
@@ -668,26 +679,16 @@ function ActionsEditor({
         </div>
       ))}
       <div className="aut-section-actions">
-        <Button
-          type="button"
+        <SplitButton
           label="Add action"
           icon="pi pi-plus"
           severity="secondary"
-          text
+          outlined
           size="small"
+          model={addActionMenuItems}
           className="aut-inline-button"
-          onClick={() => onChange(addRecordEntry(actions, optionsForActions.map((option) => option.value)))}
-          disabled={entries.length >= optionsForActions.length}
-        />
-        <Button
-          type="button"
-          label="Add scratch"
-          icon="pi pi-plus"
-          severity="secondary"
-          text
-          size="small"
-          className="aut-inline-button"
-          onClick={() => setScratchDialogVisible(true)}
+          onClick={() => onChange(addRecordEntry(actions, addActionKeys))}
+          buttonProps={{ disabled: !canAddAction }}
         />
       </div>
       <ScratchNameDialog
@@ -829,7 +830,7 @@ function ModifiersEditor({
           label="Add modifier"
           icon="pi pi-plus"
           severity="secondary"
-          text
+          outlined
           size="small"
           className="aut-inline-button"
           onClick={() => onChange([...modifiers, defaultModifier('replace')])}
@@ -1010,6 +1011,7 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
             type="button"
             label="Add pattern"
             icon="pi pi-plus"
+            outlined
             className="aut-inline-button"
             onClick={() => onChange({ ...value, match_patterns: [...parentPatterns, { text: '' }] })}
           />
@@ -1094,6 +1096,7 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
             type="button"
             label="Add child rule"
             icon="pi pi-plus"
+            outlined
             className="aut-inline-button"
             onClick={() => onChange({
               ...value,
