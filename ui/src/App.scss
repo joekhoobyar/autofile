@@ -514,9 +514,13 @@ body {
 
 .aut-modifier-fields {
   display: grid;
-  grid-template-columns: minmax(11rem, 0.7fr) minmax(14rem, 1.5fr) minmax(8rem, 0.5fr);
+  grid-template-columns: minmax(9rem, 0.8fr) minmax(11rem, 1.3fr) minmax(7rem, 0.55fr) minmax(7rem, 0.55fr);
   gap: var(--editor-gap);
   align-items: start;
+}
+
+.aut-modifier-fields > * {
+  min-width: 0;
 }
 
 .aut-modifier-field > .p-dropdown,

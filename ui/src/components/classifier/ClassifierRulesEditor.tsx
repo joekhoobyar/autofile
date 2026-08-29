@@ -89,7 +89,8 @@ function metadataOptions(options?: ClassifierRuleOptions): Option[] {
 
 function withCurrentOption(options: Option[], value: string, prefix: string): Option[] {
   if (!value || options.some((option) => option.value === value)) return options;
-  return [{ label: `${prefix}: ${value} (not found)`, value }, ...options];
+  const label = value.startsWith('_') ? `Scratch: ${value}` : `${prefix}: ${value} (not found)`;
+  return [{ label, value }, ...options];
 }
 
 function replaceRecordKey(
@@ -536,7 +537,7 @@ function ModifierEditor({
         />
       </div>
       <div className="aut-modifier-field">
-        <label>{modifier.type === 'metadata' ? 'From action' : arithmetic ? 'From snippet' : 'From'}</label>
+        <label>{modifier.type === 'metadata' ? 'From action' : arithmetic ? 'From snippet' : 'From text (supports capture groups)'}</label>
         {modifier.type === 'metadata' ? (
           <Dropdown
             value={modifier.slug}
