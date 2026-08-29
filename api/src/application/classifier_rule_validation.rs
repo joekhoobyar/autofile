@@ -34,14 +34,6 @@ pub fn validate_classifier_rules(rules: &ClassifierRules) -> ClassifierRulesVali
     let mut issues = Vec::new();
     let mut patterns = Vec::new();
 
-    if rules.match_patterns.is_empty() {
-        issues.push(ClassifierRulesValidationIssue {
-            path: "match_patterns".to_string(),
-            code: "required",
-            message: "At least one match pattern is required".to_string(),
-        });
-    }
-
     for (index, pattern) in rules.match_patterns.iter().enumerate() {
         validate_pattern(
             pattern,
