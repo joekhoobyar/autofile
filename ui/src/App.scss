@@ -394,6 +394,7 @@ body {
 .aut-rule-panel .p-panel-header {
   gap: 0.5rem;
   flex-wrap: nowrap;
+  cursor: pointer;
 }
 
 .aut-rule-panel .p-panel-icons {
@@ -402,6 +403,25 @@ body {
   align-items: center;
   gap: 0.15rem;
   margin-left: auto;
+  cursor: default;
+}
+
+.aut-panel-title-button {
+  width: auto;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.aut-panel-title-button:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--primary-color);
+  outline-offset: 3px;
 }
 
 .aut-rule-panel .p-panel-header-icon,
@@ -461,6 +481,15 @@ body {
 .aut-regex-editor .cm-editor,
 .aut-regex-editor .cm-content {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.aut-regex-editor .cm-scroller {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.aut-regex-editor .cm-content {
+  white-space: pre;
 }
 
 .aut-modifier-row {

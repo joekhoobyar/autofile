@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 
 import CodeMirror from '@uiw/react-codemirror';
+import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { yaml as yamlLanguage } from '@codemirror/lang-yaml';
 import { vscodeDark } from '@uiw/codemirror-theme-vscode';
@@ -13,6 +14,7 @@ import { InputText } from 'primereact/inputtext';
 import { Message } from 'primereact/message';
 import { MultiSelect } from 'primereact/multiselect';
 import { Panel } from 'primereact/panel';
+import { Tooltip } from 'primereact/tooltip';
 
 import type {
   ClassifierModifier,
@@ -35,7 +37,9 @@ type ClassifierRulesEditorProps = {
   onValidationChange: (valid: boolean) => void;
 };
 
-const regexExtensions = [EditorView.lineWrapping];
+const regexExtensions = [
+  EditorState.changeFilter.of((transaction) => transaction.newDoc.lines === 1),
+];
 const yamlExtensions = [yamlLanguage(), EditorView.lineWrapping];
 
 const modifierOptions: Option[] = [
@@ -144,6 +148,55 @@ function moveItem<T>(items: T[], from: number, to: number): T[] {
   return next;
 }
 
+function RulePanel({
+  heading,
+  actions,
+  children,
+}: Readonly<{
+  heading: string;
+  actions: ReactNode;
+  children: ReactNode;
+}>) {
+  const [collapsed, setCollapsed] = useState(false);
+  const toggle = () => setCollapsed((value) => !value);
+
+  return (
+    <Panel
+      header={(
+        <button
+          type="button"
+          className="aut-panel-title-button"
+          aria-expanded={!collapsed}
+        >
+          {heading}
+        </button>
+      )}
+      toggleable
+      collapsed={collapsed}
+      onToggle={(event) => setCollapsed(event.value)}
+      className="aut-rule-panel"
+      icons={actions}
+      pt={{
+        header: {
+          onClick: (event: MouseEvent<HTMLDivElement>) => {
+            if ((event.target as HTMLElement).closest('.p-panel-icons')) return;
+            toggle();
+          },
+        },
+        toggler: {
+          className: 'aut-rule-panel-toggler',
+          'aria-label': collapsed ? `Expand ${heading}` : `Collapse ${heading}`,
+          title: collapsed ? `Expand ${heading}` : `Collapse ${heading}`,
+          'data-pr-tooltip': collapsed ? `Expand ${heading}` : `Collapse ${heading}`,
+          'data-pr-position': 'top',
+        },
+      }}
+    >
+      {children}
+    </Panel>
+  );
+}
+
 function TemplateInput({
   value,
   onChange,
@@ -214,17 +267,18 @@ function PatternEditor({
   const metadata = pattern.metadata ?? {};
   const metadataEntries = Object.entries(metadata);
   const availableMetadataOptions = metadataOptions(options);
+  const singleLineText = (pattern.text ?? '').replace(/[\r\n]+/g, '');
 
   return (
     <div className="aut-pattern-editor">
       <label className="font-medium block mb-2">Text pattern</label>
       <CodeMirror
-        value={pattern.text ?? ''}
-        height="4rem"
+        value={singleLineText}
+        height="2.5rem"
         theme={vscodeDark}
         extensions={regexExtensions}
         basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLineGutter: false }}
-        onChange={(text) => onChange({ ...pattern, text: text.replace(/[\r\n]+/g, '') })}
+        onChange={(text) => onChange({ ...pattern, text })}
         className="aut-regex-editor"
         placeholder="Rust regular expression"
       />
@@ -699,6 +753,7 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
 
   return (
     <div className="aut-classifier-rules-editor">
+      <Tooltip target=".aut-classifier-rules-editor .aut-rule-panel-toggler" />
       <div className="flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
         <div>
           <h3 className="mt-0 mb-1">Rules</h3>
@@ -725,16 +780,14 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
         </div>
 
         {parentPatterns.map((pattern, index) => (
-          <Panel
+          <RulePanel
             key={index}
-            header={`Pattern ${index + 1}`}
-            toggleable
-            className="aut-rule-panel"
-            icons={(
+            heading={`Pattern ${index + 1}`}
+            actions={(
               <div className="aut-panel-actions">
-                <Button type="button" icon="pi pi-arrow-up" text aria-label="Move pattern up" disabled={index === 0} onClick={() => onChange({ ...value, match_patterns: moveItem(parentPatterns, index, index - 1) })} />
-                <Button type="button" icon="pi pi-arrow-down" text aria-label="Move pattern down" disabled={index === parentPatterns.length - 1} onClick={() => onChange({ ...value, match_patterns: moveItem(parentPatterns, index, index + 1) })} />
-                <Button type="button" icon="pi pi-trash" severity="danger" text aria-label="Remove pattern" disabled={parentPatterns.length === 1} onClick={() => onChange({ ...value, match_patterns: parentPatterns.filter((_, itemIndex) => itemIndex !== index) })} />
+                <Button type="button" icon="pi pi-arrow-up" text aria-label="Move pattern up" tooltip="Move pattern up" tooltipOptions={{ position: 'top' }} disabled={index === 0} onClick={() => onChange({ ...value, match_patterns: moveItem(parentPatterns, index, index - 1) })} />
+                <Button type="button" icon="pi pi-arrow-down" text aria-label="Move pattern down" tooltip="Move pattern down" tooltipOptions={{ position: 'top' }} disabled={index === parentPatterns.length - 1} onClick={() => onChange({ ...value, match_patterns: moveItem(parentPatterns, index, index + 1) })} />
+                <Button type="button" icon="pi pi-trash" severity="danger" text aria-label="Remove pattern" tooltip="Remove pattern" tooltipOptions={{ position: 'top' }} disabled={parentPatterns.length === 1} onClick={() => onChange({ ...value, match_patterns: parentPatterns.filter((_, itemIndex) => itemIndex !== index) })} />
               </div>
             )}
           >
@@ -745,7 +798,7 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
               issues={issuesFor(`match_patterns[${index}]`)}
               captureReplacements={false}
             />
-          </Panel>
+          </RulePanel>
         ))}
         {validation?.issues
           .filter((issue) => issue.path === 'match_patterns')
@@ -786,17 +839,15 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
           const modifiers = rule.modifiers ?? [];
           const captures = captureCount(index);
           return (
-            <Panel
+            <RulePanel
               key={index}
-              header={`Child Rule ${index + 1}`}
-              toggleable
-              className="aut-rule-panel"
-              icons={(
+              heading={`Child Rule ${index + 1}`}
+              actions={(
                 <div className="aut-panel-actions">
-                  <Button type="button" icon="pi pi-copy" text aria-label="Duplicate child rule" onClick={() => onChange({ ...value, child_rules: [...childRules.slice(0, index + 1), structuredClone(rule), ...childRules.slice(index + 1)] })} />
-                  <Button type="button" icon="pi pi-arrow-up" text aria-label="Move child rule up" disabled={index === 0} onClick={() => onChange({ ...value, child_rules: moveItem(childRules, index, index - 1) })} />
-                  <Button type="button" icon="pi pi-arrow-down" text aria-label="Move child rule down" disabled={index === childRules.length - 1} onClick={() => onChange({ ...value, child_rules: moveItem(childRules, index, index + 1) })} />
-                  <Button type="button" icon="pi pi-trash" severity="danger" text aria-label="Remove child rule" onClick={() => onChange({ ...value, child_rules: childRules.filter((_, itemIndex) => itemIndex !== index) })} />
+                  <Button type="button" icon="pi pi-copy" text aria-label="Duplicate child rule" tooltip="Duplicate child rule" tooltipOptions={{ position: 'top' }} onClick={() => onChange({ ...value, child_rules: [...childRules.slice(0, index + 1), structuredClone(rule), ...childRules.slice(index + 1)] })} />
+                  <Button type="button" icon="pi pi-arrow-up" text aria-label="Move child rule up" tooltip="Move child rule up" tooltipOptions={{ position: 'top' }} disabled={index === 0} onClick={() => onChange({ ...value, child_rules: moveItem(childRules, index, index - 1) })} />
+                  <Button type="button" icon="pi pi-arrow-down" text aria-label="Move child rule down" tooltip="Move child rule down" tooltipOptions={{ position: 'top' }} disabled={index === childRules.length - 1} onClick={() => onChange({ ...value, child_rules: moveItem(childRules, index, index + 1) })} />
+                  <Button type="button" icon="pi pi-trash" severity="danger" text aria-label="Remove child rule" tooltip="Remove child rule" tooltipOptions={{ position: 'top' }} onClick={() => onChange({ ...value, child_rules: childRules.filter((_, itemIndex) => itemIndex !== index) })} />
                 </div>
               )}
             >
@@ -829,7 +880,7 @@ export function ClassifierRulesEditor({ value, onChange, onValidationChange }: R
                   options={options}
                 />
               </div>
-            </Panel>
+            </RulePanel>
           );
         })}
       </section>
