@@ -48,7 +48,7 @@ nav:
           - Metadata Types: concepts/metadata-types.md
           - Document Metadata: concepts/document-metadata.md
       - Indexes: concepts/indexes.md
-      - Classifiers: concepts/classifiers.md
+      - Classification: concepts/classifiers.md
       - Classifier Blocks: concepts/classifier-blocks.md
   - Administration:
       - Configuration: admin/configuration.md

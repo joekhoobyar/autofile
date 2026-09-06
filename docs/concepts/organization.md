@@ -4,7 +4,7 @@ Autofile provides cabinets and tags for organizing documents.
 
 ## Cabinets
 
-Cabinets are curated collections of documents. Use cabinets when a document belongs in a defined organizational grouping.
+Cabinets are similar to folders - except that a document is allowed to belong to more than one cabinet. Use cabinets when a document belongs in a defined organizational grouping.
 
 ## Tags
 
