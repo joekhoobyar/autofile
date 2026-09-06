@@ -213,13 +213,24 @@ function RulePanel({
   return (
     <Panel
       header={(
-        <button
-          type="button"
-          className="aut-panel-title-button"
-          aria-expanded={!collapsed}
-        >
-          {heading}
-        </button>
+        <div className="aut-panel-title">
+          <span>{heading}</span>
+          <button
+            type="button"
+            className="aut-rule-panel-toggler aut-panel-caret-button"
+            aria-label={collapsed ? `Expand ${heading}` : `Collapse ${heading}`}
+            aria-expanded={!collapsed}
+            title={collapsed ? `Expand ${heading}` : `Collapse ${heading}`}
+            data-pr-tooltip={collapsed ? `Expand ${heading}` : `Collapse ${heading}`}
+            data-pr-position="top"
+            onClick={(event) => {
+              event.stopPropagation();
+              toggle();
+            }}
+          >
+            <span className={collapsed ? 'pi pi-chevron-right' : 'pi pi-chevron-down'} aria-hidden="true" />
+          </button>
+        </div>
       )}
       toggleable
       collapsed={collapsed}
@@ -234,7 +245,7 @@ function RulePanel({
           },
         },
         toggler: {
-          className: 'aut-rule-panel-toggler',
+          className: 'aut-rule-panel-default-toggler',
           'aria-label': collapsed ? `Expand ${heading}` : `Collapse ${heading}`,
           title: collapsed ? `Expand ${heading}` : `Collapse ${heading}`,
           'data-pr-tooltip': collapsed ? `Expand ${heading}` : `Collapse ${heading}`,

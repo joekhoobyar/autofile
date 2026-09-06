@@ -417,22 +417,36 @@ body {
   cursor: default;
 }
 
-.aut-panel-title-button {
-  width: auto;
+.aut-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+
+.aut-panel-caret-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
   padding: 0;
   border: 0;
   color: inherit;
   background: transparent;
   font: inherit;
-  font-weight: 600;
-  text-align: left;
+  line-height: 1;
   cursor: pointer;
 }
 
-.aut-panel-title-button:focus-visible {
+.aut-panel-caret-button:focus-visible {
   border-radius: 3px;
   outline: 2px solid var(--primary-color);
   outline-offset: 3px;
+}
+
+.aut-rule-panel-default-toggler {
+  display: none;
 }
 
 .aut-link-button {
