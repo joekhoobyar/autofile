@@ -4,7 +4,7 @@ Document classification is the process where by Autofile recognizes documents an
 
 Autofile implements document classification with a rules engine.  Rules are grouped into a blocks called classifier blocks.  Each block contains structured rules that describe when the block matches a document and what actions it should take on matched documents.
 
-The classifier editor provides visual controls for patterns, metadata conditions, actions, child rules, capture replacements, and modifier pipelines. Advanced YAML mode remains available for direct editing and import. See the [classifier rules YAML reference](../reference/classifier-rules-yaml.md) when reviewing the serialized format.
+
 
 ## What Document Classification Can Do
 
@@ -20,6 +20,6 @@ Classifier block rules can also extract captured text from a document and transf
 
 ## How to Learn the System
 
-Start with the [classifier block guide](classifier-blocks.md) to understand how blocks run from a user's perspective.
+The classifier editor provides visual controls for patterns, metadata conditions, actions, child rules, capture replacements, and modifier pipelines. Start with the [classifier block guide](classifier-blocks.md) to understand how blocks run from a user's perspective.
 
-Advanced users that prefer editing YAML may refer to the [YAML reference](../reference/classifier-rules-yaml.md) when writing or debugging rules.
+_Edit as YAML_ mode remains available for direct editing and export/import. Advanced users that prefer editing YAML may refer to the [YAML reference](../reference/classifier-rules-yaml.md) when writing or debugging rules.
