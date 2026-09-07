@@ -79,8 +79,8 @@ app.kubernetes.io/component: ui
 {{- if not (has .Values.database.mode (list "cnpg" "external")) -}}
 {{- fail "database.mode must be one of: cnpg, external" -}}
 {{- end -}}
-{{- if and (eq .Values.database.mode "external") (empty .Values.database.url) -}}
-{{- fail "database.url is required when database.mode=external" -}}
+{{- if and (eq .Values.database.mode "external") (not .Values.existingSecret) (empty .Values.database.url) -}}
+{{- fail "database.url is required when database.mode=external and existingSecret is not set" -}}
 {{- end -}}
 {{- if and (eq .Values.database.mode "cnpg") (empty .Values.database.cnpg.name) -}}
 {{- fail "database.cnpg.name is required when database.mode=cnpg" -}}

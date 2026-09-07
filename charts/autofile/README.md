@@ -97,7 +97,7 @@ The chart-level `database.mode` controls how PostgreSQL is wired into the API.
 | Mode | Behavior |
 | --- | --- |
 | `cnpg` | Default. The chart creates a CloudNativePG `Cluster` resource from `database.cnpg.*`, and the API reads `DATABASE_URL` from the generated Secret named `<database.cnpg.name>-app`, key `uri`. |
-| `external` | The chart does not create a database. `database.url` is required and is stored in the API Secret as `DATABASE_URL`, unless `existingSecret` is set. |
+| `external` | The chart does not create a database. When `existingSecret` is unset, `database.url` is required and is stored in the API Secret as `DATABASE_URL`. When `existingSecret` is set, that Secret must contain `DATABASE_URL`. |
 
 ## Generated Credentials
 
@@ -146,6 +146,15 @@ helm install autofile charts/autofile \
 database:
   mode: external
   url: postgres://user:password@postgres.example.com:5432/autofile
+```
+
+### External Database With Existing Secret
+
+```yaml
+existingSecret: autofile-env
+
+database:
+  mode: external
 ```
 
 ### External S3-Compatible Storage
@@ -262,7 +271,7 @@ ingress:
 | Parameter | Default | Description |
 | --- | --- | --- |
 | `database.mode` | `cnpg` | Database wiring mode: `cnpg` or `external`. |
-| `database.url` | `""` | PostgreSQL connection URL required when `database.mode=external`. Rendered into the API Secret as `DATABASE_URL` when `existingSecret` is not set. |
+| `database.url` | `""` | PostgreSQL connection URL required when `database.mode=external` and `existingSecret` is unset. Rendered into the API Secret as `DATABASE_URL` when `existingSecret` is not set. |
 | `database.cnpg.name` | `autofile-postgresql` | CloudNativePG `Cluster` resource name. The API reads CNPG's generated URI from Secret `<database.cnpg.name>-app`, key `uri`. |
 | `database.cnpg.annotations` | `{}` | Annotations added to the CloudNativePG `Cluster`. |
 | `database.cnpg.labels` | `{}` | Additional labels added to the CloudNativePG `Cluster`. |

@@ -49,7 +49,7 @@ api:
     port: 80
     annotations: {}
   env:
-    APP_MODE: development
+    APP_MODE: production
     BIND_ADDR: 0.0.0.0:8000
     RUST_LOG: info
     AWS_REGION: us-east-1
