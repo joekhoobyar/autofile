@@ -1147,7 +1147,7 @@ function VirtualizedPagePreview({
                 data-index={virtualPage.index}
                 ref={virtualizer.measureElement}
                 className="aut-document-preview-virtual-row"
-                style={{ transform: `translateY(${virtualPage.start - virtualizer.options.scrollMargin}px)` }}
+                style={{ transform: `translateY(${virtualPage.start}px)` }}
               >
                 <PageImageItem
                   documentId={documentId}
