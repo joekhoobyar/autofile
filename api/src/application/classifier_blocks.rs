@@ -222,7 +222,6 @@ pub async fn persist_computed_actions(
             _ => {
                 // Otherwise, this is metadata that we want to apply to the document.
                 computed_metadata.insert(key, value);
-                ()
             }
         }
     }
@@ -689,7 +688,7 @@ pub async fn load_document_text(
 fn join_non_empty_pages(pages: Vec<Option<String>>) -> String {
     pages
         .into_iter()
-        .filter_map(|page| page)
+        .flatten()
         .map(|page| page.trim().to_string())
         .filter(|page| !page.is_empty())
         .collect::<Vec<String>>()
@@ -714,7 +713,7 @@ fn find_first_match<'a>(
     patterns: &'a [ClassifierPattern],
 ) -> JobResult<Option<PatternMatch<'a>>> {
     // Allow empty patterns to match by default, so that we can apply global child rules at any point during the flow.
-    if patterns.len() == 0 {
+    if patterns.is_empty() {
         return Ok(Some(PatternMatch::Metadata));
     }
 
@@ -1271,11 +1270,9 @@ fn mod_alnum_sanitize(value: &str) -> String {
         if c.is_ascii_alphanumeric() {
             result.push(c);
             last_was_space = false;
-        } else if c.is_whitespace() {
-            if !last_was_space {
-                result.push(' ');
-                last_was_space = true;
-            }
+        } else if c.is_whitespace() && !last_was_space {
+            result.push(' ');
+            last_was_space = true;
         }
         // else: drop non-alnum chars
     }
