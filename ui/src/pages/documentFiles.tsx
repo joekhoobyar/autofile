@@ -40,6 +40,8 @@ const PREVIEW_PAGE_ASPECT_RATIO = 11 / 8.5;
 const PREVIEW_PAGE_CHROME_HEIGHT = 86;
 const PREVIEW_END_THRESHOLD_PX = 24;
 const PREVIEW_JUMP_REALIGN_DELAYS_MS = [0, 40, 120, 300, 700];
+const previewPageHeightCache = new Map<string, number>();
+const previewFileHeightEstimateCache = new Map<number, number>();
 
 type DocumentFileThumbnailProps = {
   documentId: number;
@@ -90,6 +92,10 @@ function clampPage(page: number, pageCount: number) {
 function parsePageInputValue(value: string) {
   const parsed = Number(value.trim());
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function previewPageHeightCacheKey(documentFileId: number, pageNumber: number) {
+  return `${documentFileId}:${pageNumber}`;
 }
 
 function useSelectedFileId(files: DocumentFile[] | undefined, initialFileId?: number) {
@@ -908,12 +914,24 @@ function VirtualizedPagePreview({
   const restoredFileIdRef = useRef<number | null>(null);
   const settledPageRef = useRef<number>(clampPage(initialPage, pageCount));
   const jumpTimeoutsRef = useRef<number[]>([]);
+  const cachedWidthRef = useRef(0);
+  const isScrollbarDraggingRef = useRef(false);
   const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
   const [toolbarHeight, setToolbarHeight] = useState(0);
   const [readerWidth, setReaderWidth] = useState(0);
+  const [fileEstimatedPageHeight, setFileEstimatedPageHeight] = useState<number | null>(
+    () => previewFileHeightEstimateCache.get(documentFileId) ?? null
+  );
   const [currentPage, setCurrentPage] = useState(() => clampPage(initialPage, pageCount));
   const [pageInput, setPageInput] = useState<number | null>(() => clampPage(initialPage, pageCount));
+
+  function clearJumpRealignments() {
+    for (const timeout of jumpTimeoutsRef.current) {
+      window.clearTimeout(timeout);
+    }
+    jumpTimeoutsRef.current = [];
+  }
 
   useLayoutEffect(() => {
     const appMain = document.querySelector<HTMLElement>('.app-main');
@@ -984,10 +1002,36 @@ function VirtualizedPagePreview({
     Math.round((readerWidth || 820) * PREVIEW_PAGE_ASPECT_RATIO) + PREVIEW_PAGE_CHROME_HEIGHT
   );
 
+  const getEstimatedPageHeight = (index: number) => {
+    const cachedHeight = previewPageHeightCache.get(previewPageHeightCacheKey(documentFileId, index + 1));
+    return cachedHeight ?? fileEstimatedPageHeight ?? estimatedPageHeight;
+  };
+
   const virtualizer = useVirtualizer({
     count: pageCount,
     getScrollElement: () => scrollElement,
-    estimateSize: () => estimatedPageHeight,
+    estimateSize: getEstimatedPageHeight,
+    measureElement: (element) => {
+      const indexValue = element.getAttribute('data-index');
+      const index = indexValue ? Number(indexValue) : NaN;
+      if (Number.isFinite(index) && isScrollbarDraggingRef.current) {
+        return getEstimatedPageHeight(index);
+      }
+
+      const height = element.getBoundingClientRect().height;
+      const hasLoadedImage = !!element.querySelector('.aut-document-preview-page-image.is-loaded');
+
+      if (Number.isFinite(index) && height > 0 && hasLoadedImage) {
+        previewPageHeightCache.set(previewPageHeightCacheKey(documentFileId, index + 1), height);
+
+        if (!previewFileHeightEstimateCache.has(documentFileId)) {
+          previewFileHeightEstimateCache.set(documentFileId, height);
+          setFileEstimatedPageHeight(height);
+        }
+      }
+
+      return height;
+    },
     overscan: PREVIEW_PAGE_OVERSCAN,
     scrollMargin,
     scrollPaddingStart: toolbarHeight,
@@ -1036,12 +1080,47 @@ function VirtualizedPagePreview({
     return item.end <= anchorOffset;
   };
 
-  const clearJumpRealignments = () => {
-    for (const timeout of jumpTimeoutsRef.current) {
-      window.clearTimeout(timeout);
+  useEffect(() => {
+    if (!readerWidth) return;
+    if (Math.abs(cachedWidthRef.current - readerWidth) < 8) return;
+
+    cachedWidthRef.current = readerWidth;
+    for (const key of previewPageHeightCache.keys()) {
+      if (key.startsWith(`${documentFileId}:`)) {
+        previewPageHeightCache.delete(key);
+      }
     }
-    jumpTimeoutsRef.current = [];
-  };
+    previewFileHeightEstimateCache.delete(documentFileId);
+    setFileEstimatedPageHeight(null);
+    virtualizer.measure();
+  }, [documentFileId, readerWidth, virtualizer]);
+
+  useEffect(() => {
+    if (!scrollElement) return;
+
+    const startScrollbarDrag = (event: MouseEvent) => {
+      if (event.target !== scrollElement) return;
+      const rect = scrollElement.getBoundingClientRect();
+      if (event.clientX < rect.right - 20) return;
+      isScrollbarDraggingRef.current = true;
+    };
+
+    const stopScrollbarDrag = () => {
+      if (!isScrollbarDraggingRef.current) return;
+      isScrollbarDraggingRef.current = false;
+      virtualizer.measure();
+    };
+
+    scrollElement.addEventListener('mousedown', startScrollbarDrag);
+    window.addEventListener('mouseup', stopScrollbarDrag);
+    window.addEventListener('blur', stopScrollbarDrag);
+
+    return () => {
+      scrollElement.removeEventListener('mousedown', startScrollbarDrag);
+      window.removeEventListener('mouseup', stopScrollbarDrag);
+      window.removeEventListener('blur', stopScrollbarDrag);
+    };
+  }, [scrollElement, virtualizer]);
 
   const alignPageToStart = (page: number) => {
     const index = clampPage(page, pageCount) - 1;
