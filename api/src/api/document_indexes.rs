@@ -229,11 +229,12 @@ async fn rebuild(
         })?;
 
     let mut slow_jobs = state.slow_jobs.as_ref().clone();
-    if let Err(_) = slow_jobs
+    if slow_jobs
         .push(SlowJob::RebuildDocumentIndex {
             document_index_id: id,
         })
         .await
+        .is_err()
     {
         return Err(ApiError::internal_server_error(
             "Failed to enqueue rebuild document index job",

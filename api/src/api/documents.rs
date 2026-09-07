@@ -666,7 +666,7 @@ pub async fn list(
         for (document_id, slug, value) in metadata_rows {
             metadata_by_document
                 .entry(document_id)
-                .or_insert_with(HashMap::new)
+                .or_default()
                 .insert(slug, value);
         }
     }
@@ -689,7 +689,7 @@ pub async fn list(
         for (document_id, cabinet_id) in cabinet_rows {
             cabinets_by_document
                 .entry(document_id)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(cabinet_id);
         }
     }
@@ -707,7 +707,7 @@ pub async fn list(
         for (document_id, tag_id) in tag_rows {
             tags_by_document
                 .entry(document_id)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(tag_id);
         }
     }
