@@ -42,6 +42,10 @@ function formatRole(role: UserRole): string {
   return USER_ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role;
 }
 
+function passwordChangedTemplate(user: User): string {
+  return isSystemUser(user.id) ? "" : formatDate(user.password_changed_at);
+}
+
 export function ListUsers() {
   const auth = useAuth();
   const navigate = useNavigate();
@@ -217,7 +221,7 @@ export function ListUsers() {
           <Column field="display_name" header="Display Name" sortable />
           <Column field="email" header="Email" sortable />
           <Column field="role" header="Role" body={(u: User) => formatRole(u.role)} />
-          <Column field="password_changed_at" header="Password Changed" body={(u: User) => formatDate(u.password_changed_at)} sortable />
+          <Column field="password_changed_at" header="Password Changed" body={passwordChangedTemplate} sortable />
           <Column body={actionTemplate} headerClassName="w-9rem" />
         </DataTable>
       </Card>
@@ -302,9 +306,11 @@ export function ViewUser() {
           <li>
             <span>Updated</span>: {formatDate(data.updated_at)}
           </li>
-          <li>
-            <span>Password Changed</span>: {formatDate(data.password_changed_at)}
-          </li>
+          {!isSystemUser(data.id) && (
+            <li>
+              <span>Password Changed</span>: {formatDate(data.password_changed_at)}
+            </li>
+          )}
         </ul>
 
         <div className="text-end">
