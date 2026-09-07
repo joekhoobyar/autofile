@@ -1053,7 +1053,7 @@ function VirtualizedPagePreview({
     }
 
     scrollElement.scrollTo({
-      top: Math.max(0, virtualizer.options.scrollMargin + virtualPage.start - toolbarHeight),
+      top: Math.max(0, virtualPage.start - toolbarHeight),
       behavior: 'auto',
     });
   };
@@ -1155,7 +1155,7 @@ function VirtualizedPagePreview({
                 data-index={virtualPage.index}
                 ref={virtualizer.measureElement}
                 className="aut-document-preview-virtual-row"
-                style={{ transform: `translateY(${virtualPage.start}px)` }}
+                style={{ transform: `translateY(${virtualPage.start - virtualizer.options.scrollMargin}px)` }}
               >
                 <PageImageItem
                   documentId={documentId}
