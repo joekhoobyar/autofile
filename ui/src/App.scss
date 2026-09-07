@@ -1,15 +1,34 @@
-body {
-  margin: 0;
+html, body, #root {
+  height: 100%;
 }
 
-.app-shell { height: 100vh; display: flex; flex-direction: column; }
-.app-topbar { display: none; align-items: center; gap: .5rem; padding: .5rem .75rem; border-bottom: 1px solid var(--surface-border); }
-.app-body { flex: 1; display: flex; min-height: 0; }
+body {
+  margin: 0;
+  overscroll-behavior: none;
+}
+
+.app-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app-topbar {
+  display: none;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: .5rem;
+  padding: .5rem .75rem;
+  border-bottom: 1px solid var(--surface-border);
+}
+.app-body { flex: 1; display: flex; min-height: 0; overflow: hidden; }
 .app-nav {
-  width: 225px; 
+  width: 225px;
+  flex: 0 0 auto;
   border-right: 1px solid var(--surface-border);
   padding: .75rem;
-  overflow: auto; 
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--surface-card);
 }
 .app-main {
@@ -17,7 +36,8 @@ body {
   min-width: 0;
   padding: .75rem;
   padding-top: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .aut-document-view-layout {
@@ -213,6 +233,7 @@ body {
     top: 0;
     left: 0;
     height: 100vh;
+    height: 100dvh;
     z-index: 1001;
     transform: translateX(-105%);
     transition: transform .2s ease;
