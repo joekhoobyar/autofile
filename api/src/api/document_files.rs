@@ -119,57 +119,54 @@ pub async fn create(
 
     let result = db
         .build_transaction()
-        .run::<_, diesel::result::Error, _>(|conn| {
-            Box::pin(async move {
-                let mut fast_jobs = fast_jobs;
-                let mut medium_jobs = medium_jobs;
+        .run::<_, diesel::result::Error, _>(async move |conn| {
+            let mut fast_jobs = fast_jobs;
+            let mut medium_jobs = medium_jobs;
 
-                documents::table
-                    .find(document_id)
-                    .select(documents::id)
-                    .first::<i64>(conn)
-                    .await?;
+            documents::table
+                .find(document_id)
+                .select(documents::id)
+                .first::<i64>(conn)
+                .await?;
 
-                let inserted_file =
-                    insert_document_file(conn, document_id, file_info, user.user_id).await?;
+            let inserted_file =
+                insert_document_file(conn, document_id, file_info, user.user_id).await?;
 
-                if medium_jobs
-                    .push(MediumJob::ProcessFilePages {
-                        document_file_id: inserted_file.id,
-                    })
-                    .await
-                    .is_err()
-                {
-                    pages_enqueue_failed_for_tx.store(true, std::sync::atomic::Ordering::Relaxed);
-                    return Err(diesel::result::Error::RollbackTransaction);
-                }
-
-                if fast_jobs
-                    .push(FastJob::GenerateThumbnail {
-                        document_file_id: inserted_file.id,
-                        page: 1,
-                        width: 800,
-                    })
-                    .await
-                    .is_err()
-                {
-                    thumbnail_enqueue_failed_for_tx
-                        .store(true, std::sync::atomic::Ordering::Relaxed);
-                    return Err(diesel::result::Error::RollbackTransaction);
-                }
-
-                Ok(DocumentFileView {
-                    id: inserted_file.id,
-                    document_id: inserted_file.document_id,
-                    filename: inserted_file.filename,
-                    content_type: inserted_file.content_type,
-                    size: inserted_file.size,
-                    pages: inserted_file.pages,
-                    created_at: inserted_file.created_at,
-                    created_by: inserted_file.created_by,
-                    updated_at: inserted_file.updated_at,
-                    updated_by: inserted_file.updated_by,
+            if medium_jobs
+                .push(MediumJob::ProcessFilePages {
+                    document_file_id: inserted_file.id,
                 })
+                .await
+                .is_err()
+            {
+                pages_enqueue_failed_for_tx.store(true, std::sync::atomic::Ordering::Relaxed);
+                return Err(diesel::result::Error::RollbackTransaction);
+            }
+
+            if fast_jobs
+                .push(FastJob::GenerateThumbnail {
+                    document_file_id: inserted_file.id,
+                    page: 1,
+                    width: 800,
+                })
+                .await
+                .is_err()
+            {
+                thumbnail_enqueue_failed_for_tx.store(true, std::sync::atomic::Ordering::Relaxed);
+                return Err(diesel::result::Error::RollbackTransaction);
+            }
+
+            Ok(DocumentFileView {
+                id: inserted_file.id,
+                document_id: inserted_file.document_id,
+                filename: inserted_file.filename,
+                content_type: inserted_file.content_type,
+                size: inserted_file.size,
+                pages: inserted_file.pages,
+                created_at: inserted_file.created_at,
+                created_by: inserted_file.created_by,
+                updated_at: inserted_file.updated_at,
+                updated_by: inserted_file.updated_by,
             })
         })
         .await;
@@ -222,66 +219,64 @@ pub async fn delete(
 
     let deleted_prefix = db
         .build_transaction()
-        .run::<_, diesel::result::Error, _>(|conn| {
-            Box::pin(async move {
-                let files = document_files::table
+        .run::<_, diesel::result::Error, _>(async move |conn| {
+            let files = document_files::table
+                .filter(document_files::document_id.eq(document_id))
+                .select(DocumentFile::as_select())
+                .order(document_files::id.asc())
+                .load::<DocumentFile>(conn)
+                .await?;
+
+            let Some(file_index) = files.iter().position(|file| file.id == id) else {
+                return Err(diesel::result::Error::NotFound);
+            };
+
+            if files.len() <= 1 {
+                delete_last_file_for_tx.store(true, std::sync::atomic::Ordering::Relaxed);
+                return Err(diesel::result::Error::RollbackTransaction);
+            }
+
+            let deleted_file = &files[file_index];
+            let replacement_thumbnail = if file_index == 0 {
+                files
+                    .get(1)
+                    .map(|next_file| format!("{}/_thumb.png", next_file.s3_prefix))
+            } else {
+                None
+            };
+
+            diesel::delete(
+                document_file_ocr_pages::table
+                    .filter(document_file_ocr_pages::document_file_id.eq(id)),
+            )
+            .execute(conn)
+            .await?;
+
+            diesel::delete(
+                document_file_pages::table.filter(document_file_pages::document_file_id.eq(id)),
+            )
+            .execute(conn)
+            .await?;
+
+            let affected = diesel::delete(
+                document_files::table
                     .filter(document_files::document_id.eq(document_id))
-                    .select(DocumentFile::as_select())
-                    .order(document_files::id.asc())
-                    .load::<DocumentFile>(conn)
+                    .filter(document_files::id.eq(id)),
+            )
+            .execute(conn)
+            .await?;
+            if affected == 0 {
+                return Err(diesel::result::Error::NotFound);
+            }
+
+            if let Some(thumbnail_key) = replacement_thumbnail {
+                diesel::update(documents::table.filter(documents::id.eq(document_id)))
+                    .set(documents::s3_thumbnail.eq(thumbnail_key))
+                    .execute(conn)
                     .await?;
+            }
 
-                let Some(file_index) = files.iter().position(|file| file.id == id) else {
-                    return Err(diesel::result::Error::NotFound);
-                };
-
-                if files.len() <= 1 {
-                    delete_last_file_for_tx.store(true, std::sync::atomic::Ordering::Relaxed);
-                    return Err(diesel::result::Error::RollbackTransaction);
-                }
-
-                let deleted_file = &files[file_index];
-                let replacement_thumbnail = if file_index == 0 {
-                    files
-                        .get(1)
-                        .map(|next_file| format!("{}/_thumb.png", next_file.s3_prefix))
-                } else {
-                    None
-                };
-
-                diesel::delete(
-                    document_file_ocr_pages::table
-                        .filter(document_file_ocr_pages::document_file_id.eq(id)),
-                )
-                .execute(conn)
-                .await?;
-
-                diesel::delete(
-                    document_file_pages::table.filter(document_file_pages::document_file_id.eq(id)),
-                )
-                .execute(conn)
-                .await?;
-
-                let affected = diesel::delete(
-                    document_files::table
-                        .filter(document_files::document_id.eq(document_id))
-                        .filter(document_files::id.eq(id)),
-                )
-                .execute(conn)
-                .await?;
-                if affected == 0 {
-                    return Err(diesel::result::Error::NotFound);
-                }
-
-                if let Some(thumbnail_key) = replacement_thumbnail {
-                    diesel::update(documents::table.filter(documents::id.eq(document_id)))
-                        .set(documents::s3_thumbnail.eq(thumbnail_key))
-                        .execute(conn)
-                        .await?;
-                }
-
-                Ok(deleted_file.s3_prefix.clone())
-            })
+            Ok(deleted_file.s3_prefix.clone())
         })
         .await
         .map_err(|e| {

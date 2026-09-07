@@ -143,20 +143,17 @@ async fn delete(
         return Err(ApiError::bad_request("Cannot delete default document type"));
     }
 
-    db.transaction::<_, diesel::result::Error, _>(move |conn| {
-        Box::pin(async move {
-            // Delete the join table records
-            diesel::delete(
-                document_types_metadata_types::table
-                    .filter(document_types_metadata_types::document_type_id.eq(document_type_id)),
-            )
-            .execute(conn)
-            .await?;
+    db.transaction::<_, diesel::result::Error, _>(async move |conn| {
+        // Delete the join table records
+        diesel::delete(
+            document_types_metadata_types::table
+                .filter(document_types_metadata_types::document_type_id.eq(document_type_id)),
+        )
+        .execute(conn)
+        .await?;
 
-            // Update the documents
-            diesel::update(
-                documents::table.filter(documents::document_type_id.eq(document_type_id)),
-            )
+        // Update the documents
+        diesel::update(documents::table.filter(documents::document_type_id.eq(document_type_id)))
             .set((
                 documents::document_type_id.eq(1),
                 documents::updated_by.eq(user.user_id),
@@ -165,19 +162,17 @@ async fn delete(
             .execute(conn)
             .await?;
 
-            // Delete the document type
-            let affected = diesel::delete(
-                document_types::table.filter(document_types::id.eq(document_type_id)),
-            )
-            .execute(conn)
-            .await?;
+        // Delete the document type
+        let affected =
+            diesel::delete(document_types::table.filter(document_types::id.eq(document_type_id)))
+                .execute(conn)
+                .await?;
 
-            if affected == 0 {
-                return Err(diesel::result::Error::NotFound);
-            }
+        if affected == 0 {
+            return Err(diesel::result::Error::NotFound);
+        }
 
-            Ok(())
-        })
+        Ok(())
     })
     .await
     .map_err(|e| {

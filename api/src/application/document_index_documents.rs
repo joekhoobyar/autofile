@@ -234,8 +234,7 @@ async fn do_update_document_index_document_inner(
 
             let tx_result = db
                 .build_transaction()
-                .run::<Vec<i64>, diesel::result::Error, _>(|conn| {
-                    Box::pin(async move {
+                .run::<Vec<i64>, diesel::result::Error, _>(async move |conn| {
                         let mut stack: Vec<TraversalFrame> = vec![TraversalFrame {
                             template_idx: root_idx,
                             path: Vec::new(),
@@ -283,7 +282,6 @@ async fn do_update_document_index_document_inner(
                         }
 
                         Ok(matched_leaf_value_ids)
-                    })
                 })
                 .await;
 
@@ -302,8 +300,7 @@ async fn do_update_document_index_document_inner(
 
     let cleanup_result = db
         .build_transaction()
-        .run::<_, diesel::result::Error, _>(|conn| {
-            Box::pin(async move {
+        .run::<_, diesel::result::Error, _>(async move |conn| {
                 // Any existing document_index_document records for this document that were not matched by the traversal
                 // need to be removed, as they are no longer relevant.
                 let stale_value_ids: Vec<i64> = existing_value_ids.iter().copied().collect();
@@ -333,7 +330,6 @@ async fn do_update_document_index_document_inner(
                         err
                     })?;
                 Ok(())
-            })
         })
         .await;
 

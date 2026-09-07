@@ -81,52 +81,50 @@ pub async fn create_document(
 
     let result = db
         .build_transaction()
-        .run::<_, diesel::result::Error, _>(|conn| {
-            Box::pin(async move {
-                let mut fast_jobs = fast_jobs;
-                let mut medium_jobs = medium_jobs;
-                let inserted_document: Document = diesel::insert_into(documents::table)
-                    .values((
-                        documents::title.eq(&title),
-                        documents::document_type_id.eq(document_type_id),
-                        documents::created_by.eq(user_id),
-                        documents::updated_by.eq(user_id),
-                    ))
-                    .returning(Document::as_returning())
-                    .get_result(conn)
-                    .await?;
+        .run::<_, diesel::result::Error, _>(async move |conn| {
+            let mut fast_jobs = fast_jobs;
+            let mut medium_jobs = medium_jobs;
+            let inserted_document: Document = diesel::insert_into(documents::table)
+                .values((
+                    documents::title.eq(&title),
+                    documents::document_type_id.eq(document_type_id),
+                    documents::created_by.eq(user_id),
+                    documents::updated_by.eq(user_id),
+                ))
+                .returning(Document::as_returning())
+                .get_result(conn)
+                .await?;
 
-                if let Some(upload) = file_info {
-                    let inserted_file =
-                        insert_document_file(conn, inserted_document.id, upload, user_id).await?;
+            if let Some(upload) = file_info {
+                let inserted_file =
+                    insert_document_file(conn, inserted_document.id, upload, user_id).await?;
 
-                    if fast_jobs
-                        .push(FastJob::GenerateThumbnail {
-                            document_file_id: inserted_file.id,
-                            page: 1,
-                            width: 800,
-                        })
-                        .await
-                        .is_err()
-                    {
-                        thumb_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
-                        return Err(diesel::result::Error::RollbackTransaction);
-                    }
-
-                    if medium_jobs
-                        .push(MediumJob::ProcessFilePages {
-                            document_file_id: inserted_file.id,
-                        })
-                        .await
-                        .is_err()
-                    {
-                        pages_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
-                        return Err(diesel::result::Error::RollbackTransaction);
-                    }
+                if fast_jobs
+                    .push(FastJob::GenerateThumbnail {
+                        document_file_id: inserted_file.id,
+                        page: 1,
+                        width: 800,
+                    })
+                    .await
+                    .is_err()
+                {
+                    thumb_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
+                    return Err(diesel::result::Error::RollbackTransaction);
                 }
 
-                Ok(inserted_document)
-            })
+                if medium_jobs
+                    .push(MediumJob::ProcessFilePages {
+                        document_file_id: inserted_file.id,
+                    })
+                    .await
+                    .is_err()
+                {
+                    pages_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
+                    return Err(diesel::result::Error::RollbackTransaction);
+                }
+            }
+
+            Ok(inserted_document)
         })
         .await;
 
@@ -180,65 +178,58 @@ pub async fn delete_document(
 ) -> Result<(), ApiError> {
     let prefixes = db
         .build_transaction()
-        .run::<_, diesel::result::Error, _>(|conn| {
-            Box::pin(async move {
-                // Remove document index associations before deleting the document row.
-                delete_document_index_document(conn, id).await?;
+        .run::<_, diesel::result::Error, _>(async move |conn| {
+            // Remove document index associations before deleting the document row.
+            delete_document_index_document(conn, id).await?;
 
-                diesel::delete(
-                    cabinet_documents::table.filter(cabinet_documents::document_id.eq(id)),
-                )
+            diesel::delete(cabinet_documents::table.filter(cabinet_documents::document_id.eq(id)))
                 .execute(conn)
                 .await?;
 
-                diesel::delete(tag_documents::table.filter(tag_documents::document_id.eq(id)))
-                    .execute(conn)
+            diesel::delete(tag_documents::table.filter(tag_documents::document_id.eq(id)))
+                .execute(conn)
+                .await?;
+
+            diesel::delete(
+                document_metadatas::table.filter(document_metadatas::document_id.eq(id)),
+            )
+            .execute(conn)
+            .await?;
+
+            diesel::delete(
+                document_file_ocr_pages::table.filter(exists(
+                    document_files::table
+                        .filter(document_files::document_id.eq(id))
+                        .filter(document_files::id.eq(document_file_ocr_pages::document_file_id)),
+                )),
+            )
+            .execute(conn)
+            .await?;
+
+            diesel::delete(
+                document_file_pages::table.filter(exists(
+                    document_files::table
+                        .filter(document_files::document_id.eq(id))
+                        .filter(document_files::id.eq(document_file_pages::document_file_id)),
+                )),
+            )
+            .execute(conn)
+            .await?;
+
+            let prefixes: Vec<String> =
+                diesel::delete(document_files::table.filter(document_files::document_id.eq(id)))
+                    .returning(document_files::s3_prefix)
+                    .get_results(conn)
                     .await?;
 
-                diesel::delete(
-                    document_metadatas::table.filter(document_metadatas::document_id.eq(id)),
-                )
+            let affected = diesel::delete(documents::table.filter(documents::id.eq(id)))
                 .execute(conn)
                 .await?;
+            if affected == 0 {
+                return Err(diesel::result::Error::NotFound);
+            }
 
-                diesel::delete(
-                    document_file_ocr_pages::table.filter(exists(
-                        document_files::table
-                            .filter(document_files::document_id.eq(id))
-                            .filter(
-                                document_files::id.eq(document_file_ocr_pages::document_file_id),
-                            ),
-                    )),
-                )
-                .execute(conn)
-                .await?;
-
-                diesel::delete(
-                    document_file_pages::table.filter(exists(
-                        document_files::table
-                            .filter(document_files::document_id.eq(id))
-                            .filter(document_files::id.eq(document_file_pages::document_file_id)),
-                    )),
-                )
-                .execute(conn)
-                .await?;
-
-                let prefixes: Vec<String> = diesel::delete(
-                    document_files::table.filter(document_files::document_id.eq(id)),
-                )
-                .returning(document_files::s3_prefix)
-                .get_results(conn)
-                .await?;
-
-                let affected = diesel::delete(documents::table.filter(documents::id.eq(id)))
-                    .execute(conn)
-                    .await?;
-                if affected == 0 {
-                    return Err(diesel::result::Error::NotFound);
-                }
-
-                Ok(prefixes)
-            })
+            Ok(prefixes)
         })
         .await
         .map_err(|e| {
@@ -428,42 +419,38 @@ pub async fn update_document(
 ) -> Result<Document, ApiError> {
     let updated = db
         .build_transaction()
-        .run::<_, diesel::result::Error, _>(|conn| {
-            Box::pin(async move {
-                // Update + return the updated row in one round-trip.
-                let updated: Document =
-                    diesel::update(documents::table.filter(documents::id.eq(id)))
-                        .set((
-                            &input,
-                            documents::updated_by.eq(user_id),
-                            documents::updated_at.eq(Utc::now()),
-                        ))
-                        .returning(Document::as_returning())
-                        .get_result(conn)
-                        .await?;
-
-                // Determine the metadata types that are allowed by the document type.
-                let allowed_metadata_link = document_types_metadata_types::table
-                    .filter(
-                        document_types_metadata_types::document_type_id
-                            .eq(updated.document_type_id),
-                    )
-                    .filter(
-                        document_types_metadata_types::metadata_type_id
-                            .eq(document_metadatas::metadata_type_id),
-                    );
-
-                // Delete any metadata for this document that is not allowed by the document type.
-                diesel::delete(
-                    document_metadatas::table
-                        .filter(document_metadatas::document_id.eq(id))
-                        .filter(not(exists(allowed_metadata_link))),
-                )
-                .execute(conn)
+        .run::<_, diesel::result::Error, _>(async move |conn| {
+            // Update + return the updated row in one round-trip.
+            let updated: Document = diesel::update(documents::table.filter(documents::id.eq(id)))
+                .set((
+                    &input,
+                    documents::updated_by.eq(user_id),
+                    documents::updated_at.eq(Utc::now()),
+                ))
+                .returning(Document::as_returning())
+                .get_result(conn)
                 .await?;
 
-                Ok(updated)
-            })
+            // Determine the metadata types that are allowed by the document type.
+            let allowed_metadata_link = document_types_metadata_types::table
+                .filter(
+                    document_types_metadata_types::document_type_id.eq(updated.document_type_id),
+                )
+                .filter(
+                    document_types_metadata_types::metadata_type_id
+                        .eq(document_metadatas::metadata_type_id),
+                );
+
+            // Delete any metadata for this document that is not allowed by the document type.
+            diesel::delete(
+                document_metadatas::table
+                    .filter(document_metadatas::document_id.eq(id))
+                    .filter(not(exists(allowed_metadata_link))),
+            )
+            .execute(conn)
+            .await?;
+
+            Ok(updated)
         })
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update document"))?;

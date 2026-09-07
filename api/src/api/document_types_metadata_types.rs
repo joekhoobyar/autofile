@@ -132,39 +132,36 @@ async fn document_type_save(
     Json(input): Json<Vec<DocumentTypeNewMetadataTypeInput>>,
 ) -> Result<Json<Vec<DocumentTypeMetadataType>>, ApiError> {
     let rows = db
-        .transaction::<_, diesel::result::Error, _>(move |conn| {
-            Box::pin(async move {
-                diesel::delete(
-                    document_types_metadata_types::table.filter(
-                        document_types_metadata_types::document_type_id.eq(document_type_id),
-                    ),
-                )
-                .execute(conn)
+        .transaction::<_, diesel::result::Error, _>(async move |conn| {
+            diesel::delete(
+                document_types_metadata_types::table
+                    .filter(document_types_metadata_types::document_type_id.eq(document_type_id)),
+            )
+            .execute(conn)
+            .await?;
+
+            if input.is_empty() {
+                return Ok(Vec::new());
+            }
+
+            // Prepare the rows to insert. It is worth allocating memory so that we can
+            // bulk insert with Diesel, rather than doing individual queries in a loop.
+            let rows: Vec<NewDocumentTypeMetadataType> = input
+                .into_iter()
+                .map(|m| NewDocumentTypeMetadataType {
+                    document_type_id,
+                    metadata_type_id: m.metadata_type_id,
+                    required: m.required,
+                })
+                .collect();
+
+            let rows = diesel::insert_into(document_types_metadata_types::table)
+                .values(&rows)
+                .returning(DocumentTypeMetadataType::as_returning())
+                .get_results::<DocumentTypeMetadataType>(conn)
                 .await?;
 
-                if input.is_empty() {
-                    return Ok(Vec::new());
-                }
-
-                // Prepare the rows to insert. It is worth allocating memory so that we can
-                // bulk insert with Diesel, rather than doing individual queries in a loop.
-                let rows: Vec<NewDocumentTypeMetadataType> = input
-                    .into_iter()
-                    .map(|m| NewDocumentTypeMetadataType {
-                        document_type_id,
-                        metadata_type_id: m.metadata_type_id,
-                        required: m.required,
-                    })
-                    .collect();
-
-                let rows = diesel::insert_into(document_types_metadata_types::table)
-                    .values(&rows)
-                    .returning(DocumentTypeMetadataType::as_returning())
-                    .get_results::<DocumentTypeMetadataType>(conn)
-                    .await?;
-
-                Ok(rows)
-            })
+            Ok(rows)
         })
         .await
         .map_err(|e| {

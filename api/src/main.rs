@@ -41,7 +41,9 @@ async fn main() {
         .init();
 
     // Initialize JSON Web Token
-    jsonwebtoken::crypto::aws_lc::DEFAULT_PROVIDER.install_default().expect("Failed to install rustls crypto provider");
+    jsonwebtoken::crypto::aws_lc::DEFAULT_PROVIDER
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
     let jwt_secret = std::env::var("JWT_SECRET")
         .expect("JWT_SECRET not set")
         .into_bytes();
