@@ -23,18 +23,17 @@ This starts:
 - `postgres`
 - `rustfs` (plus a one-shot `rustfs-init` job to create bucket `autofile-documents`)
 
-### User Registration
+### Default Admin User
 
-```bash
-curl -i -X POST "http://localhost:8000/api/v1/auth/register" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin@example.com",
-    "email": "admin@example.com",
-    "display_name": "Admin",
-    "password": "changeme123"
-  }'
+On a fresh installation, Autofile creates a default admin user when no non-system users exist:
+
+```text
+username: admin
+email: admin@example.com
+password: admin123!
 ```
+
+Change the default password before using Autofile in any shared or persistent environment.
 
 ## Container Images
 

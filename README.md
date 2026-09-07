@@ -69,22 +69,19 @@ password: autofile-dev-secret
 
 The `rustfs-init` service creates the local bucket `autofile-documents` automatically.
 
-## 👤 Create the First User
+## 👤 Default Admin User
 
-After the API is running, create a user through the registration endpoint:
+On a fresh installation, Autofile creates a default admin user when no non-system users exist:
 
-```bash
-curl -i -X POST "http://localhost:8000/api/v1/auth/register" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin@example.com",
-    "email": "admin@example.com",
-    "display_name": "Admin",
-    "password": "changeme123"
-  }'
+```text
+username: admin
+email: admin@example.com
+password: admin123!
 ```
 
-Then open the UI at `http://localhost:5173` and sign in.
+Open the UI at `http://localhost:5173` and sign in with the default credentials.
+
+Change the default password before using Autofile in any shared or persistent environment.
 
 ## ⚙️ Configuration
 

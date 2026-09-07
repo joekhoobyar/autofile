@@ -19,27 +19,26 @@ The public endpoints are:
 - `POST /api/v1/auth/refresh`, using the refresh-token cookie
 - `POST /api/v1/auth/logout`
 
-Create the first user through `/api/v1/auth/register`, then sign in through the UI or authentication API.
+On a fresh installation, Autofile creates a default admin user when no non-system users exist:
 
-```bash
-curl -i -X POST "http://localhost:8000/api/v1/auth/register" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin@example.com",
-    "email": "admin@example.com",
-    "display_name": "Admin",
-    "password": "changeme1234"
-  }'
+```text
+username: admin
+email: admin@example.com
+password: admin123!
 ```
 
-Passwords must contain at least 12 characters. Log in and save the refresh-token cookie with:
+Change the default password before using Autofile in any shared or persistent environment.
+
+New users can also be created through `POST /api/v1/auth/register`. Registered users receive the `user` role. Registration passwords must contain at least 12 characters.
+
+Log in and save the refresh-token cookie with:
 
 ```bash
 curl -i -c cookies.txt -X POST "http://localhost:8000/api/v1/auth/login" \
   -H "Content-Type: application/json" \
   -d '{
-    "username": "admin@example.com",
-    "password": "changeme1234"
+    "username": "admin",
+    "password": "admin123!"
   }'
 ```
 

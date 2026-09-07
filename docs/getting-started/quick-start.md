@@ -28,4 +28,4 @@ The `rustfs-init` service creates the local bucket `autofile-documents` automati
 
 ## Next Step
 
-After the stack is running, [create the first user](first-user.md), then open `http://localhost:5173` and sign in.
+After the stack is running, open `http://localhost:5173` and sign in with the [default admin user](first-user.md).

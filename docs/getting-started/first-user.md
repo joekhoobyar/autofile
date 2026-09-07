@@ -1,21 +1,14 @@
-# Create the First User
+# Default Admin User
 
-After the API is running, create an initial user through the registration endpoint.
+After the API runs migrations on a fresh installation, Autofile creates a default admin user when no non-system users exist.
 
-```bash
-curl -i -X POST "http://localhost:8000/api/v1/auth/register" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin@example.com",
-    "email": "admin@example.com",
-    "display_name": "Admin",
-    "password": "changeme1234"
-  }'
+```text
+username: admin
+email: admin@example.com
+password: admin123!
 ```
 
-Then open the UI at `http://localhost:5173` and sign in with the new account.
+Open the UI at `http://localhost:5173` and sign in with the default credentials.
 
-The API requires passwords to contain at least 12 characters.
-
-!!! warning "Use a stronger password"
-    The example password is only for local development. Use a strong password for any shared or persistent environment.
+!!! warning "Change the default password"
+    Change the default password before using Autofile in any shared or persistent environment.

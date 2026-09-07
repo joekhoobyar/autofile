@@ -4,8 +4,9 @@ use autofile_api::application::users::{
     ListUsersInput, UpdateUserInput, UserSortField, delete_user, get_user_by_id,
     get_user_by_username, list_users, update_user,
 };
-use autofile_api::domain::users::User;
+use autofile_api::domain::users::{User, UserRole};
 use autofile_api::schema::users;
+use autofile_api::shared::auth::verify_password;
 use axum::http::StatusCode;
 use diesel::prelude::*;
 use diesel_async::AsyncPgConnection;
@@ -23,6 +24,28 @@ async fn load_user(db: &mut bb8::PooledConnection<'_, AsyncPgConnection>, id: i6
         .first::<User>(db)
         .await
         .expect("user should load")
+}
+
+#[tokio::test]
+async fn migrations_seed_default_admin_user() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+
+    let admin = get_user_by_username(&mut db, "admin".to_string())
+        .await
+        .expect("default admin should exist");
+
+    assert_eq!(admin.email, "admin@example.com");
+    assert_eq!(admin.display_name, "Admin");
+    assert_eq!(admin.role, UserRole::Admin);
+    assert!(
+        verify_password("admin123!", &admin.password_hash).expect("hash should parse"),
+        "default admin password should verify"
+    );
 }
 
 #[tokio::test]

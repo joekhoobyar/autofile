@@ -24,7 +24,7 @@ Autofile is a self-hosted document management application. It stores document fi
 - [Installation](getting-started/installation.md)
 - [Helm Installation](getting-started/helm.md)
 - [Docker Compose Quick Start](getting-started/quick-start.md)
-- [Create the First User](getting-started/first-user.md)
+- [Default Admin User](getting-started/first-user.md)
 - [Metadata](concepts/metadata.md)
 - [Indexes](concepts/indexes.md)
 - [Configuration](admin/configuration.md)
