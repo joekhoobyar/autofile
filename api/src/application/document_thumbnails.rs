@@ -221,10 +221,7 @@ async fn generate_pdf_thumbnail(
         .status()
         .await?;
     if !status.success() {
-        let error = std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("pdftocairo failed with status {status}"),
-        );
+        let error = std::io::Error::other(format!("pdftocairo failed with status {status}"));
         return Err(error.into());
     }
 
@@ -249,14 +246,11 @@ async fn generate_image_thumbnail(
         .await?;
 
     if !output.status.success() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!(
-                "magick thumbnail generation failed with status {}: {}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr)
-            ),
-        )
+        return Err(std::io::Error::other(format!(
+            "magick thumbnail generation failed with status {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        ))
         .into());
     }
 

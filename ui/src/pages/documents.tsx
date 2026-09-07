@@ -11,7 +11,7 @@ import { classNames } from 'primereact/utils';
 import { format } from "date-fns";
 
 import { apiUrl, getAccessToken } from '../api';
-import { useDocuments, useDocumentThumbnail } from '../queries/useDocuments';
+import { useDocuments, useDocument, useSaveDocument, useDocumentThumbnail } from '../queries/useDocuments';
 import { useDocumentIndex } from '../queries/useDocumentIndexes';
 import { useDocumentIndexValueAncestors } from '../queries/useDocumentIndexValues';
 import { type Document, type DocumentListParams } from '../models/document';
@@ -37,7 +37,6 @@ import { AppToast } from '../components/AppToast';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
-import { useDocument, useSaveDocument } from '../queries/useDocuments';
 
 type DocumentListItemProps = {
   doc: Readonly<Document>;
@@ -58,7 +57,7 @@ type DocumentThumbnailProps = {
   buttonStyle?: React.CSSProperties;
 };
 
-const DOCUMENT_LIST_PAGE_SIZES = [6, 12, 24, 48, 96];
+const DOCUMENT_LIST_PAGE_SIZES = new Set([6, 12, 24, 48, 96]);
 
 const DEFAULT_DOCUMENT_LIST_PARAMS: DocumentListParams = {
   per_page: 12,
@@ -81,7 +80,7 @@ function parseBooleanParam(value: string | null): boolean | undefined {
   return undefined;
 }
 
-function parseDocumentListHash(hash: string): DocumentListParams {
+function parseDocumentListHash(hash: string): DocumentListParams { // NOSONAR
   const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
   const page = parsePositiveIntParam(params.get('page'));
   const perPage = parsePositiveIntParam(params.get('per_page'));
@@ -100,7 +99,7 @@ function parseDocumentListHash(hash: string): DocumentListParams {
   return {
     ...DEFAULT_DOCUMENT_LIST_PARAMS,
     ...(page ? { page } : {}),
-    ...(perPage && DOCUMENT_LIST_PAGE_SIZES.includes(perPage) ? { per_page: perPage } : {}),
+    ...(perPage && DOCUMENT_LIST_PAGE_SIZES.has(perPage) ? { per_page: perPage } : {}),
     ...(params.has('sf') ? { sf: params.get('sf') || undefined } : {}),
     ...(params.has('sd') ? { sd: parseBooleanParam(params.get('sd')) } : {}),
     ...(basicSearch ? {

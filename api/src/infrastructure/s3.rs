@@ -214,7 +214,7 @@ pub async fn delete_prefix_from_s3(
     client: &aws_sdk_s3::Client,
     bucket: &str,
     prefix: &str,
-) -> Result<(), aws_sdk_s3::Error> {
+) -> Result<(), S3Error> {
     let mut continuation = None;
 
     loop {
@@ -224,24 +224,38 @@ pub async fn delete_prefix_from_s3(
             .prefix(prefix)
             .set_continuation_token(continuation)
             .send()
-            .await?;
+            .await
+            .map_err(|e| {
+                S3Error(format!(
+                    "Failed to list S3 objects for bucket '{bucket}' prefix '{prefix}': {e}"
+                ))
+            })?;
 
         let objects: Vec<ObjectIdentifier> = resp
             .contents()
             .iter()
             .filter_map(|o| o.key())
             .map(|k| ObjectIdentifier::builder().key(k).build())
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| S3Error(format!("Failed to build S3 delete object list: {e}")))?;
 
         if !objects.is_empty() {
-            let delete = Delete::builder().set_objects(Some(objects)).build()?;
+            let delete = Delete::builder()
+                .set_objects(Some(objects))
+                .build()
+                .map_err(|e| S3Error(format!("Failed to build S3 delete request: {e}")))?;
 
             client
                 .delete_objects()
                 .bucket(bucket)
                 .delete(delete)
                 .send()
-                .await?;
+                .await
+                .map_err(|e| {
+                    S3Error(format!(
+                        "Failed to delete S3 objects for bucket '{bucket}' prefix '{prefix}': {e}"
+                    ))
+                })?;
         }
 
         if !resp.is_truncated().unwrap_or(false) {

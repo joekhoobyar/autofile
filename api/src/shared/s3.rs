@@ -73,21 +73,20 @@ pub async fn serve_s3_file(
             .get(header::IF_MODIFIED_SINCE)
             .and_then(|value| value.to_str().ok())
             .and_then(|value| parse_http_date(value).ok()),
-    ) {
-        if last_modified <= if_modified_since {
-            let mut response = Response::new(Body::empty());
-            *response.status_mut() = StatusCode::NOT_MODIFIED;
-            let headers = response.headers_mut();
-            let last_modified = fmt_http_date(last_modified);
-            if let Ok(value) = header::HeaderValue::from_str(&last_modified) {
-                headers.insert(header::LAST_MODIFIED, value);
-            }
-            headers.insert(
-                header::CACHE_CONTROL,
-                header::HeaderValue::from_static("public, must-revalidate"),
-            );
-            return Ok(response);
+    ) && last_modified <= if_modified_since
+    {
+        let mut response = Response::new(Body::empty());
+        *response.status_mut() = StatusCode::NOT_MODIFIED;
+        let headers = response.headers_mut();
+        let last_modified = fmt_http_date(last_modified);
+        if let Ok(value) = header::HeaderValue::from_str(&last_modified) {
+            headers.insert(header::LAST_MODIFIED, value);
         }
+        headers.insert(
+            header::CACHE_CONTROL,
+            header::HeaderValue::from_static("public, must-revalidate"),
+        );
+        return Ok(response);
     }
 
     let content_length = object.content_length();
@@ -98,10 +97,10 @@ pub async fn serve_s3_file(
     let body = Body::from_stream(ReaderStream::new(object.body.into_async_read()));
     let mut response = Response::new(body);
     let headers = response.headers_mut();
-    if let Some(content_type) = content_type {
-        if let Ok(value) = header::HeaderValue::from_str(&content_type) {
-            headers.insert(header::CONTENT_TYPE, value);
-        }
+    if let Some(content_type) = content_type
+        && let Ok(value) = header::HeaderValue::from_str(&content_type)
+    {
+        headers.insert(header::CONTENT_TYPE, value);
     }
     headers.insert(
         header::CACHE_CONTROL,
@@ -113,12 +112,11 @@ pub async fn serve_s3_file(
             headers.insert(header::LAST_MODIFIED, value);
         }
     }
-    if let Some(content_length) = content_length {
-        if content_length > 0 {
-            if let Ok(value) = header::HeaderValue::from_str(&content_length.to_string()) {
-                headers.insert(header::CONTENT_LENGTH, value);
-            }
-        }
+    if let Some(content_length) = content_length
+        && content_length > 0
+        && let Ok(value) = header::HeaderValue::from_str(&content_length.to_string())
+    {
+        headers.insert(header::CONTENT_LENGTH, value);
     }
 
     Ok(response)

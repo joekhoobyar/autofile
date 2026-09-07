@@ -100,23 +100,25 @@ pub async fn create_document(
                     let inserted_file =
                         insert_document_file(conn, inserted_document.id, upload, user_id).await?;
 
-                    if let Err(_) = fast_jobs
+                    if fast_jobs
                         .push(FastJob::GenerateThumbnail {
                             document_file_id: inserted_file.id,
                             page: 1,
                             width: 800,
                         })
                         .await
+                        .is_err()
                     {
                         thumb_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
                         return Err(diesel::result::Error::RollbackTransaction);
                     }
 
-                    if let Err(_) = medium_jobs
+                    if medium_jobs
                         .push(MediumJob::ProcessFilePages {
                             document_file_id: inserted_file.id,
                         })
                         .await
+                        .is_err()
                     {
                         pages_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
                         return Err(diesel::result::Error::RollbackTransaction);
