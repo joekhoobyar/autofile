@@ -125,6 +125,17 @@ body {
   overflow: hidden;
 }
 
+.aut-document-preview-page-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 42rem;
+  aspect-ratio: 8.5 / 11;
+  padding: 1rem;
+  border: 1px dashed var(--surface-border);
+}
+
 .aut-document-preview-page-skeleton {
   display: block;
   width: 100%;

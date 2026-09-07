@@ -851,28 +851,32 @@ function PageImageItem({ documentId, documentFileId, pageNumber }: Readonly<Page
   return (
     <div>
       <Divider align="center">Page {pageNumber}</Divider>
-      {isError && <Message severity="error" text={error.message} />}
-      {!isLoading && !isError && !imageUrl && (
-        <Message severity="info" text="Page image not available yet." />
-      )}
-      {!isError && (isLoading || imageUrl) && (
-        <div className="aut-document-preview-page-frame">
-          {!isImageReady && (
-            <Skeleton className="aut-document-preview-page-skeleton" />
-          )}
-          {imageUrl && (
-            <img
-              src={imageUrl}
-              alt={`Page ${pageNumber}`}
-              decoding="async"
-              onLoad={() => setLoadedImageUrl(imageUrl)}
-              className={classNames('aut-document-preview-page-image', {
-                'is-loaded': isImageReady,
-              })}
-            />
-          )}
-        </div>
-      )}
+      <div className="aut-document-preview-page-frame">
+        {isError && (
+          <div className="aut-document-preview-page-message">
+            <Message severity="error" text={error.message} />
+          </div>
+        )}
+        {!isLoading && !isError && !imageUrl && (
+          <div className="aut-document-preview-page-message">
+            <Message severity="info" text="Page image not available yet." />
+          </div>
+        )}
+        {!isError && !isImageReady && (isLoading || imageUrl) && (
+          <Skeleton className="aut-document-preview-page-skeleton" />
+        )}
+        {imageUrl && (
+          <img
+            src={imageUrl}
+            alt={`Page ${pageNumber}`}
+            decoding="async"
+            onLoad={() => setLoadedImageUrl(imageUrl)}
+            className={classNames('aut-document-preview-page-image', {
+              'is-loaded': isImageReady,
+            })}
+          />
+        )}
+      </div>
     </div>
   );
 }
