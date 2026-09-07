@@ -95,6 +95,49 @@ Malformed JSON and invalid path or query input can instead return an Axum framew
 - `/api/v1/tags`
 - `/api/v1/users`
 
+## Users
+
+Base path: `/api/v1/users`
+
+User management endpoints require an admin access token.
+
+### Resource
+
+```json
+{
+  "id": 2,
+  "username": "admin",
+  "email": "admin@example.com",
+  "display_name": "Admin",
+  "role": "admin",
+  "created_at": "2026-08-25T12:00:00Z",
+  "updated_at": "2026-08-25T12:00:00Z",
+  "password_changed_at": "2026-08-25T12:00:00Z"
+}
+```
+
+### Endpoints
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| `GET` | `/api/v1/users` | List users. |
+| `GET` | `/api/v1/users/{id}` | Get a user by ID. |
+| `GET` | `/api/v1/users/by-username/{username}` | Get a user by exact username. |
+| `PATCH` | `/api/v1/users/{id}` | Update email, display name, or role. |
+| `DELETE` | `/api/v1/users/{id}` | Delete a user. |
+
+`PATCH /api/v1/users/{id}` accepts any subset of:
+
+```json
+{
+  "email": "admin@example.com",
+  "display_name": "Admin",
+  "role": "admin"
+}
+```
+
+`role` must be either `admin` or `user`. The system user cannot be updated or deleted. An admin cannot change their own role from `admin` to `user`.
+
 ## Classifier Rule Validation
 
 `POST /api/v1/classifier-blocks/validate` accepts a classifier `rules` object and returns semantic validation without saving it. The response includes `valid`, path-addressable `issues`, and a `capture_count` for every valid text pattern. Classifier create and update requests enforce the same validation and return `422 Unprocessable Entity` for invalid rules.

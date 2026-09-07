@@ -1,4 +1,4 @@
-use crate::domain::users::User;
+use crate::domain::users::{User, UserRole};
 use crate::schema::users;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
 
@@ -35,6 +35,7 @@ pub struct ListUsersInput {
 pub struct UpdateUserInput {
     pub email: Option<String>,
     pub display_name: Option<String>,
+    pub role: Option<UserRole>,
 }
 
 #[derive(Debug, AsChangeset)]
@@ -43,6 +44,7 @@ pub struct UpdateUserInput {
 struct UserChangeset {
     email: Option<String>,
     display_name: Option<String>,
+    role: Option<UserRole>,
 }
 
 pub async fn get_user_by_id(
@@ -71,6 +73,7 @@ pub async fn get_user_by_username(
 
 pub async fn update_user(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    acting_user_id: i64,
     id: i64,
     input: UpdateUserInput,
 ) -> Result<User, ApiError> {
@@ -78,9 +81,14 @@ pub async fn update_user(
         return Err(ApiError::bad_request("Cannot update system user"));
     }
 
+    if id == acting_user_id && input.role == Some(UserRole::User) {
+        return Err(ApiError::bad_request("Cannot remove your own admin role"));
+    }
+
     let changes = UserChangeset {
         email: input.email,
         display_name: input.display_name,
+        role: input.role,
     };
 
     diesel::update(users::table.filter(users::id.eq(id)))

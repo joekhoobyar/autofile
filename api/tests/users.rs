@@ -133,10 +133,12 @@ async fn update_user_updates_fields_and_preserves_password_data() {
 
     let updated = update_user(
         &mut db,
+        1,
         103,
         UpdateUserInput {
             email: Some("users-test-gamma-new@example.com".to_string()),
             display_name: Some("Updated User".to_string()),
+            role: None,
         },
     )
     .await
@@ -148,6 +150,86 @@ async fn update_user_updates_fields_and_preserves_password_data() {
     assert_eq!(updated.display_name, "Updated User");
     assert_eq!(before.password_hash, after.password_hash);
     assert_eq!(before.password_changed_at, after.password_changed_at);
+}
+
+#[tokio::test]
+async fn update_user_updates_role() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(
+        &mut db,
+        105,
+        "users-test-role",
+        "users-test-role@example.com",
+    )
+    .await;
+
+    let promoted = update_user(
+        &mut db,
+        1,
+        105,
+        UpdateUserInput {
+            email: None,
+            display_name: None,
+            role: Some(UserRole::Admin),
+        },
+    )
+    .await
+    .expect("role update should succeed");
+    assert_eq!(promoted.role, UserRole::Admin);
+
+    let demoted = update_user(
+        &mut db,
+        1,
+        105,
+        UpdateUserInput {
+            email: None,
+            display_name: None,
+            role: Some(UserRole::User),
+        },
+    )
+    .await
+    .expect("role update should succeed");
+    assert_eq!(demoted.role, UserRole::User);
+}
+
+#[tokio::test]
+async fn update_user_rejects_self_downgrade() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(
+        &mut db,
+        106,
+        "users-test-self-role",
+        "users-test-self-role@example.com",
+    )
+    .await;
+
+    let err = update_user(
+        &mut db,
+        106,
+        106,
+        UpdateUserInput {
+            email: None,
+            display_name: None,
+            role: Some(UserRole::User),
+        },
+    )
+    .await
+    .expect_err("self downgrade should fail");
+
+    assert_eq!(err.status, StatusCode::BAD_REQUEST);
+
+    let user = load_user(&mut db, 106).await;
+    assert_eq!(user.role, UserRole::Admin);
 }
 
 #[tokio::test]
@@ -192,9 +274,11 @@ async fn update_user_rejects_system_user() {
     let err = update_user(
         &mut db,
         1,
+        1,
         UpdateUserInput {
             email: Some("new-system-email@example.com".to_string()),
             display_name: Some("Should Not Change".to_string()),
+            role: Some(UserRole::User),
         },
     )
     .await
@@ -295,10 +379,12 @@ async fn list_users_applies_pagination_search_and_sort() {
 
     update_user(
         &mut db,
+        1,
         230,
         UpdateUserInput {
             email: None,
             display_name: Some("Captain Bravo".to_string()),
+            role: None,
         },
     )
     .await

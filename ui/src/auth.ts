@@ -1,10 +1,11 @@
 import React from "react";
 import { apiMutate, setAccessToken } from "./api";
-import type { LoginRequest, LoginResult, UserRole } from "./models/auth";
+import type { AuthSession, LoginRequest, LoginResult } from "./models/auth";
 
 export type { UserRole } from "./models/auth";
 
 type JwtPayload = {
+  uid?: unknown;
   role?: unknown;
 };
 
@@ -25,10 +26,13 @@ function decodeJwtPayload(token: string): JwtPayload | null {
   }
 }
 
-export function roleFromAccessToken(token: string): UserRole | null {
+export function sessionFromAccessToken(token: string): AuthSession | null {
   const payload = decodeJwtPayload(token);
   if (payload?.role === "admin" || payload?.role === "user") {
-    return payload.role;
+    const userId = typeof payload.uid === "number" ? payload.uid : Number(payload.uid);
+    if (Number.isInteger(userId)) {
+      return { userId, role: payload.role };
+    }
   }
   return null;
 }
@@ -40,11 +44,11 @@ export async function login(user: LoginRequest): Promise<LoginResult> {
     retryOn401: false,
   });
   setAccessToken(data.access_token);
-  const role = roleFromAccessToken(data.access_token);
-  if (!role) {
-    throw new Error("Missing or invalid role in access token");
+  const session = sessionFromAccessToken(data.access_token);
+  if (!session) {
+    throw new Error("Missing or invalid session in access token");
   }
-  return { role };
+  return session;
 }
 
 export async function logout() {
@@ -58,7 +62,7 @@ export async function logout() {
 export type AuthState =
   | { status: "loading" }
   | { status: "anon" }
-  | { status: "authed"; role: UserRole };
+  | ({ status: "authed" } & AuthSession);
 
 export const AuthContext = React.createContext<AuthState>({ status: "loading" });
 export const useAuth = () => React.useContext(AuthContext);

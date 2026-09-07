@@ -8,6 +8,7 @@ import { Column } from "primereact/column";
 import { Card } from "primereact/card";
 import { Button } from "primereact/button";
 import { InputText } from "primereact/inputtext";
+import { Dropdown } from "primereact/dropdown";
 import { Message } from "primereact/message";
 import { ConfirmDialog, confirmDialog } from "primereact/confirmdialog";
 import { type Toast, type ToastMessage } from "primereact/toast";
@@ -15,6 +16,7 @@ import { classNames } from "primereact/utils";
 
 import type { ListParams } from "../api";
 import { useId } from "../util";
+import type { UserRole } from "../models/auth";
 import type { User, UserUpdateInput } from "../models/user";
 import { useDeleteUser, useSaveUser, useUser, useUsers } from "../queries/useUsers";
 import { canManageUsers, useAuth } from "../auth";
@@ -23,6 +25,10 @@ import { AppToast } from "../components/AppToast";
 
 const SYSTEM_USER_ID = 1;
 const USER_LIST_DEFAULT_PARAMS: ListParams = { sf: "username" };
+const USER_ROLE_OPTIONS: { label: string; value: UserRole }[] = [
+  { label: "Admin", value: "admin" },
+  { label: "User", value: "user" },
+];
 
 function isSystemUser(id: number): boolean {
   return id === SYSTEM_USER_ID;
@@ -30,6 +36,10 @@ function isSystemUser(id: number): boolean {
 
 function formatDate(value: string): string {
   return format(new Date(value), "MM/dd/yyyy HH:mm");
+}
+
+function formatRole(role: UserRole): string {
+  return USER_ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role;
 }
 
 export function ListUsers() {
@@ -206,6 +216,7 @@ export function ListUsers() {
           <Column field="username" header="Username" body={usernameTemplate} sortable />
           <Column field="display_name" header="Display Name" sortable />
           <Column field="email" header="Email" sortable />
+          <Column field="role" header="Role" body={(u: User) => formatRole(u.role)} />
           <Column field="password_changed_at" header="Password Changed" body={(u: User) => formatDate(u.password_changed_at)} sortable />
           <Column body={actionTemplate} headerClassName="w-9rem" />
         </DataTable>
@@ -281,6 +292,9 @@ export function ViewUser() {
           </li>
           <li>
             <span>Email</span>: {data.email}
+          </li>
+          <li>
+            <span>Role</span>: {formatRole(data.role)}
           </li>
           <li>
             <span>Created</span>: {formatDate(data.created_at)}
@@ -375,11 +389,14 @@ type UserFormValues = {
   username: string;
   email: string;
   display_name: string;
+  role: UserRole;
 };
 
 function UserForm({ data }: Readonly<{ data: User }>) {
+  const auth = useAuth();
   const navigate = useNavigate();
   const saveUser = useSaveUser();
+  const isCurrentUser = auth.status === "authed" && auth.userId === data.id;
   const {
     control,
     handleSubmit,
@@ -391,12 +408,14 @@ function UserForm({ data }: Readonly<{ data: User }>) {
       username: data.username,
       email: data.email,
       display_name: data.display_name,
+      role: data.role,
     },
     values: {
       id: data.id,
       username: data.username,
       email: data.email,
       display_name: data.display_name,
+      role: data.role,
     },
   });
 
@@ -405,6 +424,7 @@ function UserForm({ data }: Readonly<{ data: User }>) {
       id: values.id,
       email: values.email,
       display_name: values.display_name,
+      role: values.role,
     };
 
     await saveUser.mutateAsync(input, {
@@ -480,6 +500,30 @@ function UserForm({ data }: Readonly<{ data: User }>) {
             )}
           />
           {errMsg("email") && <small className="p-error">{errMsg("email")}</small>}
+        </div>
+
+        <div className="col-12 md:col-6 lg:col-4">
+          <label htmlFor="role" className="font-medium mb-2 block">
+            Role
+          </label>
+          <Controller
+            name="role"
+            control={control}
+            rules={{ required: "Role is required" }}
+            render={({ field }) => (
+              <Dropdown
+                id="role"
+                {...field}
+                options={USER_ROLE_OPTIONS}
+                optionLabel="label"
+                optionValue="value"
+                disabled={isCurrentUser}
+                className={classNames({ "p-invalid": !!errors.role })}
+              />
+            )}
+          />
+          {errMsg("role") && <small className="p-error">{errMsg("role")}</small>}
+          {isCurrentUser && <small className="block mt-2">You cannot remove your own admin role.</small>}
         </div>
       </div>
 

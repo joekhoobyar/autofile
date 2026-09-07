@@ -33,12 +33,12 @@ pub async fn get_by_username(
 }
 
 async fn update(
-    _admin: AdminUser,
+    AdminUser { user_id }: AdminUser,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
     Json(input): Json<UpdateUserInput>,
 ) -> Result<Json<User>, ApiError> {
-    Ok(Json(update_user(&mut db, id, input).await?))
+    Ok(Json(update_user(&mut db, user_id, id, input).await?))
 }
 
 async fn delete(

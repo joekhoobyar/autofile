@@ -51,7 +51,7 @@ export default function Login() {
   const submitter = async (data: LoginRequest) => {
     try {
       const result = await login(data);
-      queryClient.setQueryData(["auth", "bootstrap"], result.role);
+      queryClient.setQueryData(["auth", "bootstrap"], result);
     } catch (err: unknown) {
       setLoginError(err as HttpError | null);
       return;
