@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: API
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libpq-dev
+
+      - name: Install Rust toolchain
+        id: rust-toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: api
+          key: ${{ steps.rust-toolchain.outputs.cachekey }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Check formatting
+        working-directory: api
+        run: cargo fmt --all -- --check
+
+      - name: Check API
+        working-directory: api
+        run: cargo check --locked --all-targets
+
+      - name: Lint API
+        working-directory: api
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Test API
+        working-directory: api
+        run: cargo test --locked
+
+  ui:
+    name: UI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: Lint UI
+        working-directory: ui
+        run: npm run lint
+
+      - name: Build UI
+        working-directory: ui
+        run: npm run build

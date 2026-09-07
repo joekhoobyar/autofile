@@ -106,13 +106,13 @@ async fn create(
 ) -> Result<Json<Cabinet>, ApiError> {
     validate_slug(&input.slug)?;
 
-    if let Some(parent_id) = input.parent_id {
-        if parent_id <= 0 {
-            return Err(ApiError::new(
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "Invalid parent cabinet",
-            ));
-        }
+    if let Some(parent_id) = input.parent_id
+        && parent_id <= 0
+    {
+        return Err(ApiError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Invalid parent cabinet",
+        ));
     }
 
     let inserted: Cabinet = diesel::insert_into(cabinets::table)
