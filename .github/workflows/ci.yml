@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   api:
-    name: API
+    name: Check API
     runs-on: ubuntu-latest
 
     steps:
@@ -56,7 +56,7 @@ jobs:
         run: cargo test --locked
 
   ui:
-    name: UI
+    name: Check UI
     runs-on: ubuntu-latest
 
     steps:
