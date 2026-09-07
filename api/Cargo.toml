@@ -26,7 +26,7 @@ async-trait = "0.1"
 anyhow = "1"
 
 diesel = { version = "2.2", features = ["postgres", "chrono", "serde_json"] }
-diesel-async = { version = "0.7.4", features = ["postgres", "async-connection-wrapper", "bb8"] }
+diesel-async = { version = "0.9.0", features = ["postgres", "async-connection-wrapper", "bb8"] }
 diesel_migrations = "2"
 diesel_json = "0.3.0"
 diesel_full_text_search = "2.3.0"
