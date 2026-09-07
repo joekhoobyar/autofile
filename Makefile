@@ -17,6 +17,8 @@ image:
 	GIT_SHA="$$git_sha" docker buildx bake --push $(TARGET) $(ARGS)
 
 release: release-push version-bump
+	git commit -m 'version bump for next dev cycle' api charts ui/package && \
+	git push
 
 release-push:
 	@set -e; \
