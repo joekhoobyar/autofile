@@ -7,6 +7,7 @@ import { DataTable, type DataTableStateEvent } from "primereact/datatable";
 import { Column } from "primereact/column";
 import { Card } from "primereact/card";
 import { Button } from "primereact/button";
+import { Checkbox } from "primereact/checkbox";
 import { InputText } from "primereact/inputtext";
 import { Dropdown } from "primereact/dropdown";
 import { Message } from "primereact/message";
@@ -221,6 +222,7 @@ export function ListUsers() {
           <Column field="display_name" header="Display Name" sortable />
           <Column field="email" header="Email" sortable />
           <Column field="role" header="Role" body={(u: User) => formatRole(u.role)} />
+          <Column field="force_password_change" header="Password Change Required" body={(u: User) => u.force_password_change ? "Yes" : "No"} />
           <Column field="password_changed_at" header="Password Changed" body={passwordChangedTemplate} sortable />
           <Column body={actionTemplate} headerClassName="w-9rem" />
         </DataTable>
@@ -299,6 +301,9 @@ export function ViewUser() {
           </li>
           <li>
             <span>Role</span>: {formatRole(data.role)}
+          </li>
+          <li>
+            <span>Password Change Required</span>: {data.force_password_change ? "Yes" : "No"}
           </li>
           <li>
             <span>Created</span>: {formatDate(data.created_at)}
@@ -396,6 +401,7 @@ type UserFormValues = {
   email: string;
   display_name: string;
   role: UserRole;
+  force_password_change: boolean;
 };
 
 function UserForm({ data }: Readonly<{ data: User }>) {
@@ -415,6 +421,7 @@ function UserForm({ data }: Readonly<{ data: User }>) {
       email: data.email,
       display_name: data.display_name,
       role: data.role,
+      force_password_change: data.force_password_change,
     },
     values: {
       id: data.id,
@@ -422,6 +429,7 @@ function UserForm({ data }: Readonly<{ data: User }>) {
       email: data.email,
       display_name: data.display_name,
       role: data.role,
+      force_password_change: data.force_password_change,
     },
   });
 
@@ -431,6 +439,7 @@ function UserForm({ data }: Readonly<{ data: User }>) {
       email: values.email,
       display_name: values.display_name,
       role: values.role,
+      force_password_change: values.force_password_change,
     };
 
     await saveUser.mutateAsync(input, {
@@ -530,6 +539,26 @@ function UserForm({ data }: Readonly<{ data: User }>) {
           />
           {errMsg("role") && <small className="p-error">{errMsg("role")}</small>}
           {isCurrentUser && <small className="block mt-2">You cannot remove your own admin role.</small>}
+        </div>
+
+        <div className="col-12 md:col-6 lg:col-4">
+          <label htmlFor="force_password_change" className="font-medium mb-2 block">
+            Require Password Change
+          </label>
+          <Controller
+            name="force_password_change"
+            control={control}
+            render={({ field }) => (
+              <div className="flex align-items-center gap-2 mt-3">
+                <Checkbox
+                  inputId="force_password_change"
+                  checked={field.value}
+                  onChange={(event) => field.onChange(event.checked ?? false)}
+                />
+                <label htmlFor="force_password_change">Require password change at next login</label>
+              </div>
+            )}
+          />
         </div>
       </div>
 

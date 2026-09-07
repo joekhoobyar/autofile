@@ -1,5 +1,6 @@
 import { useRef, type RefObject } from "react";
 import { Controller, useForm } from "react-hook-form";
+import { useNavigate } from "react-router-dom";
 
 import { Button } from "primereact/button";
 import { Card } from "primereact/card";
@@ -30,26 +31,36 @@ type PasswordFormValues = {
   confirm_password: string;
 };
 
-export function Profile() {
+export function Profile({ passwordOnly = false }: Readonly<{ passwordOnly?: boolean }>) {
+  const navigate = useNavigate();
   const toast = useRef<Toast>(null);
-  const { data, isLoading, isError, error } = useProfile();
+  const { data, isLoading, isError, error } = useProfile({ enabled: !passwordOnly });
 
   if (isError) {
     return <Message severity="error" text={error.message} />;
   }
 
-  if (isLoading || !data) {
+  if (!passwordOnly && (isLoading || !data)) {
     return <div>Loading</div>;
   }
 
   return (
     <>
       <div className="grid">
-        <div className="col-12 xl:col-7">
-          <ProfileDetailsForm data={data} toast={toast} />
-        </div>
-        <div className="col-12 xl:col-5">
-          <PasswordChangeForm toast={toast} />
+        {!passwordOnly && (
+          <div className="col-12 xl:col-7">
+            <ProfileDetailsForm data={data!} toast={toast} />
+          </div>
+        )}
+        <div className={passwordOnly ? "col-12 xl:col-5" : "col-12 xl:col-5"}>
+          {passwordOnly && (
+            <Message
+              severity="warn"
+              text="You must change your password before continuing."
+              className="mb-3 w-full"
+            />
+          )}
+          <PasswordChangeForm toast={toast} onSuccess={() => passwordOnly && navigate("/documents", { replace: true })} />
         </div>
       </div>
       <AppToast ref={toast} />
@@ -188,7 +199,10 @@ function ProfileDetailsForm({ data, toast }: Readonly<{ data: User; toast: RefOb
   );
 }
 
-function PasswordChangeForm({ toast }: Readonly<{ toast: RefObject<Toast | null> }>) {
+function PasswordChangeForm({
+  toast,
+  onSuccess,
+}: Readonly<{ toast: RefObject<Toast | null>; onSuccess?: () => void }>) {
   const changePassword = useChangePassword();
   const {
     control,
@@ -213,6 +227,7 @@ function PasswordChangeForm({ toast }: Readonly<{ toast: RefObject<Toast | null>
       onSuccess: () => {
         reset();
         toast.current?.show({ severity: "success", summary: "Password changed" });
+        onSuccess?.();
       },
     });
   };

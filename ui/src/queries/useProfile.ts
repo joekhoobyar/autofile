@@ -6,13 +6,16 @@ import {
   type UseQueryResult,
 } from "@tanstack/react-query";
 
-import { HttpError, apiFetch, apiMutate } from "../api";
+import { HttpError, apiFetch, apiMutate, setAccessToken } from "../api";
+import { sessionFromAccessToken } from "../auth";
+import type { AccessTokenResponse, AuthSession } from "../models/auth";
 import type { PasswordChangeInput, ProfileUpdateInput } from "../models/profile";
 import type { User } from "../models/user";
 
-export function useProfile(): UseQueryResult<User, HttpError> {
+export function useProfile(options = {}): UseQueryResult<User, HttpError> {
   return useQuery({
     queryKey: ["profile"],
+    ...options,
     queryFn: () => apiFetch<User>("api/v1/profile"),
   });
 }
@@ -34,17 +37,22 @@ export function useSaveProfile(): UseMutationResult<User, HttpError, ProfileUpda
   });
 }
 
-export function useChangePassword(): UseMutationResult<User, HttpError, PasswordChangeInput> {
+export function useChangePassword(): UseMutationResult<AccessTokenResponse, HttpError, PasswordChangeInput> {
   const qc = useQueryClient();
 
-  return useMutation<User, HttpError, PasswordChangeInput>({
+  return useMutation<AccessTokenResponse, HttpError, PasswordChangeInput>({
     mutationFn: (body) =>
-      apiMutate<User, PasswordChangeInput>("api/v1/profile/password", {
+      apiMutate<AccessTokenResponse, PasswordChangeInput>("api/v1/profile/password", {
         method: "POST",
         body,
       }),
 
-    onSuccess: () => {
+    onSuccess: (data) => {
+      setAccessToken(data.access_token);
+      const session = sessionFromAccessToken(data.access_token);
+      if (session) {
+        qc.setQueryData<AuthSession>(["auth", "bootstrap"], session);
+      }
       qc.invalidateQueries({ queryKey: ["profile"] });
       qc.invalidateQueries({ queryKey: ["user"] });
     },

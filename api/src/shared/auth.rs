@@ -15,6 +15,8 @@ use serde::{Deserialize, Serialize};
 use crate::domain::users::UserRole;
 use crate::{shared::app_state::AppState, shared::util::ApiError};
 
+const PASSWORD_CHANGE_REQUIRED_CODE: &str = "password_change_required";
+
 const ISS: &str = "autofile-api";
 const AUD: &str = "autofile-spa";
 
@@ -52,10 +54,16 @@ pub struct AdminUser {
     pub user_id: i64,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct PasswordChangeUser {
+    pub user_id: i64,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccessClaims {
     pub uid: i64, // your user id
     pub role: UserRole,
+    pub force_password_change: bool,
     pub exp: usize,  // unix timestamp
     pub iat: usize,  // unix timestamp
     pub iss: String, // issuer (optional but recommended)
@@ -67,6 +75,7 @@ pub struct AccessClaims {
 pub struct RefreshClaims {
     pub uid: i64, // your user id
     pub role: UserRole,
+    pub force_password_change: bool,
     pub exp: usize,  // unix timestamp
     pub iat: usize,  // unix timestamp
     pub iss: String, // issuer (optional but recommended)
@@ -90,6 +99,7 @@ pub fn sign_access(
     secret: &[u8],
     uid: i64,
     role: UserRole,
+    force_password_change: bool,
     ttl_seconds: i64,
 ) -> jsonwebtoken::errors::Result<String> {
     let now = Utc::now().timestamp() as usize;
@@ -98,6 +108,7 @@ pub fn sign_access(
     let claims = AccessClaims {
         uid,
         role,
+        force_password_change,
         iat: now,
         exp,
         iss: ISS.to_string(),
@@ -116,6 +127,7 @@ pub fn sign_refresh(
     secret: &[u8],
     uid: i64,
     role: UserRole,
+    force_password_change: bool,
     ttl_seconds: i64,
 ) -> jsonwebtoken::errors::Result<String> {
     let now = Utc::now().timestamp() as usize;
@@ -124,6 +136,7 @@ pub fn sign_refresh(
     let claims = RefreshClaims {
         uid,
         role,
+        force_password_change,
         iat: now,
         exp,
         iss: ISS.to_string(),
@@ -229,7 +242,22 @@ impl FromRequestParts<Arc<AppState>> for AuthUser {
         state: &Arc<AppState>,
     ) -> Result<Self, Self::Rejection> {
         let claims = extract_access_claims(parts, state)?;
+        enforce_password_change(claims.force_password_change)?;
         Ok(AuthUser {
+            user_id: claims.uid,
+        })
+    }
+}
+
+impl FromRequestParts<Arc<AppState>> for PasswordChangeUser {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<AppState>,
+    ) -> Result<Self, Self::Rejection> {
+        let claims = extract_access_claims(parts, state)?;
+        Ok(PasswordChangeUser {
             user_id: claims.uid,
         })
     }
@@ -243,6 +271,7 @@ impl FromRequestParts<Arc<AppState>> for AdminUser {
         state: &Arc<AppState>,
     ) -> Result<Self, Self::Rejection> {
         let claims = extract_access_claims(parts, state)?;
+        enforce_password_change(claims.force_password_change)?;
         if claims.role != UserRole::Admin {
             return Err(ApiError::new(
                 StatusCode::FORBIDDEN,
@@ -281,9 +310,23 @@ fn extract_access_claims(parts: &Parts, state: &Arc<AppState>) -> Result<AccessC
         .map_err(|_| ApiError::new(StatusCode::UNAUTHORIZED, "Invalid or expired token"))
 }
 
+fn enforce_password_change(force_password_change: bool) -> Result<(), ApiError> {
+    if !force_password_change {
+        return Ok(());
+    }
+
+    Err(ApiError::with_code(
+        StatusCode::FORBIDDEN,
+        "Password change required",
+        PASSWORD_CHANGE_REQUIRED_CODE,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{sign_access, sign_refresh, verify_access, verify_refresh};
+    use super::{
+        enforce_password_change, sign_access, sign_refresh, verify_access, verify_refresh,
+    };
     use crate::domain::users::UserRole;
     use std::sync::Once;
 
@@ -300,26 +343,40 @@ mod tests {
     }
 
     #[test]
-    fn access_token_round_trips_role_claim() {
+    fn access_token_round_trips_session_claims() {
         setup();
         let secret = b"test-secret";
-        let token = sign_access(secret, 42, UserRole::Admin, 3600).expect("sign should succeed");
+        let token =
+            sign_access(secret, 42, UserRole::Admin, true, 3600).expect("sign should succeed");
 
         let claims = verify_access(secret, &token).expect("verify should succeed");
         assert_eq!(claims.uid, 42);
         assert_eq!(claims.role, UserRole::Admin);
+        assert!(claims.force_password_change);
         assert_eq!(claims.typ, "access");
     }
 
     #[test]
-    fn refresh_token_round_trips_role_claim() {
+    fn refresh_token_round_trips_session_claims() {
         setup();
         let secret = b"test-secret";
-        let token = sign_refresh(secret, 7, UserRole::User, 3600).expect("sign should succeed");
+        let token =
+            sign_refresh(secret, 7, UserRole::User, false, 3600).expect("sign should succeed");
 
         let claims = verify_refresh(secret, &token).expect("verify should succeed");
         assert_eq!(claims.uid, 7);
         assert_eq!(claims.role, UserRole::User);
+        assert!(!claims.force_password_change);
         assert_eq!(claims.typ, "refresh");
+    }
+
+    #[test]
+    fn password_change_gate_blocks_forced_users() {
+        let err = enforce_password_change(true)
+            .expect_err("forced password change should block normal endpoints");
+        assert_eq!(err.status, axum::http::StatusCode::FORBIDDEN);
+        assert_eq!(err.code, Some("password_change_required"));
+
+        enforce_password_change(false).expect("unforced users should be allowed");
     }
 }

@@ -33,7 +33,7 @@ email: admin@example.com
 password: admin123!
 ```
 
-Change the default password before using Autofile in any shared or persistent environment.
+The default admin must change this password before using other authenticated features.
 
 ## Container Images
 

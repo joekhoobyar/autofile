@@ -81,7 +81,7 @@ password: admin123!
 
 Open the UI at `http://localhost:5173` and sign in with the default credentials.
 
-Change the default password before using Autofile in any shared or persistent environment.
+The default admin must change this password before using other authenticated features.
 
 ## ⚙️ Configuration
 

@@ -1,6 +1,6 @@
 // framework
 import { useEffect, useRef, useState } from 'react';
-import { createBrowserRouter, Navigate, RouterProvider, NavLink, useLocation } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { PrimeReactProvider } from 'primereact/api';
 import 'primereact/resources/primereact.min.css';
 import 'primereact/resources/themes/lara-dark-indigo/theme.css';
@@ -87,6 +87,7 @@ export function SideNav() {
 
 function Layout() {
   const { home, model } = useBreadcrumbs();
+  const navigate = useNavigate();
   const { pathname }= useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const prevPathRef = useRef(pathname);
@@ -97,6 +98,17 @@ function Layout() {
       setMobileOpen(false);
     }
   }, [pathname, mobileOpen]);
+
+  useEffect(() => {
+    const onPasswordChangeRequired = () => {
+      if (window.location.pathname !== "/profile/password") {
+        navigate("/profile/password", { replace: true });
+      }
+    };
+
+    window.addEventListener("autofile:password-change-required", onPasswordChangeRequired);
+    return () => window.removeEventListener("autofile:password-change-required", onPasswordChangeRequired);
+  }, [navigate]);
 
   return (
     <div className={`app-shell ${mobileOpen ? "nav-open" : ""}`}>
@@ -230,6 +242,10 @@ const router = createBrowserRouter([
       {
         path: 'profile',
         element: <Profile />,
+      },
+      {
+        path: 'profile/password',
+        element: <Profile passwordOnly />,
       },
       {
         path: 'about',

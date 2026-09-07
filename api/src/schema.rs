@@ -227,6 +227,7 @@ diesel::table! {
         password_hash -> Text,
         password_changed_at -> Timestamptz,
         role -> Varchar,
+        force_password_change -> Bool,
     }
 }
 

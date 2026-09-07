@@ -28,17 +28,20 @@ export type ResourceInput<T> = Omit<Partial<T>, "id" | "createdAt" | "updatedAt"
 export type ApiError = {
   message: string;
   status: number;
+  code?: string;
   details?: unknown;
 };
 
 export class HttpError extends Error {
   public readonly status: number;
+  public readonly code?: string;
   public readonly details?: unknown;
 
-  constructor(message: string, status: number, details?: unknown) {
+  constructor(message: string, status: number, code?: string, details?: unknown) {
     super(message);
     this.name = "HttpError";
     this.status = status;
+    this.code = code;
     this.details = details;
   }
 }
@@ -59,8 +62,15 @@ export async function parseApiError(res: Response): Promise<HttpError> {
     typeof details === "string"
       ? details
       : (details as { message?: string } | undefined)?.message ?? res.statusText;
+  const code = typeof details === "object" && details !== null
+    ? (details as { code?: string }).code
+    : undefined;
 
-  throw new HttpError(msg || "Request failed", res.status, details);
+  if (code === "password_change_required" && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("autofile:password-change-required"));
+  }
+
+  throw new HttpError(msg || "Request failed", res.status, code, details);
 }
 
 export interface ListParams {

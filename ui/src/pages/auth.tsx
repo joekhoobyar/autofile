@@ -19,6 +19,9 @@ export function RequireAuth() {
 
   if (auth.status === "loading") return null; // or spinner
   if (auth.status === "anon") return <Navigate to="/login" replace state={{ from: loc }} />;
+  if (auth.forcePasswordChange && loc.pathname !== "/profile/password") {
+    return <Navigate to="/profile/password" replace />;
+  }
 
   return <Outlet />;
 }
@@ -29,6 +32,9 @@ export function RequireAdmin() {
 
   if (auth.status === "loading") return null;
   if (auth.status === "anon") return <Navigate to="/login" replace state={{ from: loc }} />;
+  if (auth.forcePasswordChange && loc.pathname !== "/profile/password") {
+    return <Navigate to="/profile/password" replace />;
+  }
   if (!canManageUsers(auth)) return <Navigate to="/documents" replace />;
 
   return <Outlet />;
@@ -52,11 +58,11 @@ export default function Login() {
     try {
       const result = await login(data);
       queryClient.setQueryData(["auth", "bootstrap"], result);
+      navigate(result.forcePasswordChange ? "/profile/password" : from, { replace: true });
     } catch (err: unknown) {
       setLoginError(err as HttpError | null);
       return;
     }
-    navigate(from, { replace: true });
   };
 
   // PrimeReact-friendly error helper

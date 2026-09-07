@@ -28,6 +28,7 @@ password: admin123!
 ```
 
 Change the default password before using Autofile in any shared or persistent environment.
+The default admin is required to change this password before using other authenticated APIs.
 
 New users can also be created through `POST /api/v1/auth/register`. Registered users receive the `user` role. Registration passwords must contain at least 12 characters.
 
@@ -75,6 +76,15 @@ Application errors contain a message and use the relevant HTTP status:
 
 Common statuses include `400 Bad Request`, `401 Unauthorized`, `404 Not Found`, `409 Conflict`, and `422 Unprocessable Entity`.
 
+When a user must change their password, authenticated endpoints other than `POST /api/v1/profile/password` return `403 Forbidden`:
+
+```json
+{
+  "message": "Password change required",
+  "code": "password_change_required"
+}
+```
+
 Malformed JSON and invalid path or query input can instead return an Axum framework rejection response.
 
 ## Health
@@ -101,6 +111,7 @@ Malformed JSON and invalid path or query input can instead return an Axum framew
 Base path: `/api/v1/profile`
 
 Profile endpoints require an authenticated access token and operate on the current user.
+When `force_password_change` is set, only `POST /api/v1/profile/password` is available until the password is changed.
 
 ### Endpoints
 
@@ -129,7 +140,7 @@ The profile update endpoint does not accept `role`.
 }
 ```
 
-The current password is not required. New passwords must contain at least 12 characters.
+The current password is not required. New passwords must contain at least 12 characters. A successful password change clears `force_password_change`, returns a fresh access token, and refreshes the session cookie.
 
 ## Users
 
@@ -146,6 +157,7 @@ User management endpoints require an admin access token.
   "email": "admin@example.com",
   "display_name": "Admin",
   "role": "admin",
+  "force_password_change": false,
   "created_at": "2026-08-25T12:00:00Z",
   "updated_at": "2026-08-25T12:00:00Z",
   "password_changed_at": "2026-08-25T12:00:00Z"
@@ -159,7 +171,7 @@ User management endpoints require an admin access token.
 | `GET` | `/api/v1/users` | List users. |
 | `GET` | `/api/v1/users/{id}` | Get a user by ID. |
 | `GET` | `/api/v1/users/by-username/{username}` | Get a user by exact username. |
-| `PATCH` | `/api/v1/users/{id}` | Update email, display name, or role. |
+| `PATCH` | `/api/v1/users/{id}` | Update email, display name, role, or force-password-change status. |
 | `DELETE` | `/api/v1/users/{id}` | Delete a user. |
 
 `PATCH /api/v1/users/{id}` accepts any subset of:
@@ -168,11 +180,12 @@ User management endpoints require an admin access token.
 {
   "email": "admin@example.com",
   "display_name": "Admin",
-  "role": "admin"
+  "role": "admin",
+  "force_password_change": true
 }
 ```
 
-`role` must be either `admin` or `user`. The system user cannot be updated or deleted. An admin cannot change their own role from `admin` to `user`.
+`role` must be either `admin` or `user`. Setting `force_password_change` to `true` blocks the user from calling authenticated APIs other than `POST /api/v1/profile/password` until they change their password. The system user cannot be updated or deleted. An admin cannot change their own role from `admin` to `user`.
 
 ## Classifier Rule Validation
 

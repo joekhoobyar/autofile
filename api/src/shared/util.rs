@@ -26,6 +26,8 @@ pub struct ApiError {
     #[serde(skip_serializing)]
     pub status: StatusCode,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code: Option<&'static str>,
 }
 
 impl ApiError {
@@ -33,6 +35,15 @@ impl ApiError {
         Self {
             status,
             message: message.into(),
+            code: None,
+        }
+    }
+
+    pub fn with_code(status: StatusCode, message: impl Into<String>, code: &'static str) -> Self {
+        Self {
+            status,
+            message: message.into(),
+            code: Some(code),
         }
     }
 

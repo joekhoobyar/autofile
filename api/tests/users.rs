@@ -43,6 +43,7 @@ async fn migrations_seed_default_admin_user() {
     assert_eq!(admin.email, "admin@example.com");
     assert_eq!(admin.display_name, "Admin");
     assert_eq!(admin.role, UserRole::Admin);
+    assert!(admin.force_password_change);
     assert!(
         verify_password("admin123!", &admin.password_hash).expect("hash should parse"),
         "default admin password should verify"
@@ -140,6 +141,7 @@ async fn update_user_updates_fields_and_preserves_password_data() {
             email: Some("users-test-gamma-new@example.com".to_string()),
             display_name: Some("Updated User".to_string()),
             role: None,
+            force_password_change: None,
         },
     )
     .await
@@ -177,11 +179,13 @@ async fn update_user_updates_role() {
             email: None,
             display_name: None,
             role: Some(UserRole::Admin),
+            force_password_change: Some(true),
         },
     )
     .await
     .expect("role update should succeed");
     assert_eq!(promoted.role, UserRole::Admin);
+    assert!(promoted.force_password_change);
 
     let demoted = update_user(
         &mut db,
@@ -191,11 +195,13 @@ async fn update_user_updates_role() {
             email: None,
             display_name: None,
             role: Some(UserRole::User),
+            force_password_change: Some(false),
         },
     )
     .await
     .expect("role update should succeed");
     assert_eq!(demoted.role, UserRole::User);
+    assert!(!demoted.force_password_change);
 }
 
 #[tokio::test]
@@ -222,6 +228,7 @@ async fn update_user_rejects_self_downgrade() {
             email: None,
             display_name: None,
             role: Some(UserRole::User),
+            force_password_change: None,
         },
     )
     .await
@@ -321,6 +328,7 @@ async fn change_password_updates_password_hash_and_timestamp() {
 
     assert_ne!(updated.password_hash, before.password_hash);
     assert!(updated.password_changed_at >= before.password_changed_at);
+    assert!(!updated.force_password_change);
     assert!(
         verify_password("new-password-123", &updated.password_hash).expect("hash should parse"),
         "new password should verify"
@@ -403,6 +411,7 @@ async fn update_user_rejects_system_user() {
             email: Some("new-system-email@example.com".to_string()),
             display_name: Some("Should Not Change".to_string()),
             role: Some(UserRole::User),
+            force_password_change: Some(true),
         },
     )
     .await
@@ -509,6 +518,7 @@ async fn list_users_applies_pagination_search_and_sort() {
             email: None,
             display_name: Some("Captain Bravo".to_string()),
             role: None,
+            force_password_change: None,
         },
     )
     .await

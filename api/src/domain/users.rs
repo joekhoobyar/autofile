@@ -24,6 +24,7 @@ pub struct User {
     pub password_hash: String,
     pub password_changed_at: DateTime<Utc>,
     pub role: UserRole,
+    pub force_password_change: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

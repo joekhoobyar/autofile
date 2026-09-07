@@ -1,12 +1,13 @@
 import React from "react";
 import { apiMutate, setAccessToken } from "./api";
-import type { AuthSession, LoginRequest, LoginResult } from "./models/auth";
+import type { AccessTokenResponse, AuthSession, LoginRequest, LoginResult } from "./models/auth";
 
 export type { UserRole } from "./models/auth";
 
 type JwtPayload = {
   uid?: unknown;
   role?: unknown;
+  force_password_change?: unknown;
 };
 
 function decodeJwtPayload(token: string): JwtPayload | null {
@@ -31,14 +32,18 @@ export function sessionFromAccessToken(token: string): AuthSession | null {
   if (payload?.role === "admin" || payload?.role === "user") {
     const userId = typeof payload.uid === "number" ? payload.uid : Number(payload.uid);
     if (Number.isInteger(userId)) {
-      return { userId, role: payload.role };
+      return {
+        userId,
+        role: payload.role,
+        forcePasswordChange: payload.force_password_change === true,
+      };
     }
   }
   return null;
 }
 
 export async function login(user: LoginRequest): Promise<LoginResult> {
-  const data = await apiMutate<{ access_token: string }>("api/v1/auth/login", {
+  const data = await apiMutate<AccessTokenResponse>("api/v1/auth/login", {
     method: 'POST',
     body: user,
     retryOn401: false,

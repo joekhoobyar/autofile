@@ -4,7 +4,8 @@ INSERT INTO users (
     display_name,
     password_hash,
     password_changed_at,
-    role
+    role,
+    force_password_change
 )
 SELECT
     'admin',
@@ -12,7 +13,8 @@ SELECT
     'Admin',
     '$argon2id$v=19$m=19456,t=2,p=1$AorfSurLxJEiJe7vWSmMRA$FgyltbMBO/UeX1BAJcO/9e4j1y3LombFNpE1sYraSXI',
     NOW(),
-    'admin'
+    'admin',
+    true
 WHERE NOT EXISTS (
     SELECT 1
     FROM users

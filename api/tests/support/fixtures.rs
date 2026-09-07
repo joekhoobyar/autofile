@@ -150,6 +150,7 @@ pub async fn insert_user(
             users::password_hash.eq("hash"),
             users::password_changed_at.eq(now),
             users::role.eq(UserRole::Admin),
+            users::force_password_change.eq(false),
         ))
         .on_conflict(users::id)
         .do_nothing()

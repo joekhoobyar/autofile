@@ -63,6 +63,43 @@ pub async fn register(
     Ok(Json(inserted))
 }
 
+pub fn issue_tokens(
+    state: &AppState,
+    cookies: &Cookies,
+    user: &User,
+) -> Result<AccessTokenResponse, ApiError> {
+    let access_token = sign_access(
+        &state.jwt_secret,
+        user.id,
+        user.role,
+        user.force_password_change,
+        ACCESS_TTL_SECONDS,
+    )
+    .map_err(|_| ApiError::internal_server_error("Token error"))?;
+
+    let refresh_token = sign_refresh(
+        &state.jwt_secret,
+        user.id,
+        user.role,
+        user.force_password_change,
+        REFRESH_TTL_SECONDS,
+    )
+    .map_err(|_| ApiError::internal_server_error("Token error"))?;
+
+    let mut cookie = Cookie::new("refresh_token", refresh_token);
+    cookie.set_http_only(true);
+    cookie.set_secure(is_production());
+    cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
+    cookie.set_path("/api/v1/auth");
+    cookies.add(cookie);
+
+    Ok(AccessTokenResponse {
+        access_token,
+        token_type: "Bearer",
+        expires_in: ACCESS_TTL_SECONDS,
+    })
+}
+
 pub async fn login(
     State(state): State<Arc<AppState>>,
     cookies: Cookies,
@@ -86,26 +123,7 @@ pub async fn login(
         return Err(fail());
     }
 
-    // 2) issue access jwt
-    let access_token = sign_access(&state.jwt_secret, user.id, user.role, ACCESS_TTL_SECONDS)
-        .map_err(|_| ApiError::internal_server_error("Token error"))?;
-
-    // 3) issue refresh token + set cookie
-    let refresh_token = sign_refresh(&state.jwt_secret, user.id, user.role, REFRESH_TTL_SECONDS)
-        .map_err(|_| ApiError::internal_server_error("Token error"))?;
-
-    let mut cookie = Cookie::new("refresh_token", refresh_token);
-    cookie.set_http_only(true);
-    cookie.set_secure(is_production());
-    cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
-    cookie.set_path("/api/v1/auth");
-    cookies.add(cookie);
-
-    Ok(Json(AccessTokenResponse {
-        access_token,
-        token_type: "Bearer",
-        expires_in: ACCESS_TTL_SECONDS,
-    }))
+    Ok(Json(issue_tokens(&state, &cookies, &user)?))
 }
 
 pub async fn logout(cookies: Cookies) -> Result<StatusCode, ApiError> {
@@ -124,6 +142,7 @@ pub async fn logout(cookies: Cookies) -> Result<StatusCode, ApiError> {
 pub async fn refresh(
     State(state): State<Arc<AppState>>,
     cookies: Cookies,
+    DbConn(mut db): DbConn,
 ) -> Result<Json<AccessTokenResponse>, ApiError> {
     let refresh_cookie = cookies
         .get("refresh_token")
@@ -132,19 +151,14 @@ pub async fn refresh(
     let claims = verify_refresh(&state.jwt_secret, refresh_cookie.value())
         .map_err(|_| ApiError::unauthorized("Invalid refresh token"))?;
 
-    let access = sign_access(
-        &state.jwt_secret,
-        claims.uid,
-        claims.role,
-        ACCESS_TTL_SECONDS,
-    )
-    .map_err(|_| ApiError::internal_server_error("Token error"))?;
+    let user = users::table
+        .find(claims.uid)
+        .select(User::as_select())
+        .first::<User>(&mut db)
+        .await
+        .map_err(|_| ApiError::unauthorized("Invalid refresh token"))?;
 
-    Ok(Json(AccessTokenResponse {
-        access_token: access,
-        token_type: "Bearer",
-        expires_in: ACCESS_TTL_SECONDS,
-    }))
+    Ok(Json(issue_tokens(&state, &cookies, &user)?))
 }
 
 pub fn routes() -> Router<Arc<AppState>> {

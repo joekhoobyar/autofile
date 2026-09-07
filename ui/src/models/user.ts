@@ -6,6 +6,7 @@ export interface User {
   email: string;
   display_name: string;
   role: UserRole;
+  force_password_change: boolean;
   created_at: string;
   updated_at: string;
   password_changed_at: string;
@@ -16,4 +17,5 @@ export interface UserUpdateInput {
   email?: string;
   display_name?: string;
   role?: UserRole;
+  force_password_change?: boolean;
 }

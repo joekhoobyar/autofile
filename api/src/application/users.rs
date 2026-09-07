@@ -37,6 +37,7 @@ pub struct UpdateUserInput {
     pub email: Option<String>,
     pub display_name: Option<String>,
     pub role: Option<UserRole>,
+    pub force_password_change: Option<bool>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -59,6 +60,7 @@ struct UserChangeset {
     email: Option<String>,
     display_name: Option<String>,
     role: Option<UserRole>,
+    force_password_change: Option<bool>,
 }
 
 #[derive(Debug, AsChangeset)]
@@ -137,6 +139,7 @@ pub async fn change_password(
         .set((
             users::password_hash.eq(pw_hash),
             users::password_changed_at.eq(diesel::dsl::now),
+            users::force_password_change.eq(false),
             users::updated_at.eq(diesel::dsl::now),
         ))
         .returning(User::as_returning())
@@ -163,6 +166,7 @@ pub async fn update_user(
         email: input.email,
         display_name: input.display_name,
         role: input.role,
+        force_password_change: input.force_password_change,
     };
 
     diesel::update(users::table.filter(users::id.eq(id)))
