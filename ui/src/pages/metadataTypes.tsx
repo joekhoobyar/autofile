@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -215,10 +215,13 @@ function MetadataTypeForm({ data }: Readonly<{ data?: Partial<MetadataType> }>) 
   const dataType = useWatch({ control, name: 'data_type' });
   const initialChoicesText = data?.options?.choices?.join('\n') ?? '';
   const [choicesText, setChoicesText] = useState(initialChoicesText);
+  const [prevChoicesText, setPrevChoicesText] = useState(initialChoicesText);
 
-  useEffect(() => {
+  // Reset the editable choices text whenever the loaded metadata type changes.
+  if (prevChoicesText !== initialChoicesText) {
+    setPrevChoicesText(initialChoicesText);
     setChoicesText(initialChoicesText);
-  }, [initialChoicesText]);
+  }
 
   const submitter = async (data: Partial<MetadataType>) => {
     await saveMetadataType.mutateAsync(data, {

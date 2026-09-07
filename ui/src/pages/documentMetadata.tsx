@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useDocument, useSaveDocumentMetadata } from '../queries/useDocuments';
@@ -53,10 +53,13 @@ export function EditDocumentMetadata() {
     }).sort((a, b) => a.name.localeCompare(b.name));
   }, [doc?.metadata, dtmdts, mdt]);
   const [rows, setRows] = useState<MetadataRow[]>([]);
+  const [prevInitialRows, setPrevInitialRows] = useState(initialRows);
 
-  useEffect(() => {
+  // Reset editable rows whenever the loaded metadata changes.
+  if (prevInitialRows !== initialRows) {
+    setPrevInitialRows(initialRows);
     setRows(initialRows);
-  }, [initialRows]);
+  }
 
   const missingRequiredRows = useMemo(
     () => rows.filter((row) => row.required && !isMetadataValueSet(row.value)),

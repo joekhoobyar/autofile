@@ -85,7 +85,6 @@ function Layout() {
   useEffect(() => {
     if (prevPathRef.current !== pathname) {
       prevPathRef.current = pathname;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMobileOpen(false);
     }
   }, [pathname, mobileOpen]);

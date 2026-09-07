@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
+import { useId, useRef, useState, type CSSProperties } from 'react';
 
 import { Button } from 'primereact/button';
 import { Dialog } from 'primereact/dialog';
@@ -35,7 +35,6 @@ export function DocumentActions({
 }: Readonly<DocumentActionsProps>) {
   const actionMenu = useRef<Menu>(null);
   const toast = useRef<Toast>(null);
-  const documentIdsRef = useRef(documentIds);
   const menuId = useId();
   const hasSelection = documentIds.length > 0;
   const deleteDocument = useDeleteDocument();
@@ -56,10 +55,6 @@ export function DocumentActions({
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [removeTagVisible, setRemoveTagVisible] = useState(false);
   const [removeTagId, setRemoveTagId] = useState<number | null>(null);
-
-  useEffect(() => {
-    documentIdsRef.current = documentIds;
-  }, [documentIds]);
 
   const showSuccess = (summary: string, detail: string) => {
     toast.current?.show({ severity: 'success', summary, detail });
@@ -85,7 +80,7 @@ export function DocumentActions({
   };
 
   const saveAddToCabinet = async () => {
-    const currentDocumentIds = documentIdsRef.current;
+    const currentDocumentIds = documentIds;
     const currentSelectionCount = currentDocumentIds.length;
     if (!selectedCabinetId || currentSelectionCount === 0) return;
     try {
@@ -110,7 +105,7 @@ export function DocumentActions({
   };
 
   const saveRemoveFromCabinet = async () => {
-    const currentDocumentIds = documentIdsRef.current;
+    const currentDocumentIds = documentIds;
     const currentSelectionCount = currentDocumentIds.length;
     if (!removeCabinetId || currentSelectionCount === 0) return;
     try {
@@ -134,7 +129,7 @@ export function DocumentActions({
   };
 
   const saveAddTag = async () => {
-    const currentDocumentIds = documentIdsRef.current;
+    const currentDocumentIds = documentIds;
     const currentSelectionCount = currentDocumentIds.length;
     if (!selectedTagId || currentSelectionCount === 0) return;
     try {
@@ -159,7 +154,7 @@ export function DocumentActions({
   };
 
   const saveRemoveTag = async () => {
-    const currentDocumentIds = documentIdsRef.current;
+    const currentDocumentIds = documentIds;
     const currentSelectionCount = currentDocumentIds.length;
     if (!removeTagId || currentSelectionCount === 0) return;
     try {
@@ -173,7 +168,7 @@ export function DocumentActions({
   };
 
   const deleteSelectedDocuments = async () => {
-    const currentDocumentIds = documentIdsRef.current;
+    const currentDocumentIds = documentIds;
     const currentSelectionCount = currentDocumentIds.length;
     if (currentSelectionCount === 0) return;
     try {
@@ -187,7 +182,7 @@ export function DocumentActions({
   };
 
   const reprocessSelectedDocuments = async () => {
-    const currentDocumentIds = documentIdsRef.current;
+    const currentDocumentIds = documentIds;
     const currentSelectionCount = currentDocumentIds.length;
     if (currentSelectionCount === 0) return;
     try {
@@ -200,7 +195,7 @@ export function DocumentActions({
   };
 
   const generateThumbnailsForSelectedDocuments = async () => {
-    const currentDocumentIds = documentIdsRef.current;
+    const currentDocumentIds = documentIds;
     const currentSelectionCount = currentDocumentIds.length;
     if (currentSelectionCount === 0) return;
     try {
@@ -213,7 +208,7 @@ export function DocumentActions({
   };
 
   const classifySelectedDocuments = async () => {
-    const currentDocumentIds = documentIdsRef.current;
+    const currentDocumentIds = documentIds;
     const currentSelectionCount = currentDocumentIds.length;
     if (currentSelectionCount === 0) return;
     try {
@@ -287,14 +282,13 @@ export function DocumentActions({
     });
   };
 
-  const actionMenuItems: MenuItem[] = [];
-  if (includeNewDocument) {
-    actionMenuItems.push(
-      { icon: 'pi pi-upload', label: 'New Document', url: '/documents/new' },
-      { separator: true },
-    );
-  }
-  actionMenuItems.push(
+  const actionMenuItems: MenuItem[] = [
+    ...(includeNewDocument
+      ? [
+          { icon: 'pi pi-upload', label: 'New Document', url: '/documents/new' },
+          { separator: true },
+        ]
+      : []),
     { icon: 'pi pi-plus-circle', label: 'Add to Cabinet', command: () => { openAddToCabinetDialog(); }, disabled: !hasSelection },
     { icon: 'pi pi-minus-circle', label: 'Remove from Cabinet', command: () => { openRemoveFromCabinetDialog(); }, disabled: !hasSelection },
     { separator: true },
@@ -306,7 +300,7 @@ export function DocumentActions({
     { icon: 'pi pi-bolt', label: 'Classify Document', command: () => { confirmClassifySelectedDocuments(); }, disabled: !hasSelection || classifyDocument.isPending },
     { separator: true },
     { icon: 'pi pi-trash', label: 'Delete Document', command: () => { confirmDeleteSelectedDocuments(); }, disabled: !hasSelection },
-  );
+  ];
 
   return (
     <div className={containerClassName}>

@@ -865,13 +865,17 @@ function AdvancedYamlDialog({
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
+  const [syncedRules, setSyncedRules] = useState<ClassifierRules | null>(null);
 
-  useEffect(() => {
-    if (visible) {
-      setDraft(rulesToYaml(rules));
-      setError(null);
-    }
-  }, [rules, visible]);
+  // Reset the draft whenever the dialog is opened or the rules change.
+  if (visible && syncedRules !== rules) {
+    setSyncedRules(rules);
+    setDraft(rulesToYaml(rules));
+    setError(null);
+  }
+  if (!visible && syncedRules !== null) {
+    setSyncedRules(null);
+  }
 
   const apply = async () => {
     const parsed = yamlToRules(draft);
