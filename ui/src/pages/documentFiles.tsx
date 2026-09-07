@@ -87,6 +87,11 @@ function clampPage(page: number, pageCount: number) {
   return Math.min(Math.max(Math.trunc(page), 1), pageCount);
 }
 
+function parsePageInputValue(value: string) {
+  const parsed = Number(value.trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function useSelectedFileId(files: DocumentFile[] | undefined, initialFileId?: number) {
   const [selectedFileId, setSelectedFileId] = useState<number | null>(initialFileId ?? null);
 
@@ -1116,8 +1121,11 @@ function VirtualizedPagePreview({
             inputClassName="aut-document-preview-page-input"
             onValueChange={(event) => setPageInput(event.value ?? null)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' && pageInput !== null) {
-                scrollToPage(pageInput);
+              if (event.key === 'Enter') {
+                const enteredPage = parsePageInputValue(event.currentTarget.value);
+                if (enteredPage !== null) {
+                  scrollToPage(enteredPage);
+                }
               }
             }}
           />
