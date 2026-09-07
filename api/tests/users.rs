@@ -1,8 +1,9 @@
 mod support;
 
 use autofile_api::application::users::{
-    ListUsersInput, UpdateUserInput, UserSortField, delete_user, get_user_by_id,
-    get_user_by_username, list_users, update_user,
+    ChangePasswordInput, ListUsersInput, UpdateProfileInput, UpdateUserInput, UserSortField,
+    change_password, delete_user, get_profile, get_user_by_id, get_user_by_username, list_users,
+    update_profile, update_user,
 };
 use autofile_api::domain::users::{User, UserRole};
 use autofile_api::schema::users;
@@ -233,6 +234,129 @@ async fn update_user_rejects_self_downgrade() {
 }
 
 #[tokio::test]
+async fn get_profile_returns_current_user() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(
+        &mut db,
+        107,
+        "users-test-profile",
+        "users-test-profile@example.com",
+    )
+    .await;
+
+    let profile = get_profile(&mut db, 107)
+        .await
+        .expect("profile should load");
+
+    assert_eq!(profile.id, 107);
+    assert_eq!(profile.username, "users-test-profile");
+}
+
+#[tokio::test]
+async fn update_profile_updates_only_profile_fields() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(
+        &mut db,
+        108,
+        "users-test-profile-update",
+        "users-test-profile-update@example.com",
+    )
+    .await;
+
+    let before = load_user(&mut db, 108).await;
+    let updated = update_profile(
+        &mut db,
+        108,
+        UpdateProfileInput {
+            email: Some("users-test-profile-new@example.com".to_string()),
+            display_name: Some("Profile User".to_string()),
+        },
+    )
+    .await
+    .expect("profile update should succeed");
+
+    assert_eq!(updated.email, "users-test-profile-new@example.com");
+    assert_eq!(updated.display_name, "Profile User");
+    assert_eq!(updated.role, before.role);
+    assert_eq!(updated.password_hash, before.password_hash);
+    assert_eq!(updated.password_changed_at, before.password_changed_at);
+}
+
+#[tokio::test]
+async fn change_password_updates_password_hash_and_timestamp() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(
+        &mut db,
+        109,
+        "users-test-password",
+        "users-test-password@example.com",
+    )
+    .await;
+
+    let before = load_user(&mut db, 109).await;
+    let updated = change_password(
+        &mut db,
+        109,
+        ChangePasswordInput {
+            new_password: "new-password-123".to_string(),
+        },
+    )
+    .await
+    .expect("password change should succeed");
+
+    assert_ne!(updated.password_hash, before.password_hash);
+    assert!(updated.password_changed_at >= before.password_changed_at);
+    assert!(
+        verify_password("new-password-123", &updated.password_hash).expect("hash should parse"),
+        "new password should verify"
+    );
+}
+
+#[tokio::test]
+async fn change_password_rejects_short_password() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(
+        &mut db,
+        110,
+        "users-test-short-password",
+        "users-test-short-password@example.com",
+    )
+    .await;
+
+    let err = change_password(
+        &mut db,
+        110,
+        ChangePasswordInput {
+            new_password: "too-short".to_string(),
+        },
+    )
+    .await
+    .expect_err("short password should fail");
+
+    assert_eq!(err.status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 async fn delete_user_removes_row_and_future_reads_fail() {
     let test_db = TestDatabase::new().await;
     let mut db = test_db
@@ -433,6 +557,22 @@ fn update_user_input_rejects_unknown_password_fields() {
 
     assert!(
         err.to_string().contains("unknown field `password`"),
+        "unexpected deserialize error: {err}"
+    );
+}
+
+#[test]
+fn update_profile_input_rejects_role_field() {
+    let payload = json!({
+        "email": "new@example.com",
+        "role": "admin"
+    });
+
+    let err = serde_json::from_value::<UpdateProfileInput>(payload)
+        .expect_err("role field should be rejected");
+
+    assert!(
+        err.to_string().contains("unknown field `role`"),
         "unexpected deserialize error: {err}"
     );
 }

@@ -20,6 +20,7 @@ pub mod api {
     pub mod document_types_metadata_types;
     pub mod documents;
     pub mod metadata_types;
+    pub mod profile;
     pub mod tag_documents;
     pub mod tags;
     pub mod users;

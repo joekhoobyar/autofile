@@ -30,6 +30,7 @@ import { EditClassifierBlock, ListClassifierBlocks, NewClassifierBlock } from '.
 import { DocumentClassifierTest } from './pages/documentClassifierTest.tsx';
 import { DocumentTemplateTest } from './pages/documentTemplateTest.tsx';
 import { EditUser, ListUsers, ViewUser } from './pages/users.tsx';
+import { Profile } from './pages/profile.tsx';
 import { About } from './pages/about.tsx';
 
 export function SideNav() {
@@ -60,18 +61,26 @@ export function SideNav() {
           );
         })}
       </div>
-      <NavLink
-        to="/about"
-        className={({ isActive }) => `side-nav-item side-nav-secondary ${isActive ? 'is-active' : ''}`}
-      >
-        About
-      </NavLink>
-      <NavLink
-        to="/logout"
-        className={`side-nav-item side-nav-logout ${isLogoutActive ? 'is-active' : ''}`}
-      >
-        Logout
-      </NavLink>
+      <div className="side-nav-bottom">
+        <NavLink
+          to="/about"
+          className={({ isActive }) => `side-nav-item side-nav-secondary ${isActive ? 'is-active' : ''}`}
+        >
+          About
+        </NavLink>
+        <NavLink
+          to="/profile"
+          className={({ isActive }) => `side-nav-item side-nav-secondary ${isActive ? 'is-active' : ''}`}
+        >
+          Profile
+        </NavLink>
+        <NavLink
+          to="/logout"
+          className={`side-nav-item side-nav-logout ${isLogoutActive ? 'is-active' : ''}`}
+        >
+          Logout
+        </NavLink>
+      </div>
     </nav>
   );
 }
@@ -217,6 +226,10 @@ const router = createBrowserRouter([
           { path: ':id', element: <ViewUser/> },
           { path: ':id/edit', element: <EditUser/> },
         ],
+      },
+      {
+        path: 'profile',
+        element: <Profile />,
       },
       {
         path: 'about',

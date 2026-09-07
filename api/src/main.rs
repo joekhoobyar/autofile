@@ -213,6 +213,7 @@ async fn main() {
         .nest("/documents", api::document_files::routes())
         .nest("/documents", api::document_metadatas::routes())
         .nest("/metadata-types", api::metadata_types::routes())
+        .nest("/profile", api::profile::routes())
         .nest("/users", api::users::routes())
         .nest("/tags", api::tags::routes())
         .nest("/tags", api::tag_documents::routes());

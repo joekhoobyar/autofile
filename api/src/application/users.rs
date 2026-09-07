@@ -1,5 +1,6 @@
 use crate::domain::users::{User, UserRole};
 use crate::schema::users;
+use crate::shared::auth::hash_password;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
 
 use bb8::PooledConnection;
@@ -38,6 +39,19 @@ pub struct UpdateUserInput {
     pub role: Option<UserRole>,
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateProfileInput {
+    pub email: Option<String>,
+    pub display_name: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChangePasswordInput {
+    pub new_password: String,
+}
+
 #[derive(Debug, AsChangeset)]
 #[diesel(table_name = users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -45,6 +59,14 @@ struct UserChangeset {
     email: Option<String>,
     display_name: Option<String>,
     role: Option<UserRole>,
+}
+
+#[derive(Debug, AsChangeset)]
+#[diesel(table_name = users)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+struct ProfileChangeset {
+    email: Option<String>,
+    display_name: Option<String>,
 }
 
 pub async fn get_user_by_id(
@@ -69,6 +91,58 @@ pub async fn get_user_by_username(
         .first::<User>(db)
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch user"))
+}
+
+pub async fn get_profile(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    user_id: i64,
+) -> Result<User, ApiError> {
+    get_user_by_id(db, user_id).await
+}
+
+pub async fn update_profile(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    user_id: i64,
+    input: UpdateProfileInput,
+) -> Result<User, ApiError> {
+    if user_id == SYSTEM_USER_ID {
+        return Err(ApiError::bad_request("Cannot update system user"));
+    }
+
+    let changes = ProfileChangeset {
+        email: input.email,
+        display_name: input.display_name,
+    };
+
+    diesel::update(users::table.filter(users::id.eq(user_id)))
+        .set((&changes, users::updated_at.eq(diesel::dsl::now)))
+        .returning(User::as_returning())
+        .get_result(db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update profile"))
+}
+
+pub async fn change_password(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    user_id: i64,
+    input: ChangePasswordInput,
+) -> Result<User, ApiError> {
+    if user_id == SYSTEM_USER_ID {
+        return Err(ApiError::bad_request("Cannot update system user"));
+    }
+
+    let pw_hash = hash_password(&input.new_password).map_err(ApiError::bad_request)?;
+
+    diesel::update(users::table.filter(users::id.eq(user_id)))
+        .set((
+            users::password_hash.eq(pw_hash),
+            users::password_changed_at.eq(diesel::dsl::now),
+            users::updated_at.eq(diesel::dsl::now),
+        ))
+        .returning(User::as_returning())
+        .get_result(db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to change password"))
 }
 
 pub async fn update_user(

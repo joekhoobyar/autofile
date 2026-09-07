@@ -92,8 +92,44 @@ Malformed JSON and invalid path or query input can instead return an Axum framew
 - `/api/v1/document-types-metadata-types`
 - `/api/v1/documents`
 - `/api/v1/metadata-types`
+- `/api/v1/profile`
 - `/api/v1/tags`
 - `/api/v1/users`
+
+## Profile
+
+Base path: `/api/v1/profile`
+
+Profile endpoints require an authenticated access token and operate on the current user.
+
+### Endpoints
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| `GET` | `/api/v1/profile` | Get the current user's profile. |
+| `PATCH` | `/api/v1/profile` | Update the current user's email or display name. |
+| `POST` | `/api/v1/profile/password` | Change the current user's password. |
+
+`PATCH /api/v1/profile` accepts any subset of:
+
+```json
+{
+  "email": "admin@example.com",
+  "display_name": "Admin"
+}
+```
+
+The profile update endpoint does not accept `role`.
+
+`POST /api/v1/profile/password` accepts:
+
+```json
+{
+  "new_password": "new-password-123"
+}
+```
+
+The current password is not required. New passwords must contain at least 12 characters.
 
 ## Users
 

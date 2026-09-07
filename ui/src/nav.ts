@@ -119,6 +119,8 @@ export function useBreadcrumbs(): { home: MenuItem; model: MenuItem[] } {
   );
 
   const model = useMemo(() => {
+    if (pathname === "/profile") return [{ label: "Profile", command: () => navigate("/profile") }];
+
     const section = NAV.find(s => pathname === s.to || pathname.startsWith(s.to + "/"));
     if (!section) return [];
 
