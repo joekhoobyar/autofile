@@ -27,7 +27,7 @@
     "primeicons": "^7.0.0",
     "primereact": "^10.9.7",
     "react": "^19.2.8",
-    "react-dom": "^19.2.0",
+    "react-dom": "^19.2.8",
     "react-hook-form": "^7.69.0",
     "react-router-dom": "^7.18.3",
     "yaml": "^2.9.0"
