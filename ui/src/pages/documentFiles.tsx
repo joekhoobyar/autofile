@@ -39,6 +39,7 @@ const PREVIEW_PAGE_OVERSCAN = 8;
 const PREVIEW_PAGE_ASPECT_RATIO = 11 / 8.5;
 const PREVIEW_PAGE_CHROME_HEIGHT = 86;
 const PREVIEW_END_THRESHOLD_PX = 24;
+const PREVIEW_JUMP_REALIGN_DELAYS_MS = [0, 40, 120, 300, 700];
 
 type DocumentFileThumbnailProps = {
   documentId: number;
@@ -897,11 +898,14 @@ function VirtualizedPagePreview({
   onSettledPageChange,
 }: Readonly<VirtualizedPagePreviewProps>) {
   const readerRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const restoredFileIdRef = useRef<number | null>(null);
   const settledPageRef = useRef<number>(clampPage(initialPage, pageCount));
+  const jumpTimeoutsRef = useRef<number[]>([]);
   const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
+  const [toolbarHeight, setToolbarHeight] = useState(0);
   const [readerWidth, setReaderWidth] = useState(0);
   const [currentPage, setCurrentPage] = useState(() => clampPage(initialPage, pageCount));
   const [pageInput, setPageInput] = useState<number | null>(() => clampPage(initialPage, pageCount));
@@ -910,6 +914,20 @@ function VirtualizedPagePreview({
     const appMain = document.querySelector<HTMLElement>('.app-main');
     setScrollElement(appMain);
   }, []);
+
+  useEffect(() => {
+    if (!scrollElement) return;
+
+    scrollElement.addEventListener('wheel', clearJumpRealignments, { passive: true });
+    scrollElement.addEventListener('touchstart', clearJumpRealignments, { passive: true });
+    scrollElement.addEventListener('keydown', clearJumpRealignments);
+
+    return () => {
+      scrollElement.removeEventListener('wheel', clearJumpRealignments);
+      scrollElement.removeEventListener('touchstart', clearJumpRealignments);
+      scrollElement.removeEventListener('keydown', clearJumpRealignments);
+    };
+  }, [scrollElement]);
 
   useLayoutEffect(() => {
     const reader = readerRef.current;
@@ -920,6 +938,18 @@ function VirtualizedPagePreview({
 
     const observer = new ResizeObserver(updateWidth);
     observer.observe(reader);
+    return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    const toolbar = toolbarRef.current;
+    if (!toolbar) return;
+
+    const updateHeight = () => setToolbarHeight(toolbar.offsetHeight);
+    updateHeight();
+
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(toolbar);
     return () => observer.disconnect();
   }, []);
 
@@ -949,17 +979,17 @@ function VirtualizedPagePreview({
     Math.round((readerWidth || 820) * PREVIEW_PAGE_ASPECT_RATIO) + PREVIEW_PAGE_CHROME_HEIGHT
   );
 
-  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: pageCount,
     getScrollElement: () => scrollElement,
     estimateSize: () => estimatedPageHeight,
     overscan: PREVIEW_PAGE_OVERSCAN,
     scrollMargin,
+    scrollPaddingStart: toolbarHeight,
     getItemKey: (index) => `${documentFileId}-${index + 1}`,
     useFlushSync: false,
     onChange: (instance, sync) => {
-      const viewportStart = Math.max(0, (instance.scrollOffset ?? 0) - instance.options.scrollMargin);
+      const viewportStart = Math.max(0, (instance.scrollOffset ?? 0) - instance.options.scrollMargin + toolbarHeight);
       const viewportEnd = viewportStart + (instance.scrollRect?.height ?? 0);
       const totalSize = instance.getTotalSize();
 
@@ -996,6 +1026,50 @@ function VirtualizedPagePreview({
     },
   });
 
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) => {
+    const anchorOffset = Math.max(0, (instance.scrollOffset ?? 0) - instance.options.scrollMargin + toolbarHeight);
+    return item.end <= anchorOffset;
+  };
+
+  const clearJumpRealignments = () => {
+    for (const timeout of jumpTimeoutsRef.current) {
+      window.clearTimeout(timeout);
+    }
+    jumpTimeoutsRef.current = [];
+  };
+
+  const alignPageToStart = (page: number) => {
+    const index = clampPage(page, pageCount) - 1;
+    const virtualPage = virtualizer.getVirtualItems().find((item) => item.index === index);
+
+    if (!virtualPage || !scrollElement) {
+      virtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
+      return;
+    }
+
+    scrollElement.scrollTo({
+      top: Math.max(0, virtualizer.options.scrollMargin + virtualPage.start - toolbarHeight),
+      behavior: 'auto',
+    });
+  };
+
+  const scrollToPage = (page: number) => {
+    const nextPage = clampPage(page, pageCount);
+    setCurrentPage(nextPage);
+    setPageInput(nextPage);
+    settledPageRef.current = nextPage;
+    onSettledPageChange(nextPage);
+
+    clearJumpRealignments();
+    virtualizer.scrollToIndex(nextPage - 1, { align: 'start', behavior: 'auto' });
+
+    jumpTimeoutsRef.current = PREVIEW_JUMP_REALIGN_DELAYS_MS.map((delay) => (
+      window.setTimeout(() => alignPageToStart(nextPage), delay)
+    ));
+  };
+
+  useEffect(() => clearJumpRealignments, []);
+
   useEffect(() => {
     const page = clampPage(initialPage, pageCount);
     setCurrentPage(page);
@@ -1006,28 +1080,21 @@ function VirtualizedPagePreview({
     restoredFileIdRef.current = documentFileId;
 
     const frame = window.requestAnimationFrame(() => {
-      virtualizer.scrollToIndex(page - 1, { align: 'start', behavior: 'auto' });
+      scrollToPage(page);
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [documentFileId, initialPage, pageCount, virtualizer]);
+    // Restore the requested page on file changes only; URL updates during scroll should not re-jump.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentFileId]);
 
   if (pageCount <= 0) {
     return <Message severity="info" text="No pages available for this file." />;
   }
 
-  const scrollToPage = (page: number) => {
-    const nextPage = clampPage(page, pageCount);
-    setCurrentPage(nextPage);
-    setPageInput(nextPage);
-    settledPageRef.current = nextPage;
-    onSettledPageChange(nextPage);
-    virtualizer.scrollToIndex(nextPage - 1, { align: 'start', behavior: 'auto' });
-  };
-
   return (
     <div ref={readerRef} className="aut-document-preview-reader">
-      <div className="aut-document-preview-toolbar">
+      <div ref={toolbarRef} className="aut-document-preview-toolbar">
         <Button
           icon="pi pi-angle-left"
           label="Previous"
