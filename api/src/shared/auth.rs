@@ -287,9 +287,21 @@ fn extract_access_claims(parts: &Parts, state: &Arc<AppState>) -> Result<AccessC
 mod tests {
     use super::{sign_access, sign_refresh, verify_access, verify_refresh};
     use crate::domain::users::UserRole;
+    use std::sync::Once;
+
+    // 1. Declare a global static initializer
+    static INIT: Once = Once::new();
+
+    // 2. Wrap your one-time setup code in a function
+    fn setup() {
+        INIT.call_once(|| {
+            jsonwebtoken::crypto::aws_lc::DEFAULT_PROVIDER.install_default().expect("Failed to install rustls crypto provider");
+        });
+    }
 
     #[test]
     fn access_token_round_trips_role_claim() {
+        setup();
         let secret = b"test-secret";
         let token = sign_access(secret, 42, UserRole::Admin, 3600).expect("sign should succeed");
 
@@ -301,6 +313,7 @@ mod tests {
 
     #[test]
     fn refresh_token_round_trips_role_claim() {
+        setup();
         let secret = b"test-secret";
         let token = sign_refresh(secret, 7, UserRole::User, 3600).expect("sign should succeed");
 

@@ -40,6 +40,12 @@ async fn main() {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
+    // Initialize JSON Web Token
+    jsonwebtoken::crypto::aws_lc::DEFAULT_PROVIDER.install_default().expect("Failed to install rustls crypto provider");
+    let jwt_secret = std::env::var("JWT_SECRET")
+        .expect("JWT_SECRET not set")
+        .into_bytes();
+
     // Redis storage (queue) for background jobs.
     let redis_url = std::env::var("REDIS_URL")
         .unwrap_or_else(|_| "redis://127.0.0.1:6379/?connect_timeout=2&timeout=2".to_string());
@@ -62,7 +68,6 @@ async fn main() {
         s3_defaults = s3_defaults.endpoint_url(endpoint);
     }
     let s3_config = s3_defaults.load().await;
-
     let mut s3_client_config = aws_sdk_s3::Config::builder()
         .behavior_version(aws_sdk_s3::config::BehaviorVersion::latest())
         .credentials_provider(s3_config.credentials_provider().unwrap())
@@ -75,6 +80,7 @@ async fn main() {
     let s3_client = aws_sdk_s3::Client::from_conf(s3_client_config.build());
     let s3_bucket = std::env::var("S3_BUCKET").expect("S3_BUCKET must be set");
 
+    // Initialize allowed origins for CORS
     let allowed_origins = std::env::var("ALLOWED_ORIGINS")
         .ok()
         .map(|value| {
@@ -87,10 +93,6 @@ async fn main() {
         })
         .filter(|origins| !origins.is_empty())
         .unwrap_or_else(|| vec!["http://localhost:5173".to_string()]);
-
-    let jwt_secret = std::env::var("JWT_SECRET")
-        .expect("JWT_SECRET not set")
-        .into_bytes();
 
     // Build shared application state
     let app_state = Arc::new(AppState {
