@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
 import { apiFetch, apiFetchRaw, apiMutate, HttpError, parseApiError } from '../api';
 import { type DocumentFile, type DocumentFileOcrPage, type DocumentFilePage } from '../models/documentFile';
 import { useBlobObjectUrl } from './blobUrl';
@@ -92,15 +92,20 @@ export function useDocumentFilePageImage(
   documentId: string | number,
   documentFileId: string | number,
   pageNumber: number,
-  options = {}
+  options: Omit<UseQueryOptions<Blob | null, HttpError>, 'queryKey' | 'queryFn'> = {}
 ): UseQueryResult<string | undefined, HttpError> {
+  const { enabled = true, ...queryOptions } = options;
   const query = useQuery<Blob | null, HttpError>({
     queryKey: ['documentFilePageImage', 'get', documentId, documentFileId, pageNumber],
-    enabled: !!documentId && !!documentFileId && !!pageNumber,
-    ...options,
-    queryFn: async () => {
+    enabled: !!documentId && !!documentFileId && !!pageNumber && enabled,
+    staleTime: Infinity,
+    gcTime: 30_000,
+    retry: 1,
+    ...queryOptions,
+    queryFn: async ({ signal }) => {
       const res = await apiFetchRaw(
-        `api/v1/documents/${documentId}/files/${documentFileId}/pages/${pageNumber}/image`
+        `api/v1/documents/${documentId}/files/${documentFileId}/pages/${pageNumber}/image`,
+        { signal }
       );
       if (res.status === 404) {
         return null;
