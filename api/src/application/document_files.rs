@@ -170,13 +170,10 @@ async fn run_process<R: ProcessRunner + ?Sized>(
 ) -> JobResult<()> {
     let output = runner.run(program, args).await?;
     if !output.success {
-        let error = std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!(
-                "{tool_name} failed with status {}: {}",
-                output.status, output.stderr
-            ),
-        );
+        let error = std::io::Error::other(format!(
+            "{tool_name} failed with status {}: {}",
+            output.status, output.stderr
+        ));
         return Err(error.into());
     }
 
@@ -805,10 +802,8 @@ async fn convert_office_document_to_pdf_with_runner<R: ProcessRunner + ?Sized>(
     }
     .await;
 
-    if copied_input {
-        if let Err(err) = tokio::fs::remove_file(&office_input).await {
-            tracing::warn!(error = %err, path = %office_input.display(), "failed to remove soffice temp input");
-        }
+    if copied_input && let Err(err) = tokio::fs::remove_file(&office_input).await {
+        tracing::warn!(error = %err, path = %office_input.display(), "failed to remove soffice temp input");
     }
     if let Err(err) = tokio::fs::remove_dir_all(&convert_dir).await {
         tracing::warn!(error = %err, path = %convert_dir.display(), "failed to remove soffice temp dir");
@@ -1215,10 +1210,7 @@ async fn extract_pdf_page_image(
         .status()
         .await?;
     if !status.success() {
-        let error = std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("pdftocairo failed with status {status}"),
-        );
+        let error = std::io::Error::other(format!("pdftocairo failed with status {status}"));
         return Err(error.into());
     }
 
@@ -1244,14 +1236,11 @@ pub(crate) async fn convert_image_to_png(
         .await?;
 
     if !output.status.success() {
-        let error = std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!(
-                "magick failed with status {}: {}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr)
-            ),
-        );
+        let error = std::io::Error::other(format!(
+            "magick failed with status {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        ));
         return Err(error.into());
     }
 
@@ -1328,14 +1317,11 @@ async fn count_pages(file: String, _state: Data<Arc<AppState>>) -> JobResult<u32
     let output = Command::new("pdfinfo").arg(file).output().await?;
 
     if !output.status.success() {
-        let error = std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!(
-                "pdfinfo failed with status {}: {}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr)
-            ),
-        );
+        let error = std::io::Error::other(format!(
+            "pdfinfo failed with status {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        ));
         return Err(error.into());
     }
 
@@ -1343,19 +1329,15 @@ async fn count_pages(file: String, _state: Data<Arc<AppState>>) -> JobResult<u32
     for line in output_str.lines() {
         if line.starts_with("Pages:") {
             let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() == 2 {
-                if let Ok(page_count) = parts[1].parse::<u32>() {
-                    return Ok(page_count);
-                }
+            if parts.len() == 2
+                && let Ok(page_count) = parts[1].parse::<u32>()
+            {
+                return Ok(page_count);
             }
         }
     }
 
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        "Failed to parse page count from pdfinfo output",
-    )
-    .into())
+    Err(std::io::Error::other("Failed to parse page count from pdfinfo output").into())
 }
 
 /**

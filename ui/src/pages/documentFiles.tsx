@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { Button } from 'primereact/button';
 import { Card } from 'primereact/card';
@@ -9,6 +10,7 @@ import { DataView, DataViewLayoutOptions } from 'primereact/dataview';
 import { Divider } from 'primereact/divider';
 import { Dropdown } from 'primereact/dropdown';
 import { FileUpload, type FileUploadFile, type FileUploadHandlerEvent, type FileUploadSelectEvent, type FileUploadUploadEvent, type ItemTemplateOptions } from 'primereact/fileupload';
+import { InputNumber } from 'primereact/inputnumber';
 import { Message } from 'primereact/message';
 import { ProgressBar } from 'primereact/progressbar';
 import { Skeleton } from 'primereact/skeleton';
@@ -32,6 +34,14 @@ import {
   useDeleteDocumentFile,
 } from '../queries/useDocumentFiles';
 import { useId } from '../util';
+
+const PREVIEW_PAGE_OVERSCAN = 8;
+const PREVIEW_PAGE_ASPECT_RATIO = 11 / 8.5;
+const PREVIEW_PAGE_CHROME_HEIGHT = 86;
+const PREVIEW_END_THRESHOLD_PX = 24;
+const PREVIEW_JUMP_REALIGN_DELAYS_MS = [0, 40, 120, 300, 700];
+const previewPageHeightCache = new Map<string, number>();
+const previewFileHeightEstimateCache = new Map<number, number>();
 
 type DocumentFileThumbnailProps = {
   documentId: number;
@@ -71,6 +81,21 @@ function formatBytes(size: number) {
     unitIndex += 1;
   }
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function clampPage(page: number, pageCount: number) {
+  if (pageCount <= 0) return 1;
+  if (!Number.isFinite(page)) return 1;
+  return Math.min(Math.max(Math.trunc(page), 1), pageCount);
+}
+
+function parsePageInputValue(value: string) {
+  const parsed = Number(value.trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function previewPageHeightCacheKey(documentFileId: number, pageNumber: number) {
+  return `${documentFileId}:${pageNumber}`;
 }
 
 function useSelectedFileId(files: DocumentFile[] | undefined, initialFileId?: number) {
@@ -838,62 +863,399 @@ function PageImageItem({ documentId, documentFileId, pageNumber }: Readonly<Page
   return (
     <div>
       <Divider align="center">Page {pageNumber}</Divider>
-      {isError && <Message severity="error" text={error.message} />}
-      {!isLoading && !isError && !imageUrl && (
-        <Message severity="info" text="Page image not available yet." />
-      )}
-      {!isError && (isLoading || imageUrl) && (
-        <div
-          style={{
-            position: 'relative',
-            width: '100%',
-            minHeight: '20rem',
-            overflow: 'hidden',
-          }}
-        >
-          {!isImageReady && (
-            <div className="p-4">
-                <div className="flex mb-3">
-                    <Skeleton shape="circle" size="4rem" className="mr-2"></Skeleton>
-                    <div>
-                        <Skeleton width="10rem" className="mb-2"></Skeleton>
-                        <Skeleton width="5rem" className="mb-2"></Skeleton>
-                        <Skeleton height=".5rem"></Skeleton>
-                    </div>
-                </div>
-                <Skeleton width="100%" height="30rem"></Skeleton>
-                <div className="flex justify-content-between mt-3 mb-3">
-                    <Skeleton width="4rem" height="2rem"></Skeleton>
-                    <Skeleton width="4rem" height="2rem"></Skeleton>
-                </div>
-                <Skeleton width="100%" height="30rem"></Skeleton>
-            </div>
-          )}
-          {imageUrl && (
-            <img
-              src={imageUrl}
-              alt={`Page ${pageNumber}`}
-              onLoad={() => setLoadedImageUrl(imageUrl)}
-              style={{
-                width: '100%',
-                height: 'auto',
-                display: 'block',
-                opacity: isImageReady ? 1 : 0,
-                transition: 'opacity 180ms ease',
-              }}
-            />
-          )}
+      <div className="aut-document-preview-page-frame">
+        {isError && (
+          <div className="aut-document-preview-page-message">
+            <Message severity="error" text={error.message} />
+          </div>
+        )}
+        {!isLoading && !isError && !imageUrl && (
+          <div className="aut-document-preview-page-message">
+            <Message severity="info" text="Page image not available yet." />
+          </div>
+        )}
+        {!isError && !isImageReady && (isLoading || imageUrl) && (
+          <Skeleton className="aut-document-preview-page-skeleton" />
+        )}
+        {imageUrl && (
+          <img
+            src={imageUrl}
+            alt={`Page ${pageNumber}`}
+            decoding="async"
+            onLoad={() => setLoadedImageUrl(imageUrl)}
+            className={classNames('aut-document-preview-page-image', {
+              'is-loaded': isImageReady,
+            })}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+type VirtualizedPagePreviewProps = {
+  documentId: number;
+  documentFileId: number;
+  pageCount: number;
+  initialPage: number;
+  onSettledPageChange: (page: number) => void;
+};
+
+function VirtualizedPagePreview({
+  documentId,
+  documentFileId,
+  pageCount,
+  initialPage,
+  onSettledPageChange,
+}: Readonly<VirtualizedPagePreviewProps>) {
+  const readerRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const restoredFileIdRef = useRef<number | null>(null);
+  const settledPageRef = useRef<number>(clampPage(initialPage, pageCount));
+  const jumpTimeoutsRef = useRef<number[]>([]);
+  const cachedWidthRef = useRef(0);
+  const isScrollbarDraggingRef = useRef(false);
+  const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+  const [toolbarHeight, setToolbarHeight] = useState(0);
+  const [readerWidth, setReaderWidth] = useState(0);
+  const [fileEstimatedPageHeight, setFileEstimatedPageHeight] = useState<number | null>(
+    () => previewFileHeightEstimateCache.get(documentFileId) ?? null
+  );
+  const [currentPage, setCurrentPage] = useState(() => clampPage(initialPage, pageCount));
+  const [pageInput, setPageInput] = useState<number | null>(() => clampPage(initialPage, pageCount));
+
+  function clearJumpRealignments() {
+    for (const timeout of jumpTimeoutsRef.current) {
+      window.clearTimeout(timeout);
+    }
+    jumpTimeoutsRef.current = [];
+  }
+
+  useLayoutEffect(() => {
+    const appMain = document.querySelector<HTMLElement>('.app-main');
+    setScrollElement(appMain);
+  }, []);
+
+  useEffect(() => {
+    if (!scrollElement) return;
+
+    scrollElement.addEventListener('wheel', clearJumpRealignments, { passive: true });
+    scrollElement.addEventListener('touchstart', clearJumpRealignments, { passive: true });
+    scrollElement.addEventListener('keydown', clearJumpRealignments);
+
+    return () => {
+      scrollElement.removeEventListener('wheel', clearJumpRealignments);
+      scrollElement.removeEventListener('touchstart', clearJumpRealignments);
+      scrollElement.removeEventListener('keydown', clearJumpRealignments);
+    };
+  }, [scrollElement]);
+
+  useLayoutEffect(() => {
+    const reader = readerRef.current;
+    if (!reader) return;
+
+    const updateWidth = () => setReaderWidth(reader.clientWidth);
+    updateWidth();
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(reader);
+    return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    const toolbar = toolbarRef.current;
+    if (!toolbar) return;
+
+    const updateHeight = () => setToolbarHeight(toolbar.offsetHeight);
+    updateHeight();
+
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(toolbar);
+    return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!scrollElement || !listRef.current) return;
+
+    const updateScrollMargin = () => {
+      if (!listRef.current) return;
+      const scrollRect = scrollElement.getBoundingClientRect();
+      const listRect = listRef.current.getBoundingClientRect();
+      setScrollMargin(listRect.top - scrollRect.top + scrollElement.scrollTop);
+    };
+
+    updateScrollMargin();
+    const observer = new ResizeObserver(updateScrollMargin);
+    observer.observe(scrollElement);
+    observer.observe(listRef.current);
+    window.addEventListener('resize', updateScrollMargin);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateScrollMargin);
+    };
+  }, [scrollElement]);
+
+  const estimatedPageHeight = Math.max(
+    720,
+    Math.round((readerWidth || 820) * PREVIEW_PAGE_ASPECT_RATIO) + PREVIEW_PAGE_CHROME_HEIGHT
+  );
+
+  const getEstimatedPageHeight = (index: number) => {
+    const cachedHeight = previewPageHeightCache.get(previewPageHeightCacheKey(documentFileId, index + 1));
+    return cachedHeight ?? fileEstimatedPageHeight ?? estimatedPageHeight;
+  };
+
+  const virtualizer = useVirtualizer({
+    count: pageCount,
+    getScrollElement: () => scrollElement,
+    estimateSize: getEstimatedPageHeight,
+    measureElement: (element) => {
+      const indexValue = element.getAttribute('data-index');
+      const index = indexValue ? Number(indexValue) : NaN;
+      if (Number.isFinite(index) && isScrollbarDraggingRef.current) {
+        return getEstimatedPageHeight(index);
+      }
+
+      const height = element.getBoundingClientRect().height;
+      const hasLoadedImage = !!element.querySelector('.aut-document-preview-page-image.is-loaded');
+
+      if (Number.isFinite(index) && height > 0 && hasLoadedImage) {
+        previewPageHeightCache.set(previewPageHeightCacheKey(documentFileId, index + 1), height);
+
+        if (!previewFileHeightEstimateCache.has(documentFileId)) {
+          previewFileHeightEstimateCache.set(documentFileId, height);
+          setFileEstimatedPageHeight(height);
+        }
+      }
+
+      return height;
+    },
+    overscan: PREVIEW_PAGE_OVERSCAN,
+    scrollMargin,
+    scrollPaddingStart: toolbarHeight,
+    getItemKey: (index) => `${documentFileId}-${index + 1}`,
+    useFlushSync: false,
+    onChange: (instance, sync) => {
+      const viewportStart = Math.max(0, (instance.scrollOffset ?? 0) - instance.options.scrollMargin + toolbarHeight);
+      const viewportEnd = viewportStart + (instance.scrollRect?.height ?? 0);
+      const totalSize = instance.getTotalSize();
+
+      const nextPage = (() => {
+        if (viewportEnd >= totalSize - PREVIEW_END_THRESHOLD_PX) {
+          return pageCount;
+        }
+
+        const visibleItems = instance
+          .getVirtualItems()
+          .filter((item) => item.end > viewportStart && item.start < viewportEnd);
+
+        const mostVisibleItem = visibleItems.reduce<(typeof visibleItems)[number] | undefined>(
+          (best, item) => {
+            const itemVisibleHeight = Math.min(item.end, viewportEnd) - Math.max(item.start, viewportStart);
+            const bestVisibleHeight = best
+              ? Math.min(best.end, viewportEnd) - Math.max(best.start, viewportStart)
+              : -1;
+
+            return itemVisibleHeight > bestVisibleHeight ? item : best;
+          },
+          undefined
+        );
+
+        return clampPage((mostVisibleItem?.index ?? 0) + 1, pageCount);
+      })();
+
+      setCurrentPage((prevPage) => (prevPage === nextPage ? prevPage : nextPage));
+
+      if (!sync && settledPageRef.current !== nextPage) {
+        settledPageRef.current = nextPage;
+        onSettledPageChange(nextPage);
+      }
+    },
+  });
+
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) => {
+    const anchorOffset = Math.max(0, (instance.scrollOffset ?? 0) - instance.options.scrollMargin + toolbarHeight);
+    return item.end <= anchorOffset;
+  };
+
+  useEffect(() => {
+    if (!readerWidth) return;
+    if (Math.abs(cachedWidthRef.current - readerWidth) < 8) return;
+
+    cachedWidthRef.current = readerWidth;
+    for (const key of previewPageHeightCache.keys()) {
+      if (key.startsWith(`${documentFileId}:`)) {
+        previewPageHeightCache.delete(key);
+      }
+    }
+    previewFileHeightEstimateCache.delete(documentFileId);
+    setFileEstimatedPageHeight(null);
+    virtualizer.measure();
+  }, [documentFileId, readerWidth, virtualizer]);
+
+  useEffect(() => {
+    if (!scrollElement) return;
+
+    const startScrollbarDrag = (event: MouseEvent) => {
+      if (event.target !== scrollElement) return;
+      const rect = scrollElement.getBoundingClientRect();
+      if (event.clientX < rect.right - 20) return;
+      isScrollbarDraggingRef.current = true;
+    };
+
+    const stopScrollbarDrag = () => {
+      if (!isScrollbarDraggingRef.current) return;
+      isScrollbarDraggingRef.current = false;
+      virtualizer.measure();
+    };
+
+    scrollElement.addEventListener('mousedown', startScrollbarDrag);
+    window.addEventListener('mouseup', stopScrollbarDrag);
+    window.addEventListener('blur', stopScrollbarDrag);
+
+    return () => {
+      scrollElement.removeEventListener('mousedown', startScrollbarDrag);
+      window.removeEventListener('mouseup', stopScrollbarDrag);
+      window.removeEventListener('blur', stopScrollbarDrag);
+    };
+  }, [scrollElement, virtualizer]);
+
+  const alignPageToStart = (page: number) => {
+    const index = clampPage(page, pageCount) - 1;
+    const virtualPage = virtualizer.getVirtualItems().find((item) => item.index === index);
+
+    if (!virtualPage || !scrollElement) {
+      virtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
+      return;
+    }
+
+    scrollElement.scrollTo({
+      top: Math.max(0, virtualPage.start - toolbarHeight),
+      behavior: 'auto',
+    });
+  };
+
+  const scrollToPage = (page: number) => {
+    const nextPage = clampPage(page, pageCount);
+    setCurrentPage(nextPage);
+    setPageInput(nextPage);
+    settledPageRef.current = nextPage;
+    onSettledPageChange(nextPage);
+
+    clearJumpRealignments();
+    virtualizer.scrollToIndex(nextPage - 1, { align: 'start', behavior: 'auto' });
+
+    jumpTimeoutsRef.current = PREVIEW_JUMP_REALIGN_DELAYS_MS.map((delay) => (
+      window.setTimeout(() => alignPageToStart(nextPage), delay)
+    ));
+  };
+
+  useEffect(() => clearJumpRealignments, []);
+
+  useEffect(() => {
+    const page = clampPage(initialPage, pageCount);
+    setCurrentPage(page);
+    setPageInput(page);
+    settledPageRef.current = page;
+
+    if (restoredFileIdRef.current === documentFileId) return;
+    restoredFileIdRef.current = documentFileId;
+
+    const frame = window.requestAnimationFrame(() => {
+      scrollToPage(page);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+    // Restore the requested page on file changes only; URL updates during scroll should not re-jump.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentFileId]);
+
+  if (pageCount <= 0) {
+    return <Message severity="info" text="No pages available for this file." />;
+  }
+
+  return (
+    <div ref={readerRef} className="aut-document-preview-reader">
+      <div ref={toolbarRef} className="aut-document-preview-toolbar">
+        <Button
+          icon="pi pi-angle-left"
+          label="Previous"
+          size="small"
+          outlined
+          disabled={currentPage <= 1}
+          onClick={() => scrollToPage(currentPage - 1)}
+        />
+        <div className="aut-document-preview-page-status">
+          Page {currentPage.toLocaleString()} of {pageCount.toLocaleString()}
         </div>
-      )}
+        <div className="aut-document-preview-page-jump">
+          <span className="font-medium">Jump to</span>
+          <InputNumber
+            value={pageInput}
+            min={1}
+            max={pageCount}
+            useGrouping={false}
+            inputClassName="aut-document-preview-page-input"
+            onValueChange={(event) => setPageInput(event.value ?? null)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                const enteredPage = parsePageInputValue(event.currentTarget.value);
+                if (enteredPage !== null) {
+                  scrollToPage(enteredPage);
+                }
+              }
+            }}
+          />
+          <Button label="Go" size="small" outlined disabled={pageInput === null} onClick={() => pageInput !== null && scrollToPage(pageInput)} />
+        </div>
+        <Button
+          icon="pi pi-angle-right"
+          iconPos="right"
+          label="Next"
+          size="small"
+          outlined
+          disabled={currentPage >= pageCount}
+          onClick={() => scrollToPage(currentPage + 1)}
+        />
+      </div>
+
+      <div ref={listRef} className="aut-document-preview-virtual-list">
+        <div
+          className="aut-document-preview-virtual-spacer"
+          style={{ height: `${virtualizer.getTotalSize()}px` }}
+        >
+          {virtualizer.getVirtualItems().map((virtualPage) => {
+            const pageNumber = virtualPage.index + 1;
+            return (
+              <div
+                key={virtualPage.key}
+                data-index={virtualPage.index}
+                ref={virtualizer.measureElement}
+                className="aut-document-preview-virtual-row"
+                style={{ transform: `translateY(${virtualPage.start - virtualizer.options.scrollMargin}px)` }}
+              >
+                <PageImageItem
+                  documentId={documentId}
+                  documentFileId={documentFileId}
+                  pageNumber={pageNumber}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
 
 export function DocumentFilePagePreview() {
   const documentId = useId('id');
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const initialFileId = Number(searchParams.get('file_id'));
   const resolvedInitialFileId = Number.isNaN(initialFileId) ? undefined : initialFileId;
+  const initialPage = clampPage(Number(searchParams.get('page')), Number.MAX_SAFE_INTEGER);
   const { data: document, isLoading: isDocumentLoading, isError: isDocumentError, error: documentError } = useDocument(documentId);
   const { data: files, isLoading: isFilesLoading, isError: isFilesError, error: filesError } = useDocumentFiles(documentId);
   const { effectiveFileId, effectiveFile, setSelectedFileId } = useSelectedFileId(files, resolvedInitialFileId);
@@ -903,10 +1265,20 @@ export function DocumentFilePagePreview() {
     [files]
   );
 
-  const pageNumbers = useMemo(() => {
-    if (!effectiveFile || effectiveFile.pages <= 0) return [];
-    return Array.from({ length: effectiveFile.pages }, (_, index) => index + 1);
-  }, [effectiveFile]);
+  const updatePreviewParams = (fileId: number, page: number) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('file_id', String(fileId));
+    next.set('page', String(clampPage(page, effectiveFile?.pages ?? Number.MAX_SAFE_INTEGER)));
+    setSearchParams(next, { replace: true });
+  };
+
+  const selectFile = (fileId: number) => {
+    setSelectedFileId(fileId);
+    const next = new URLSearchParams(searchParams);
+    next.set('file_id', String(fileId));
+    next.set('page', '1');
+    setSearchParams(next, { replace: true });
+  };
 
   if (isDocumentError) {
     return <Message severity="error" text={documentError.message} />;
@@ -926,7 +1298,7 @@ export function DocumentFilePagePreview() {
             <span className="font-medium">File</span>
             <Dropdown
               value={effectiveFileId}
-              onChange={(event) => setSelectedFileId(event.value as number)}
+              onChange={(event) => selectFile(event.value as number)}
               options={fileOptions}
               placeholder={isFilesLoading ? 'Loading files...' : 'Select a file'}
               className="w-full md:w-20rem"
@@ -939,19 +1311,13 @@ export function DocumentFilePagePreview() {
           )}
 
           {effectiveFileId && (
-            <div className="flex flex-column gap-3">
-              {!isFilesLoading && pageNumbers.length === 0 && (
-                <Message severity="info" text="No pages available for this file." />
-              )}
-              {pageNumbers.map((pageNumber) => (
-                <PageImageItem
-                  key={`${effectiveFileId}-${pageNumber}`}
-                  documentId={documentId}
-                  documentFileId={effectiveFileId}
-                  pageNumber={pageNumber}
-                />
-              ))}
-            </div>
+            <VirtualizedPagePreview
+              documentId={documentId}
+              documentFileId={effectiveFileId}
+              pageCount={effectiveFile?.pages ?? 0}
+              initialPage={initialPage}
+              onSettledPageChange={(page) => updatePreviewParams(effectiveFileId, page)}
+            />
           )}
         </div>
       </Card>
