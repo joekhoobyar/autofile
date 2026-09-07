@@ -35,7 +35,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: api
+          workspaces: api -> target
           key: ${{ steps.rust-toolchain.outputs.cachekey }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
