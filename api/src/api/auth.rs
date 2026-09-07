@@ -44,7 +44,7 @@ pub async fn register(
     DbConn(mut db): DbConn,
     Json(req): Json<RegisterRequest>,
 ) -> Result<Json<User>, ApiError> {
-    let pw_hash = hash_password(&req.password).map_err(|m| ApiError::bad_request(m))?;
+    let pw_hash = hash_password(&req.password).map_err(ApiError::bad_request)?;
 
     let inserted: User = diesel::insert_into(users::table)
         .values((

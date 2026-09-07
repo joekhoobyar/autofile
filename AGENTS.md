@@ -55,6 +55,8 @@ API integration tests live in `api/tests/`. They start a fresh `postgres:17-alpi
 
 ## UI Architecture
 
+Use Node.js 24 for UI development and CI.
+
 - `ui/src/App.tsx`: application shell, provider composition, route table, and access guards.
 - `ui/src/nav.ts`: primary navigation and breadcrumb metadata. Update it with route changes.
 - `ui/src/pages/`: route-level list, create, edit, and detail screens.
