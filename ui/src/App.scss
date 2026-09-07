@@ -61,6 +61,89 @@ body {
   margin: 0;
 }
 
+.aut-document-preview-reader {
+  width: 100%;
+}
+
+.aut-document-preview-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.5rem;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface-card);
+  font-size: 0.875rem;
+}
+
+.aut-document-preview-page-status {
+  min-width: 8.5rem;
+  text-align: center;
+  font-weight: 600;
+}
+
+.aut-document-preview-page-jump {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.aut-document-preview-page-input {
+  width: 4.75rem;
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+  font-size: 0.875rem;
+}
+
+.aut-document-preview-virtual-list {
+  width: 100%;
+}
+
+.aut-document-preview-virtual-spacer {
+  position: relative;
+  width: 100%;
+}
+
+.aut-document-preview-virtual-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding-top: 0.25rem;
+  padding-bottom: 1rem;
+}
+
+.aut-document-preview-page-frame {
+  position: relative;
+  width: 100%;
+  min-height: 20rem;
+  overflow: hidden;
+}
+
+.aut-document-preview-page-skeleton {
+  display: block;
+  width: 100%;
+  min-height: 42rem;
+  aspect-ratio: 8.5 / 11;
+}
+
+.aut-document-preview-page-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.aut-document-preview-page-image.is-loaded {
+  opacity: 1;
+}
+
 .aut-about-license-row {
   display: flex;
   align-items: center;
@@ -163,6 +246,20 @@ body {
 
   .aut-document-view-menu-mobile {
     display: flex;
+  }
+
+  .aut-document-preview-toolbar {
+    justify-content: stretch;
+  }
+
+  .aut-document-preview-toolbar .p-button {
+    flex: 1 1 8rem;
+  }
+
+  .aut-document-preview-page-status,
+  .aut-document-preview-page-jump {
+    flex: 1 1 100%;
+    justify-content: center;
   }
 }
 
