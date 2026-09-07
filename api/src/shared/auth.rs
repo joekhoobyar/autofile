@@ -295,7 +295,9 @@ mod tests {
     // 2. Wrap your one-time setup code in a function
     fn setup() {
         INIT.call_once(|| {
-            jsonwebtoken::crypto::aws_lc::DEFAULT_PROVIDER.install_default().expect("Failed to install rustls crypto provider");
+            jsonwebtoken::crypto::aws_lc::DEFAULT_PROVIDER
+                .install_default()
+                .expect("Failed to install rustls crypto provider");
         });
     }
 

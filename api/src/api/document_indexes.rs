@@ -146,56 +146,52 @@ async fn delete(
 ) -> Result<Json<()>, ApiError> {
     let document_index_id = id;
 
-    db.transaction::<_, diesel::result::Error, _>(move |conn| {
-        Box::pin(async move {
-            // Delete associated document index documents
-            let value_ids = document_index_values::table
-                .inner_join(
-                    document_index_templates::table
-                        .on(document_index_values::document_index_template_id
-                            .eq(document_index_templates::id)),
-                )
-                .filter(document_index_templates::document_index_id.eq(document_index_id))
-                .select(document_index_values::id);
-            diesel::delete(
-                document_index_documents::table
-                    .filter(document_index_documents::document_index_value_id.eq_any(value_ids)),
-            )
-            .execute(conn)
-            .await?;
+    db.transaction::<_, diesel::result::Error, _>(async move |conn| {
+        // Delete associated document index documents
+        let value_ids = document_index_values::table
+            .inner_join(document_index_templates::table.on(
+                document_index_values::document_index_template_id.eq(document_index_templates::id),
+            ))
+            .filter(document_index_templates::document_index_id.eq(document_index_id))
+            .select(document_index_values::id);
+        diesel::delete(
+            document_index_documents::table
+                .filter(document_index_documents::document_index_value_id.eq_any(value_ids)),
+        )
+        .execute(conn)
+        .await?;
 
-            // Delete associated document index values
-            let template_ids = document_index_templates::table
-                .filter(document_index_templates::document_index_id.eq(document_index_id))
-                .select(document_index_templates::id);
-            diesel::delete(
-                document_index_values::table
-                    .filter(document_index_values::document_index_template_id.eq_any(template_ids)),
-            )
-            .execute(conn)
-            .await?;
+        // Delete associated document index values
+        let template_ids = document_index_templates::table
+            .filter(document_index_templates::document_index_id.eq(document_index_id))
+            .select(document_index_templates::id);
+        diesel::delete(
+            document_index_values::table
+                .filter(document_index_values::document_index_template_id.eq_any(template_ids)),
+        )
+        .execute(conn)
+        .await?;
 
-            // Delete associated document templates
-            diesel::delete(
-                document_index_templates::table
-                    .filter(document_index_templates::document_index_id.eq(document_index_id)),
-            )
-            .execute(conn)
-            .await?;
+        // Delete associated document templates
+        diesel::delete(
+            document_index_templates::table
+                .filter(document_index_templates::document_index_id.eq(document_index_id)),
+        )
+        .execute(conn)
+        .await?;
 
-            // Delete the document index
-            let affected = diesel::delete(
-                document_indexes::table.filter(document_indexes::id.eq(document_index_id)),
-            )
-            .execute(conn)
-            .await?;
+        // Delete the document index
+        let affected = diesel::delete(
+            document_indexes::table.filter(document_indexes::id.eq(document_index_id)),
+        )
+        .execute(conn)
+        .await?;
 
-            if affected == 0 {
-                return Err(diesel::result::Error::NotFound);
-            }
+        if affected == 0 {
+            return Err(diesel::result::Error::NotFound);
+        }
 
-            Ok(())
-        })
+        Ok(())
     })
     .await
     .map_err(|e| {
