@@ -127,9 +127,31 @@ The same resolved credentials are used for the RustFS Secret and the API Secret'
 
 `rustfs.secret.existingSecret` must match `objectStorage.rustfs.existingSecret`; the RustFS subchart consumes the parent-managed Secret through that value.
 
-### Helm Template Caveat
+### Helm Template And Argo CD Caveat
 
 Offline `helm template` runs cannot read live cluster Secrets, so generated credentials change between offline renders. Real `helm upgrade` operations against a cluster reuse existing generated credentials through Helm `lookup`.
+
+Argo CD uses Helm primarily to render manifests with `helm template` and then manages the application lifecycle itself. Because the chart's generated credentials depend on `randAlphaNum` when `lookup` cannot read an existing live Secret, Argo CD can see the application as perpetually `OutOfSync` and may repeatedly apply changed Secret values during automated sync.
+
+When deploying this chart with Argo CD, set stable credential values explicitly or manage the Secrets outside the chart. At minimum, configure:
+
+```yaml
+secrets:
+  JWT_SECRET: replace-with-stable-jwt-secret
+
+valkey:
+  auth:
+    aclUsers:
+      default:
+        password: replace-with-stable-valkey-password
+
+objectStorage:
+  rustfs:
+    accessKey: replace-with-stable-rustfs-access-key
+    secretKey: replace-with-stable-rustfs-secret-key
+```
+
+For production GitOps deployments, prefer a secret-management workflow such as External Secrets, Sealed Secrets, SOPS, or an existing Kubernetes Secret referenced through chart values instead of relying on generated defaults.
 
 ## Common Examples
 
