@@ -1,6 +1,6 @@
 # Metadata
 
-Metadata lets Autofile store structured information about documents. It is useful for describing documents consistently, finding them later, applying classifier results, and building [document indexes](indexes.md).
+Metadata lets Autofile store structured information about documents. It is useful for describing documents consistently, finding them later, applying [classification](classification.md) results, and building [document indexes](indexes.md).
 
 ## Metadata Model
 

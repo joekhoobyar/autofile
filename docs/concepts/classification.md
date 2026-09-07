@@ -4,8 +4,6 @@ Document classification is the process where by Autofile recognizes documents an
 
 Autofile implements document classification with a rules engine.  Rules are grouped into a blocks called classifier blocks.  Each block contains structured rules that describe when the block matches a document and what actions it should take on matched documents.
 
-
-
 ## What Document Classification Can Do
 
 Document classification can apply:

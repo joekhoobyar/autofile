@@ -362,7 +362,7 @@ function ClassifierBlockForm({ data }: Readonly<{ data?: Partial<ClassifierBlock
         <div className="col-12 md:col-6 lg:col-4">
           <label htmlFor="order" className="font-medium mb-2 block">Order</label>
           <InputText id="order" value={data?.order?.toString() ?? 'Assigned automatically on create'} disabled />
-          <small className="text-600">Order is managed by the API.</small>
+          <small className="text-600">Order is managed by drag-and-drop on the list page.</small>
         </div>
 
         <div className="col-12 md:col-6 lg:col-4">

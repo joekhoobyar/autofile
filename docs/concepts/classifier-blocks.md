@@ -17,10 +17,10 @@ Open the Classifiers page, then create a new classifier block or edit an existin
 
 The top of the form contains the block-level settings:
 
-- Name: the human-readable block name.
-- Description: optional context for other users.
-- Enabled: disabled blocks are ignored during classification.
-- Order: assigned and managed by the API.
+- **Name:** the human-readable block name.
+- **Description:** optional context for other users.
+- **Enabled:** disabled blocks are ignored during classification.
+- **Order:** managed by drag-and-drop on the list page.
 
 ![screenshot: classifier block form top section with name, description, enabled, and order](../assets/classifier-block-form-top.png){width="100%"}
 
@@ -40,12 +40,12 @@ Disabled blocks are ignored.
 
 Classifier blocks run in ascending order by their `order` field.
 
-The Classifiers page shows the block order and allows reordering when the list is sorted by order ascending.
+The Classifiers list page shows the block order and allows reordering when the list is sorted by order ascending.
 
 Order matters because:
 
 - Earlier blocks run first.
-- Earlier blocks can compute actions that later blocks use for metadata matching.
+- Earlier blocks can compute metadata actions that later blocks use for metadata matching.
 - Later actions overwrite earlier actions with the same key.
 - A matching block can stop the entire classification run unless the continue option is enabled.
 
@@ -70,8 +70,8 @@ The block matches when any top-level pattern matches. If no top-level patterns a
 
 Each pattern can contain:
 
-- Text: a regular expression matched against the document text.
-- Metadata conditions: exact string comparisons against computed actions or stored document metadata.
+- **Text pattern:** a regular expression matched against the document text.
+- **Metadata conditions:** exact string comparisons against computed actions or stored document metadata.
 
 ![screenshot: match patterns section with one expanded pattern showing text and metadata conditions](../assets/classifier-block-form-match_patterns.png){width="100%"}
 
@@ -89,18 +89,18 @@ Common actions include:
 
 | Action | Effect |
 | --- | --- |
-| Suggested document type | Sets the document type. |
-| Suggested filename | Sets the document title. |
-| Suggested tags | Adds tags. |
-| Suggested cabinets | Adds the document to cabinets. |
-| Metadata Type | Sets document metadata. |
-| Scratch value | Stores a temporary value for later rules. |
+| **Document Type** | Sets the document type. |
+| **Document Title** | Sets the document title. |
+| **Tags** | Adds tags. |
+| **Cabinets** | Adds the document to cabinets. |
+| **Metadata** | Sets document metadata. |
+| **Scratch** | Stores a temporary value for later rules. |
 
-The referenced Document Type, tag, cabinet, and Metadata Type records must already exist. Unknown tag and cabinet slugs are skipped. Unknown metadata slugs are logged and skipped.
+The referenced *Document Type*, *Tag*, *Cabinet*, or *Metadata* records must already exist. Unknown tag and cabinet slugs are skipped. Unknown metadata slugs are logged and skipped.
 
-Classifier metadata must be associated with the resulting Document Type. Date and Lookup values must pass the same validation as values entered on the document's [Metadata page](document-metadata.md). Invalid values for known fields fail classification rather than being skipped.
+Classifier metadata must be associated with the resulting *Document Type*. Date and Lookup values must pass the same validation as values entered on the document's [Metadata page](document-metadata.md). Invalid values for known fields fail classification rather than being skipped.
 
-Use the **Add action** split button to add a normal action. Open the dropdown side of the same button to add a scratch action.
+Use the **Add action** split button to add a normal action. Open the dropdown side of the same button to **Add scratch** values. Scratch values allow you to store information in a "scratch" area that is not saved to the document but *is* available for later classifier blocks that run.
 
 !!! warning "Classifier updates are not atomic"
     Classifier actions are persisted in stages. A title, Document Type, tag, or cabinet change may already have been saved if a later metadata value fails validation. Review the document after correcting a failed classifier run.
@@ -125,9 +125,9 @@ Child rules run only after the top-level block matches. Autofile evaluates every
 
 Each child rule contains:
 
-- Pattern: text and metadata conditions that decide whether the child rule runs.
-- Modifier pipeline: optional transformations that create additional snippets.
-- Actions: values computed when the child rule matches.
+- **Pattern:** text and metadata conditions that decide whether the child rule runs.
+- **Modifier pipeline:** optional transformations that create additional snippets.
+- **Actions:** values computed when the child rule matches.
 
 Use child rules to extract specific values after a document has already been recognized by the parent block. For example, a top-level pattern might recognize an invoice, while child rules extract invoice number, invoice date, account number, or total amount.
 
