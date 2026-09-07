@@ -1,4 +1,4 @@
-.PHONY: image version-bump
+.PHONY: image version-bump release-push release
 
 image:
 	@set -e; \
@@ -15,6 +15,18 @@ image:
 	fi; \
 	echo "GIT_SHA=$$git_sha docker buildx bake --push $(TARGET) $(ARGS)"; \
 	GIT_SHA="$$git_sha" docker buildx bake --push $(TARGET) $(ARGS)
+
+release: release-push version-bump
+
+release-push:
+	@set -e; \
+	current_version="$$(perl -ne 'print $$1 and exit if /^version = "([0-9]+\.[0-9]+\.[0-9]+)"/' api/Cargo.toml)"; \
+	if [ -z "$$current_version" ]; then \
+		echo "Unable to determine current version from api/Cargo.toml" >&2; \
+		exit 1; \
+	fi; \
+	git tag "v$$current_version" && \
+	git push origin "v$$current_version"
 
 version-bump:
 	@set -e; \
