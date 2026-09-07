@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use argon2::{
     Argon2,
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    password_hash::{PasswordHasher, PasswordVerifier, phc::PasswordHash},
 };
 use axum::{
     extract::FromRequestParts,
@@ -10,7 +10,6 @@ use axum::{
 };
 use chrono::Utc;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
-use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::users::UserRole;
@@ -24,13 +23,12 @@ pub fn hash_password(password: &str) -> Result<String, &'static str> {
         return Err("password too short");
     }
 
-    let salt = SaltString::generate(&mut OsRng);
-
     // Argon2id with reasonable defaults; you can tune parameters later.
+    // `hash_password` generates a random salt internally via `getrandom`.
     let argon2 = Argon2::default();
 
     let hash = argon2
-        .hash_password(password.as_bytes(), &salt)
+        .hash_password(password.as_bytes())
         .map_err(|_| "hashing failed")?
         .to_string();
 
