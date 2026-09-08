@@ -42,11 +42,11 @@ async fn update(
 }
 
 async fn delete(
-    _admin: AdminUser,
+    AdminUser { user_id }: AdminUser,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
 ) -> Result<Json<()>, ApiError> {
-    delete_user(&mut db, id).await?;
+    delete_user(&mut db, user_id, id).await?;
     Ok(Json(()))
 }
 

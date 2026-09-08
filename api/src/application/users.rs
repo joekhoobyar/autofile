@@ -179,10 +179,15 @@ pub async fn update_user(
 
 pub async fn delete_user(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    acting_user_id: i64,
     id: i64,
 ) -> Result<(), ApiError> {
     if id == SYSTEM_USER_ID {
         return Err(ApiError::bad_request("Cannot delete system user"));
+    }
+
+    if id == acting_user_id {
+        return Err(ApiError::bad_request("Cannot delete your own user"));
     }
 
     let affected = diesel::delete(users::table.filter(users::id.eq(id)))

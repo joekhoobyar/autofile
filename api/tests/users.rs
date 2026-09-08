@@ -380,7 +380,7 @@ async fn delete_user_removes_row_and_future_reads_fail() {
     )
     .await;
 
-    delete_user(&mut db, 104)
+    delete_user(&mut db, 1, 104)
         .await
         .expect("delete should succeed");
 
@@ -434,7 +434,7 @@ async fn delete_user_rejects_system_user() {
         .await
         .expect("db connection should succeed");
 
-    let err = delete_user(&mut db, 1)
+    let err = delete_user(&mut db, 2, 1)
         .await
         .expect_err("system user delete should fail");
     assert_eq!(err.status, StatusCode::BAD_REQUEST);
@@ -443,6 +443,33 @@ async fn delete_user_rejects_system_user() {
         .await
         .expect("system user should still exist");
     assert_eq!(system_user.id, 1);
+}
+
+#[tokio::test]
+async fn delete_user_rejects_self_delete() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(
+        &mut db,
+        107,
+        "users-test-self-delete",
+        "users-test-self-delete@example.com",
+    )
+    .await;
+
+    let err = delete_user(&mut db, 107, 107)
+        .await
+        .expect_err("self delete should fail");
+    assert_eq!(err.status, StatusCode::BAD_REQUEST);
+
+    let user = get_user_by_id(&mut db, 107)
+        .await
+        .expect("user should still exist");
+    assert_eq!(user.id, 107);
 }
 
 #[tokio::test]

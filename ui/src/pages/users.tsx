@@ -20,7 +20,7 @@ import { useId } from "../util";
 import type { UserRole } from "../models/auth";
 import type { User, UserUpdateInput } from "../models/user";
 import { useDeleteUser, useSaveUser, useUser, useUsers } from "../queries/useUsers";
-import { canManageUsers, useAuth } from "../auth";
+import { canManageUsers, type AuthState, useAuth } from "../auth";
 import { useHashListParams } from "../util/listParamsHash";
 import { AppToast } from "../components/AppToast";
 
@@ -41,6 +41,12 @@ function formatDate(value: string): string {
 
 function formatRole(role: UserRole): string {
   return USER_ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role;
+}
+
+function userDeleteDisabledReason(user: User, auth: AuthState): string | null {
+  if (isSystemUser(user.id)) return "System user cannot be deleted.";
+  if (auth.status === "authed" && auth.userId === user.id) return "You cannot delete your own user.";
+  return null;
 }
 
 function passwordChangedTemplate(user: User): string {
@@ -146,17 +152,19 @@ export function ListUsers() {
         disabled={isSystemUser(user.id)}
         onClick={() => navigate(`${user.id}/edit`)}
       />
-      <Button
-        type="button"
-        icon="pi pi-trash"
-        severity="danger"
-        rounded
-        text
-        raised
-        aria-description="Delete"
-        disabled={isSystemUser(user.id)}
-        onClick={() => confirmDeleteUser(user)}
-      />
+      <span title={userDeleteDisabledReason(user, auth) ?? "Delete"} style={{ display: "inline-flex" }}>
+        <Button
+          type="button"
+          icon="pi pi-trash"
+          severity="danger"
+          rounded
+          text
+          raised
+          aria-description="Delete"
+          disabled={!!userDeleteDisabledReason(user, auth)}
+          onClick={() => confirmDeleteUser(user)}
+        />
+      </span>
     </div>
   );
 
@@ -268,7 +276,7 @@ export function ViewUser() {
   };
 
   const confirmDelete = () => {
-    if (isSystemUser(data.id)) {
+    if (userDeleteDisabledReason(data, auth)) {
       return;
     }
 
@@ -327,15 +335,17 @@ export function ViewUser() {
             disabled={isSystemUser(data.id)}
             onClick={() => navigate(`/users/${data.id}/edit`)}
           />
-          <Button
-            label="Delete"
-            type="button"
-            icon="pi pi-trash"
-            severity="danger"
-            raised
-            disabled={isSystemUser(data.id)}
-            onClick={confirmDelete}
-          />
+          <span title={userDeleteDisabledReason(data, auth) ?? "Delete"} style={{ display: "inline-flex", marginLeft: "0.7em" }}>
+            <Button
+              label="Delete"
+              type="button"
+              icon="pi pi-trash"
+              severity="danger"
+              raised
+              disabled={!!userDeleteDisabledReason(data, auth)}
+              onClick={confirmDelete}
+            />
+          </span>
           <Button
             label="Back"
             type="button"
