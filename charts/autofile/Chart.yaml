@@ -2,8 +2,8 @@ apiVersion: v2
 name: autofile
 description: Autofile API and UI deployment
 type: application
-version: 0.4.6
-appVersion: v0.4.6
+version: 0.4.7
+appVersion: v0.4.7
 keywords:
   - edms
   - dms
