@@ -6,11 +6,6 @@ Child rules expand the capabilities even further.  Text matching can capture val
 
 The classifier block editor provides visual controls for the normal workflow. Advanced YAML editing is still available when you need to inspect, paste, or debug the serialized rule structure.
 
-Classifier blocks are powerful because each block can do two things:
-
-- Decide whether the block applies to a document.
-- Extract or compute values through child rules after the block applies.
-
 ## Opening The Editor
 
 Open the Classifiers page, then create a new classifier block or edit an existing one.
