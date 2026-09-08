@@ -947,21 +947,16 @@ async fn process_file_pages_pdf(
         .execute(&mut db)
         .await?;
     if affected == 0 {
-        tracing::info!(
-            document_file_id,
-            "document file no longer exists; cancelling page processing"
-        );
-        return Ok(());
+        return cancel_document_file_processing(document_file_id, None, "page processing");
     }
 
     for page in 1..=pages {
         if !document_file_exists(&mut db, document_file_id).await? {
-            tracing::info!(
+            return cancel_document_file_processing(
                 document_file_id,
-                page,
-                "document file no longer exists; cancelling page processing"
+                Some(page),
+                "page processing",
             );
-            return Ok(());
         }
 
         {
@@ -971,23 +966,21 @@ async fn process_file_pages_pdf(
             if !upsert_document_file_page(&mut db, document_file_id, page as i32, Some(text))
                 .await?
             {
-                tracing::info!(
+                return cancel_document_file_processing(
                     document_file_id,
-                    page,
-                    "document file no longer exists; cancelling page processing"
+                    Some(page),
+                    "page processing",
                 );
-                return Ok(());
             }
         }
 
         {
             if !document_file_exists(&mut db, document_file_id).await? {
-                tracing::info!(
+                return cancel_document_file_processing(
                     document_file_id,
-                    page,
-                    "document file no longer exists; cancelling page processing"
+                    Some(page),
+                    "page processing",
                 );
-                return Ok(());
             }
 
             tracing::info!(document_file_id, page, "extracting image for page");
@@ -1010,12 +1003,11 @@ async fn process_file_pages_pdf(
             )
             .await?
             {
-                tracing::info!(
+                return cancel_document_file_processing(
                     document_file_id,
-                    page,
-                    "document file no longer exists; cancelling page processing"
+                    Some(page),
+                    "page processing",
                 );
-                return Ok(());
             }
             remove_temp_file_best_effort(&image_path, "page image").await;
         }
@@ -1050,30 +1042,15 @@ async fn process_file_pages_image(
         .execute(&mut db)
         .await?;
     if affected == 0 {
-        tracing::info!(
-            document_file_id,
-            page = 1,
-            "document file no longer exists; cancelling image page processing"
-        );
-        return Ok(());
+        return cancel_document_file_processing(document_file_id, Some(1), "image page processing");
     }
 
     if !upsert_document_file_page(&mut db, document_file_id, 1, None).await? {
-        tracing::info!(
-            document_file_id,
-            page = 1,
-            "document file no longer exists; cancelling image page processing"
-        );
-        return Ok(());
+        return cancel_document_file_processing(document_file_id, Some(1), "image page processing");
     }
 
     if !document_file_exists(&mut db, document_file_id).await? {
-        tracing::info!(
-            document_file_id,
-            page = 1,
-            "document file no longer exists; cancelling image page processing"
-        );
-        return Ok(());
+        return cancel_document_file_processing(document_file_id, Some(1), "image page processing");
     }
 
     let image_path = temp_dir.join("page-1.png");
@@ -1092,12 +1069,7 @@ async fn process_file_pages_image(
     );
     let ocr_text = extract_page_ocr(&image_path, temp_dir, state.clone()).await?;
     if !upsert_document_file_ocr_page(&mut db, document_file_id, 1, Some(ocr_text)).await? {
-        tracing::info!(
-            document_file_id,
-            page = 1,
-            "document file no longer exists; cancelling image page processing"
-        );
-        return Ok(());
+        return cancel_document_file_processing(document_file_id, Some(1), "image page processing");
     }
     remove_temp_file_best_effort(&image_path, "image page").await;
 
@@ -1141,6 +1113,27 @@ async fn document_file_exists(
     .await?;
 
     Ok(exists)
+}
+
+fn cancel_document_file_processing(
+    document_file_id: i64,
+    page: Option<u32>,
+    processing_name: &'static str,
+) -> JobResult<()> {
+    if let Some(page) = page {
+        tracing::info!(
+            document_file_id,
+            page,
+            "document file no longer exists; cancelling {processing_name}"
+        );
+    } else {
+        tracing::info!(
+            document_file_id,
+            "document file no longer exists; cancelling {processing_name}"
+        );
+    }
+
+    Ok(())
 }
 
 pub async fn cleanup_extra_page_rows(
