@@ -7,7 +7,7 @@ Autofile is a self-hosted document management application. It stores document fi
 ![document grid basic](assets/document-grid-basic.png){ align=left width="100%" style="margin: 0 0 1rem 0;" }
 
 !!! note Alpha software
-    Autofile is relatively stable, but it is still alpha software. Expect breaking changes as installation, administration, and document-processing workflows continue to mature.
+    Autofile is relatively stable, but it is still alpha software. We will avoid breaking changes to APIs whenever possible. Expect installation instructions, administration, and documentation to continue to mature.
 
 ## What Autofile Provides
 
