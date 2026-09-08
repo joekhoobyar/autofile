@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Automate cutting and reopening CHANGELOG.md release sections in `make release`.
+- Restrict document type, metadata type, and document type metadata association administration to admin users while preserving read access for regular users.
+- Add read-only detail pages for document types and metadata types, including linked metadata type chips and usage indicators.
 
 ## [0.4.4] - 2026-09-07
 
