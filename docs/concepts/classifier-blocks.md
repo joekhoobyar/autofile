@@ -229,6 +229,8 @@ The test result shows computed actions in a serialized format. This is useful fo
 
 Use **Edit as YAML instead >>** when you need to inspect or directly edit the underlying rule structure.
 
+![screenshot: advanced YAML dialog](../assets/classifier-block-form-yaml.png){width="100%"}
+
 Advanced YAML is useful for:
 
 - Pasting a rule created elsewhere.
@@ -237,9 +239,6 @@ Advanced YAML is useful for:
 - Debugging validation errors with the [classifier rules YAML reference](../reference/classifier-rules-yaml.md).
 
 For normal editing, prefer the visual editor.
-
-<!-- TODO screenshot: Advanced YAML dialog -->
-![screenshot: advanced YAML dialog](../assets/classifier-block-form-yaml.png){width="100%"}
 
 ## Writing Safe Rules
 
