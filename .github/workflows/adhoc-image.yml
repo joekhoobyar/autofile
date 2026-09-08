@@ -1,6 +1,8 @@
 name: Adhoc Image
 
 on:
+  schedule:
+    - cron: "0 8 * * 0"
   workflow_dispatch:
     inputs:
       target:
@@ -38,21 +40,25 @@ jobs:
         id: build-vars
         shell: bash
         run: |
-          case "${{ inputs.target }}" in
-            adhoc|base)
-              bake_group="${{ inputs.target }}"
-              ;;
-            rust-base)
-              bake_group="autofile-api-rust-base"
-              ;;
-            runtime-base)
-              bake_group="autofile-api-runtime-base"
-              ;;
-            *)
-              echo "Unsupported manual build target: ${{ inputs.target }}" >&2
-              exit 1
-              ;;
-          esac
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            bake_group="base"
+          else
+            case "${{ inputs.target }}" in
+              adhoc|base)
+                bake_group="${{ inputs.target }}"
+                ;;
+              rust-base)
+                bake_group="autofile-api-rust-base"
+                ;;
+              runtime-base)
+                bake_group="autofile-api-runtime-base"
+                ;;
+              *)
+                echo "Unsupported manual build target: ${{ inputs.target }}" >&2
+                exit 1
+                ;;
+            esac
+          fi
 
           {
             echo "GIT_SHA=$(git rev-parse --short HEAD)"
@@ -93,21 +99,25 @@ jobs:
         id: manifest-vars
         shell: bash
         run: |
-          case "${{ inputs.target }}" in
-            adhoc|base)
-              bake_group="${{ inputs.target }}"
-              ;;
-            rust-base)
-              bake_group="autofile-api-rust-base"
-              ;;
-            runtime-base)
-              bake_group="autofile-api-runtime-base"
-              ;;
-            *)
-              echo "Unsupported manual build target: ${{ inputs.target }}" >&2
-              exit 1
-              ;;
-          esac
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            bake_group="base"
+          else
+            case "${{ inputs.target }}" in
+              adhoc|base)
+                bake_group="${{ inputs.target }}"
+                ;;
+              rust-base)
+                bake_group="autofile-api-rust-base"
+                ;;
+              runtime-base)
+                bake_group="autofile-api-runtime-base"
+                ;;
+              *)
+                echo "Unsupported manual build target: ${{ inputs.target }}" >&2
+                exit 1
+                ;;
+            esac
+          fi
 
           {
             echo "git_sha=$(git rev-parse --short HEAD)"
