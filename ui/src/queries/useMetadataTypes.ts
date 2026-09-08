@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query';
 import { apiFetchList, type ListParams, type ResourceList, type ResourceInput, HttpError, apiMutate, apiFetch } from '../api';
+import { type Document, type DocumentListParams } from '../models/document';
 import { type MetadataType } from '../models/metadataType';
 import { type DocumentTypeMetadataType, type DocumentTypeNewMetadataType } from '../models/documentTypeMetadataType';
 
@@ -21,6 +22,18 @@ export function useMetadataTypeUsage(metadata_type_id: string | number | undefin
     enabled: !!metadata_type_id,
     ...options,
     queryFn: () => apiFetch<DocumentTypeMetadataType[]>(`api/v1/document-types-metadata-types?metadata_type_id=${metadata_type_id}&per_page=1`),
+  });
+}
+
+export function useMetadataTypeDocumentUsage(metadata_type_id: string | number | undefined, options = {}): UseQueryResult<ResourceList<Document>, HttpError> {
+  return useQuery({
+    queryKey: ['document', 'list', 'by-metadata-type', {metadata_type_id}],
+    enabled: !!metadata_type_id,
+    ...options,
+    queryFn: () => {
+      const params: DocumentListParams = { metadata_type_id: Number(metadata_type_id), per_page: 1 };
+      return apiFetchList<Document>('api/v1/documents', params);
+    },
   });
 }
 

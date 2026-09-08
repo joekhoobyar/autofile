@@ -11,7 +11,7 @@ import { InputTextarea } from 'primereact/inputtextarea';
 import { classNames } from 'primereact/utils';
 
 import type { ListParams } from '../api';
-import { useMetadataType, useMetadataTypes, useSaveMetadataType, useDeleteMetadataType, useMetadataTypeUsage } from '../queries/useMetadataTypes';
+import { useMetadataType, useMetadataTypes, useSaveMetadataType, useDeleteMetadataType, useMetadataTypeUsage, useMetadataTypeDocumentUsage } from '../queries/useMetadataTypes';
 import { type MetadataType } from '../models/metadataType';
 import { Dropdown } from 'primereact/dropdown';
 import { Message } from 'primereact/message';
@@ -25,12 +25,23 @@ import { AppToast } from '../components/AppToast';
 const METADATA_TYPE_LIST_DEFAULT_PARAMS: ListParams = { sf: 'name' };
 
 function MetadataTypeDeleteButton({ metadataType, onDelete }: Readonly<{ metadataType: MetadataType; onDelete: (c: MetadataType) => void }>) {
-  const { data: usages } = useMetadataTypeUsage(metadataType.id);
-  const inUse = (usages?.length ?? 0) > 0;
+  const { data: documentTypeUsages, isPending: isDocumentTypeUsagePending } = useMetadataTypeUsage(metadataType.id);
+  const { data: documentUsages, isPending: isDocumentUsagePending } = useMetadataTypeDocumentUsage(metadataType.id);
+  const inUseByDocumentType = (documentTypeUsages?.length ?? 0) > 0;
+  const inUseByDocumentMetadata = (documentUsages?.total ?? 0) > 0;
+  const isUsagePending = isDocumentTypeUsagePending || isDocumentUsagePending;
+  const disabled = isUsagePending || inUseByDocumentType || inUseByDocumentMetadata;
+  const title = isUsagePending
+    ? 'Checking usage'
+    : inUseByDocumentMetadata
+      ? 'In use by document metadata'
+      : inUseByDocumentType
+        ? 'In use by a document type'
+        : 'Delete';
 
   return (
     <span
-      title={inUse ? 'In use by a document type' : 'Delete'}
+      title={title}
       style={{ display: 'inline-flex' }}
     >
       <Button
@@ -41,7 +52,7 @@ function MetadataTypeDeleteButton({ metadataType, onDelete }: Readonly<{ metadat
         text
         raised
         aria-description="Delete"
-        disabled={inUse}
+        disabled={disabled}
         onClick={() => onDelete(metadataType)}
       ></Button>
     </span>

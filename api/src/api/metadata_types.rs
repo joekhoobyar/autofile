@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::domain::metadata_types::{DataType, MetadataType};
-use crate::schema::{document_types_metadata_types, metadata_types};
+use crate::schema::{document_metadatas, document_types_metadata_types, metadata_types};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
@@ -155,6 +155,24 @@ async fn delete(
     if in_use {
         return Err(ApiError::conflict(
             "Metadata type is in use by a document type and cannot be deleted",
+        ));
+    }
+
+    let has_document_metadata: bool = diesel::select(exists(
+        document_metadatas::table.filter(document_metadatas::metadata_type_id.eq(id)),
+    ))
+    .get_result(&mut db)
+    .await
+    .map_err(|e| {
+        ApiError::new(
+            diesel_to_http(e),
+            "Failed to check metadata_type document metadata usage",
+        )
+    })?;
+
+    if has_document_metadata {
+        return Err(ApiError::conflict(
+            "Metadata type is in use by document metadata and cannot be deleted",
         ));
     }
 
