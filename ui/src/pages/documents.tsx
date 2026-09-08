@@ -8,7 +8,6 @@ import { DataView, DataViewLayoutOptions, type DataViewPageEvent } from 'primere
 import { Dropdown } from 'primereact/dropdown';
 import { Dialog } from 'primereact/dialog';
 import { classNames } from 'primereact/utils';
-import { format } from "date-fns";
 
 import { apiUrl, ensureAuthenticated, getAccessToken } from '../api';
 import { useDocuments, useDocument, useSaveDocument, useDocumentThumbnail } from '../queries/useDocuments';
@@ -34,6 +33,7 @@ import { Badge } from 'primereact/badge';
 import { Chip } from 'primereact/chip';
 import { DocumentActions } from '../components/DocumentActions';
 import { AppToast } from '../components/AppToast';
+import { DateText } from '../components/DateText';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
@@ -297,7 +297,7 @@ function DocumentListItem({ doc, index, onImageClick, selected, onSelectionChang
               <ul className="aut-document-metadata">
                 <li><span>Type</span>: {ddt?.[doc.document_type_id]?.name}</li>
                 <li><span>Pages</span>: {doc.pages ?? 0}</li>
-                <li><span>Created</span>: {format(new Date(doc.created_at), "MM/dd/yyyy HH:mm")}</li>
+                <li><span>Created</span>: <DateText value={doc.created_at} /></li>
                 {Object.entries(doc.metadata)
                   .sort(([keyA], [keyB]) => {
                     const nameA = mdt?.[keyA]?.name ?? keyA;
@@ -396,7 +396,7 @@ function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange, cabi
               <ul className="aut-document-metadata">
                 <li><span>Type</span>: {ddt?.[doc.document_type_id]?.name}</li>
                 <li><span>Pages</span>: {doc.pages ?? 0}</li>
-                <li><span>Created</span>: {format(new Date(doc.created_at), "MM/dd/yyyy HH:mm")}</li>
+                <li><span>Created</span>: <DateText value={doc.created_at} /></li>
                 {Object.entries(doc.metadata)
                   .sort(([keyA], [keyB]) => {
                     const nameA = mdt?.[keyA]?.name ?? keyA;

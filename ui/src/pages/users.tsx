@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { format } from "date-fns";
 
 import { DataTable, type DataTableStateEvent } from "primereact/datatable";
 import { Column } from "primereact/column";
@@ -25,6 +24,7 @@ import { canManageUsers, type AuthState, useAuth } from "../auth";
 import { useHashListParams } from "../util/listParamsHash";
 import { AppToast } from "../components/AppToast";
 import { DescriptionList } from "../components/DescriptionList";
+import { DateText } from "../components/DateText";
 
 const SYSTEM_USER_ID = 1;
 const USER_LIST_DEFAULT_PARAMS: ListParams = { sf: "username" };
@@ -37,10 +37,6 @@ function isSystemUser(id: number): boolean {
   return id === SYSTEM_USER_ID;
 }
 
-function formatDate(value: string): string {
-  return format(new Date(value), "MM/dd/yyyy HH:mm");
-}
-
 function formatRole(role: UserRole): string {
   return USER_ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role;
 }
@@ -51,8 +47,8 @@ function userDeleteDisabledReason(user: User, auth: AuthState): string | null {
   return null;
 }
 
-function passwordChangedTemplate(user: User): string {
-  return isSystemUser(user.id) ? "" : formatDate(user.password_changed_at);
+function passwordChangedTemplate(user: User): ReactNode {
+  return isSystemUser(user.id) ? "" : <DateText value={user.password_changed_at} />;
 }
 
 export function ListUsers() {
@@ -314,10 +310,10 @@ export function ViewUser() {
                 </span>
               ),
             },
-            { label: "Created", value: formatDate(data.created_at) },
-            { label: "Updated", value: formatDate(data.updated_at) },
+            { label: "Created", value: <DateText value={data.created_at} /> },
+            { label: "Updated", value: <DateText value={data.updated_at} /> },
             ...(!isSystemUser(data.id)
-              ? [{ label: "Password Changed", value: formatDate(data.password_changed_at) }]
+              ? [{ label: "Password Changed", value: <DateText value={data.password_changed_at} /> }]
               : []),
           ]}
         />

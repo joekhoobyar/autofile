@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
 
 import { DataTable, type DataTableStateEvent } from 'primereact/datatable';
 import { Column } from 'primereact/column';
@@ -25,13 +24,10 @@ import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 import { useHashListParams } from '../util/listParamsHash';
 import { AppToast } from '../components/AppToast';
 import { DescriptionList } from '../components/DescriptionList';
+import { DateText } from '../components/DateText';
 import { canAdminister, useAuth } from '../auth';
 
 const DOCUMENT_TYPE_LIST_DEFAULT_PARAMS: ListParams = { sf: 'name' };
-
-function formatDate(value: string): string {
-  return format(new Date(value), 'MM/dd/yyyy HH:mm');
-}
 
 export function ListDocumentTypes() {
   const auth = useAuth();
@@ -262,8 +258,8 @@ export function ViewDocumentType() {
                 ) : 'None'
               ),
             },
-            { label: 'Created', value: formatDate(data.created_at) },
-            { label: 'Updated', value: formatDate(data.updated_at) },
+            { label: 'Created', value: <DateText value={data.created_at} /> },
+            { label: 'Updated', value: <DateText value={data.updated_at} /> },
           ]}
         />
 

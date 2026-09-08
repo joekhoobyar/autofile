@@ -18,10 +18,10 @@ import { Tag } from 'primereact/tag';
 import { type Toast } from 'primereact/toast';
 import { Tooltip } from 'primereact/tooltip';
 import { classNames } from 'primereact/utils';
-import { format } from 'date-fns';
 
 import { HttpError, apiFetch, apiUrl, ensureAuthenticated, getAccessToken } from '../api';
 import { AppToast } from '../components/AppToast';
+import { DateText } from '../components/DateText';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { type DocumentFile } from '../models/documentFile';
 import { useDocument } from '../queries/useDocuments';
@@ -159,7 +159,7 @@ function FileMetadata({ file }: Readonly<{ file: DocumentFile }>) {
       <li><span>Content Type</span>: {file.content_type ?? 'Unknown'}</li>
       <li><span>Size</span>: {formatBytes(file.size)}</li>
       <li><span>Pages</span>: {file.pages ?? 0}</li>
-      <li><span>Created</span>: {format(new Date(file.created_at), 'MM/dd/yyyy HH:mm')}</li>
+      <li><span>Created</span>: <DateText value={file.created_at} /></li>
     </ul>
   );
 }
