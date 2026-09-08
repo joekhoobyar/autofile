@@ -230,7 +230,7 @@ export function ListUsers() {
           <Column field="display_name" header="Display Name" sortable />
           <Column field="email" header="Email" sortable />
           <Column field="role" header="Role" body={(u: User) => formatRole(u.role)} />
-          <Column field="force_password_change" header="Password Change Required" body={(u: User) => u.force_password_change ? "Yes" : "No"} />
+          <Column field="enabled" header="Enabled" body={(u: User) => u.enabled ? "Yes" : "No"} sortable />
           <Column field="password_changed_at" header="Password Changed" body={passwordChangedTemplate} sortable />
           <Column body={actionTemplate} headerClassName="w-9rem" />
         </DataTable>
@@ -309,6 +309,9 @@ export function ViewUser() {
           </li>
           <li>
             <span>Role</span>: {formatRole(data.role)}
+          </li>
+          <li>
+            <span>Enabled</span>: {data.enabled ? "Yes" : "No"}
           </li>
           <li>
             <span>Password Change Required</span>: {data.force_password_change ? "Yes" : "No"}
@@ -411,6 +414,7 @@ type UserFormValues = {
   email: string;
   display_name: string;
   role: UserRole;
+  enabled: boolean;
   force_password_change: boolean;
 };
 
@@ -431,6 +435,7 @@ function UserForm({ data }: Readonly<{ data: User }>) {
       email: data.email,
       display_name: data.display_name,
       role: data.role,
+      enabled: data.enabled,
       force_password_change: data.force_password_change,
     },
     values: {
@@ -439,6 +444,7 @@ function UserForm({ data }: Readonly<{ data: User }>) {
       email: data.email,
       display_name: data.display_name,
       role: data.role,
+      enabled: data.enabled,
       force_password_change: data.force_password_change,
     },
   });
@@ -449,6 +455,7 @@ function UserForm({ data }: Readonly<{ data: User }>) {
       email: values.email,
       display_name: values.display_name,
       role: values.role,
+      enabled: values.enabled,
       force_password_change: values.force_password_change,
     };
 
@@ -549,6 +556,28 @@ function UserForm({ data }: Readonly<{ data: User }>) {
           />
           {errMsg("role") && <small className="p-error">{errMsg("role")}</small>}
           {isCurrentUser && <small className="block mt-2">You cannot remove your own admin role.</small>}
+        </div>
+
+        <div className="col-12 md:col-6 lg:col-4">
+          <label htmlFor="enabled" className="font-medium mb-2 block">
+            Enabled
+          </label>
+          <Controller
+            name="enabled"
+            control={control}
+            render={({ field }) => (
+              <div className="flex align-items-center gap-2 mt-3">
+                <Checkbox
+                  inputId="enabled"
+                  checked={field.value}
+                  disabled={isCurrentUser}
+                  onChange={(event) => field.onChange(event.checked ?? false)}
+                />
+                <label htmlFor="enabled">Allow this user to sign in</label>
+              </div>
+            )}
+          />
+          {isCurrentUser && <small className="block mt-2">You cannot disable your own user.</small>}
         </div>
 
         <div className="col-12 md:col-6 lg:col-4">

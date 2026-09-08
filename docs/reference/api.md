@@ -30,7 +30,7 @@ password: admin123!
 Change the default password before using Autofile in any shared or persistent environment.
 The default admin is required to change this password before using other authenticated APIs.
 
-New users can also be created through `POST /api/v1/auth/register` when user registration is enabled. Registered users receive the `user` role. Registration passwords must contain at least 12 characters. When registration is disabled, the endpoint returns `403 Forbidden`.
+New users can also be created through `POST /api/v1/auth/register` when user registration is enabled. Registered users receive the `user` role and are disabled until an admin enables them. Registration passwords must contain at least 12 characters. When registration is disabled, the endpoint returns `403 Forbidden`.
 
 Log in and save the refresh-token cookie with:
 
@@ -194,6 +194,7 @@ User management endpoints require an admin access token.
   "email": "admin@example.com",
   "display_name": "Admin",
   "role": "admin",
+  "enabled": true,
   "force_password_change": false,
   "created_at": "2026-08-25T12:00:00Z",
   "updated_at": "2026-08-25T12:00:00Z",
@@ -208,7 +209,7 @@ User management endpoints require an admin access token.
 | `GET` | `/api/v1/users` | List users. |
 | `GET` | `/api/v1/users/{id}` | Get a user by ID. |
 | `GET` | `/api/v1/users/by-username/{username}` | Get a user by exact username. |
-| `PATCH` | `/api/v1/users/{id}` | Update email, display name, role, or force-password-change status. |
+| `PATCH` | `/api/v1/users/{id}` | Update email, display name, role, enabled status, or force-password-change status. |
 | `DELETE` | `/api/v1/users/{id}` | Delete a user. |
 
 `PATCH /api/v1/users/{id}` accepts any subset of:
@@ -218,11 +219,12 @@ User management endpoints require an admin access token.
   "email": "admin@example.com",
   "display_name": "Admin",
   "role": "admin",
+  "enabled": true,
   "force_password_change": true
 }
 ```
 
-`role` must be either `admin` or `user`. Setting `force_password_change` to `true` blocks the user from calling authenticated APIs other than `POST /api/v1/profile/password` until they change their password. The system user cannot be updated or deleted. An admin cannot change their own role from `admin` to `user`.
+`role` must be either `admin` or `user`. Setting `enabled` to `false` prevents the user from logging in or refreshing credentials. Setting `force_password_change` to `true` blocks the user from calling authenticated APIs other than `POST /api/v1/profile/password` until they change their password. The system user cannot be updated or deleted. An admin cannot change their own role from `admin` to `user` or disable their own account.
 
 ## Classifier Rule Validation
 

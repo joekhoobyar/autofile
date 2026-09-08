@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add an admin-only Settings page and `/api/v1/settings` API for controlling app behavior, starting with an `allow_user_registration` toggle that blocks `POST /api/v1/auth/register` when disabled.
+- Add user enabled/disabled status, require admins to enable newly registered users, and block login or token refresh for disabled users.
 
 ### Changed
 

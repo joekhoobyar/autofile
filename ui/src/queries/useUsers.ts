@@ -42,6 +42,7 @@ export function useSaveUser(): UseMutationResult<User, HttpError, UserUpdateInpu
         display_name: input.display_name,
         role: input.role,
         force_password_change: input.force_password_change,
+        enabled: input.enabled,
       };
       return apiMutate<User, typeof body>(`api/v1/users/${input.id}`, {
         method: "PATCH",

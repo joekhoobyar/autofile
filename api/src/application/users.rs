@@ -20,6 +20,7 @@ pub enum UserSortField {
     CreatedAt,
     UpdatedAt,
     PasswordChangedAt,
+    Enabled,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -38,6 +39,7 @@ pub struct UpdateUserInput {
     pub display_name: Option<String>,
     pub role: Option<UserRole>,
     pub force_password_change: Option<bool>,
+    pub enabled: Option<bool>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -61,6 +63,7 @@ struct UserChangeset {
     display_name: Option<String>,
     role: Option<UserRole>,
     force_password_change: Option<bool>,
+    enabled: Option<bool>,
 }
 
 #[derive(Debug, AsChangeset)]
@@ -162,11 +165,16 @@ pub async fn update_user(
         return Err(ApiError::bad_request("Cannot remove your own admin role"));
     }
 
+    if id == acting_user_id && input.enabled == Some(false) {
+        return Err(ApiError::bad_request("Cannot disable your own user"));
+    }
+
     let changes = UserChangeset {
         email: input.email,
         display_name: input.display_name,
         role: input.role,
         force_password_change: input.force_password_change,
+        enabled: input.enabled,
     };
 
     diesel::update(users::table.filter(users::id.eq(id)))
@@ -266,6 +274,10 @@ pub async fn list_users(
         (Some(UserSortField::PasswordChangedAt), _) => {
             query.order((users::password_changed_at.asc(), users::id.asc()))
         }
+        (Some(UserSortField::Enabled), Some(true)) => {
+            query.order((users::enabled.desc(), users::id.asc()))
+        }
+        (Some(UserSortField::Enabled), _) => query.order((users::enabled.asc(), users::id.asc())),
         (Some(UserSortField::Id), Some(true)) => query.order(users::id.desc()),
         _ => query.order(users::id.asc()),
     };

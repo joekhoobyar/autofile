@@ -30,6 +30,45 @@ async fn settings_default_to_allowing_user_registration() {
 }
 
 #[tokio::test]
+async fn registered_users_are_disabled_by_default() {
+    let test_db = TestDatabase::new().await;
+    let conn = test_db
+        .pool
+        .get_owned()
+        .await
+        .expect("db connection should succeed");
+
+    let user = register(
+        DbConn(conn),
+        Json(RegisterRequest {
+            username: "settings-register-disabled-by-default".to_string(),
+            email: "settings-register-disabled-by-default@example.com".to_string(),
+            display_name: "Disabled By Default".to_string(),
+            password: "long-enough-password".to_string(),
+        }),
+    )
+    .await
+    .expect("registration should succeed")
+    .0;
+
+    assert!(!user.enabled);
+
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    let persisted_enabled = users::table
+        .filter(users::username.eq("settings-register-disabled-by-default"))
+        .select(users::enabled)
+        .first::<bool>(&mut db)
+        .await
+        .expect("user should load");
+
+    assert!(!persisted_enabled);
+}
+
+#[tokio::test]
 async fn disabled_registration_rejects_register_request() {
     let test_db = TestDatabase::new().await;
     let mut db = test_db

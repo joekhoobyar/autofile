@@ -63,6 +63,7 @@ pub async fn register(
             users::password_hash.eq(pw_hash),
             users::password_changed_at.eq(Utc::now()),
             users::role.eq(UserRole::User),
+            users::enabled.eq(false),
         ))
         .returning(User::as_returning())
         .get_result(&mut db)
@@ -127,10 +128,7 @@ pub async fn login(
     let Some(user) = user else {
         return Err(fail());
     };
-    let ok = verify_password(&req.password, &user.password_hash).unwrap_or(false);
-    if !ok {
-        return Err(fail());
-    }
+    validate_login_user(&user, &req.password)?;
 
     Ok(Json(issue_tokens(&state, &cookies, &user)?))
 }
@@ -167,7 +165,28 @@ pub async fn refresh(
         .await
         .map_err(|_| ApiError::unauthorized("Invalid refresh token"))?;
 
+    validate_refresh_user(&user)?;
+
     Ok(Json(issue_tokens(&state, &cookies, &user)?))
+}
+
+fn validate_login_user(user: &User, password: &str) -> Result<(), ApiError> {
+    let fail = || ApiError::unauthorized("Invalid credentials");
+
+    let ok = verify_password(password, &user.password_hash).unwrap_or(false);
+    if !ok || !user.enabled {
+        return Err(fail());
+    }
+
+    Ok(())
+}
+
+fn validate_refresh_user(user: &User) -> Result<(), ApiError> {
+    if !user.enabled {
+        return Err(ApiError::unauthorized("Invalid refresh token"));
+    }
+
+    Ok(())
 }
 
 pub fn routes() -> Router<Arc<AppState>> {
@@ -176,4 +195,55 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/login", post(login))
         .route("/refresh", post(refresh))
         .route("/logout", post(logout))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_login_user, validate_refresh_user};
+    use crate::domain::users::{User, UserRole};
+    use crate::shared::auth::hash_password;
+    use axum::http::StatusCode;
+    use chrono::Utc;
+
+    fn test_user(enabled: bool) -> User {
+        User {
+            id: 42,
+            username: "test-user".to_string(),
+            email: "test-user@example.com".to_string(),
+            display_name: "Test User".to_string(),
+            password_hash: hash_password("long-enough-password").expect("hash should succeed"),
+            password_changed_at: Utc::now(),
+            role: UserRole::User,
+            force_password_change: false,
+            enabled,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn disabled_user_cannot_login() {
+        let err = validate_login_user(&test_user(false), "long-enough-password")
+            .expect_err("disabled user should not login");
+
+        assert_eq!(err.status, StatusCode::UNAUTHORIZED);
+        assert_eq!(err.message, "Invalid credentials");
+    }
+
+    #[test]
+    fn disabled_user_cannot_refresh() {
+        let err =
+            validate_refresh_user(&test_user(false)).expect_err("disabled user should not refresh");
+
+        assert_eq!(err.status, StatusCode::UNAUTHORIZED);
+        assert_eq!(err.message, "Invalid refresh token");
+    }
+
+    #[test]
+    fn enabled_user_can_login_and_refresh() {
+        let user = test_user(true);
+
+        validate_login_user(&user, "long-enough-password").expect("enabled user should login");
+        validate_refresh_user(&user).expect("enabled user should refresh");
+    }
 }

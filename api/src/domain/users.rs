@@ -25,6 +25,7 @@ pub struct User {
     pub password_changed_at: DateTime<Utc>,
     pub role: UserRole,
     pub force_password_change: bool,
+    pub enabled: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

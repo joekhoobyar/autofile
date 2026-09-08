@@ -43,11 +43,35 @@ async fn migrations_seed_default_admin_user() {
     assert_eq!(admin.email, "admin@example.com");
     assert_eq!(admin.display_name, "Admin");
     assert_eq!(admin.role, UserRole::Admin);
+    assert!(admin.enabled);
     assert!(admin.force_password_change);
     assert!(
         verify_password("admin123!", &admin.password_hash).expect("hash should parse"),
         "default admin password should verify"
     );
+}
+
+#[tokio::test]
+async fn inserted_users_default_to_enabled() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(
+        &mut db,
+        108,
+        "users-test-enabled-default",
+        "users-test-enabled-default@example.com",
+    )
+    .await;
+
+    let user = get_user_by_id(&mut db, 108)
+        .await
+        .expect("user should load");
+
+    assert!(user.enabled);
 }
 
 #[tokio::test]
@@ -142,6 +166,7 @@ async fn update_user_updates_fields_and_preserves_password_data() {
             display_name: Some("Updated User".to_string()),
             role: None,
             force_password_change: None,
+            enabled: None,
         },
     )
     .await
@@ -180,6 +205,7 @@ async fn update_user_updates_role() {
             display_name: None,
             role: Some(UserRole::Admin),
             force_password_change: Some(true),
+            enabled: None,
         },
     )
     .await
@@ -196,12 +222,62 @@ async fn update_user_updates_role() {
             display_name: None,
             role: Some(UserRole::User),
             force_password_change: Some(false),
+            enabled: None,
         },
     )
     .await
     .expect("role update should succeed");
     assert_eq!(demoted.role, UserRole::User);
     assert!(!demoted.force_password_change);
+}
+
+#[tokio::test]
+async fn update_user_updates_enabled_status() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(
+        &mut db,
+        109,
+        "users-test-enabled-update",
+        "users-test-enabled-update@example.com",
+    )
+    .await;
+
+    let disabled = update_user(
+        &mut db,
+        1,
+        109,
+        UpdateUserInput {
+            email: None,
+            display_name: None,
+            role: None,
+            force_password_change: None,
+            enabled: Some(false),
+        },
+    )
+    .await
+    .expect("enabled update should succeed");
+    assert!(!disabled.enabled);
+
+    let enabled = update_user(
+        &mut db,
+        1,
+        109,
+        UpdateUserInput {
+            email: None,
+            display_name: None,
+            role: None,
+            force_password_change: None,
+            enabled: Some(true),
+        },
+    )
+    .await
+    .expect("enabled update should succeed");
+    assert!(enabled.enabled);
 }
 
 #[tokio::test]
@@ -229,6 +305,7 @@ async fn update_user_rejects_self_downgrade() {
             display_name: None,
             role: Some(UserRole::User),
             force_password_change: None,
+            enabled: None,
         },
     )
     .await
@@ -238,6 +315,43 @@ async fn update_user_rejects_self_downgrade() {
 
     let user = load_user(&mut db, 106).await;
     assert_eq!(user.role, UserRole::Admin);
+}
+
+#[tokio::test]
+async fn update_user_rejects_self_disable() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(
+        &mut db,
+        110,
+        "users-test-self-disable",
+        "users-test-self-disable@example.com",
+    )
+    .await;
+
+    let err = update_user(
+        &mut db,
+        110,
+        110,
+        UpdateUserInput {
+            email: None,
+            display_name: None,
+            role: None,
+            force_password_change: None,
+            enabled: Some(false),
+        },
+    )
+    .await
+    .expect_err("self disable should fail");
+
+    assert_eq!(err.status, StatusCode::BAD_REQUEST);
+
+    let user = load_user(&mut db, 110).await;
+    assert!(user.enabled);
 }
 
 #[tokio::test]
@@ -412,6 +526,7 @@ async fn update_user_rejects_system_user() {
             display_name: Some("Should Not Change".to_string()),
             role: Some(UserRole::User),
             force_password_change: Some(true),
+            enabled: Some(false),
         },
     )
     .await
@@ -546,6 +661,7 @@ async fn list_users_applies_pagination_search_and_sort() {
             display_name: Some("Captain Bravo".to_string()),
             role: None,
             force_password_change: None,
+            enabled: None,
         },
     )
     .await
