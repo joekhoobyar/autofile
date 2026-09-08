@@ -110,7 +110,7 @@ Computed actions are important because:
 - Matching child rules write into computed actions.
 - Later actions with the same key overwrite earlier values.
 - Metadata patterns check computed actions before stored document metadata.
-- The metadata modifier can copy a computed action into a child-rule snippet.
+- Modifier pipelines can copy a computed action into a child-rule snippet.
 
 ## Child Rules
 
@@ -127,8 +127,6 @@ Each child rule contains:
 Use child rules to extract specific values after a document has already been recognized by the parent block. For example, a top-level pattern might recognize an invoice, while child rules extract invoice number, invoice date, account number, or total amount.
 
 Use the child rule controls to duplicate, move, or remove child rules. Use **Add child rule** to add another rule at the bottom of the list.
-
-<!-- TODO  -->
 
 ## Captures And Snippets
 
@@ -241,6 +239,7 @@ Advanced YAML is useful for:
 For normal editing, prefer the visual editor.
 
 <!-- TODO screenshot: Advanced YAML dialog -->
+![screenshot: advanced YAML dialog](../assets/classifier-block-form-yaml.png){width="100%"}
 
 ## Writing Safe Rules
 
