@@ -1,4 +1,4 @@
-.PHONY: image version-bump release-push release
+.PHONY: image changelog-release changelog-unreleased version-bump release-push release
 
 image:
 	@set -e; \
@@ -16,10 +16,60 @@ image:
 	echo "GIT_SHA=$$git_sha docker buildx bake --push $(TARGET) $(ARGS)"; \
 	GIT_SHA="$$git_sha" docker buildx bake --push $(TARGET) $(ARGS)
 
-release: release-push version-bump
+release: changelog-release
+	@set -e; \
+	current_version="$$(perl -ne 'print $$1 and exit if /^version = "([0-9]+\.[0-9]+\.[0-9]+)"/' api/Cargo.toml)"; \
+	git commit -m "prepare release v$$current_version" CHANGELOG.md
+	$(MAKE) release-push
+	$(MAKE) version-bump
+	$(MAKE) changelog-unreleased
 	git commit -m 'version bump for next dev cycle' \
-		api/Cargo.toml api/Cargo.lock charts/autofile/Chart.yaml ui/package.json ui/package-lock.json && \
+		CHANGELOG.md api/Cargo.toml api/Cargo.lock charts/autofile/Chart.yaml ui/package.json ui/package-lock.json && \
 	git push
+
+changelog-release:
+	@set -e; \
+	current_version="$$(perl -ne 'print $$1 and exit if /^version = "([0-9]+\.[0-9]+\.[0-9]+)"/' api/Cargo.toml)"; \
+	if [ -z "$$current_version" ]; then \
+		echo "Unable to determine current version from api/Cargo.toml" >&2; \
+		exit 1; \
+	fi; \
+	if [ ! -f CHANGELOG.md ]; then \
+		echo "CHANGELOG.md not found" >&2; \
+		exit 1; \
+	fi; \
+	date="$$(date -u +%Y-%m-%d)"; \
+	if ! grep -qxF '## [Unreleased]' CHANGELOG.md; then \
+		echo "CHANGELOG.md must contain a '## [Unreleased]' heading" >&2; \
+		exit 1; \
+	fi; \
+	if grep -qxF "## [$$current_version]" CHANGELOG.md || grep -qF "## [$$current_version] - " CHANGELOG.md; then \
+		echo "CHANGELOG.md already contains a section for $$current_version" >&2; \
+		exit 1; \
+	fi; \
+	perl -0pi -e 's/^## \[Unreleased\]$$/## ['"$$current_version"'] - '"$$date"'/m' CHANGELOG.md; \
+	if ! grep -qxF "## [$$current_version] - $$date" CHANGELOG.md; then \
+		echo "Failed to prepare CHANGELOG.md for $$current_version" >&2; \
+		exit 1; \
+	fi; \
+	echo "Prepared CHANGELOG.md for $$current_version"
+
+changelog-unreleased:
+	@set -e; \
+	if [ ! -f CHANGELOG.md ]; then \
+		echo "CHANGELOG.md not found" >&2; \
+		exit 1; \
+	fi; \
+	if grep -qxF '## [Unreleased]' CHANGELOG.md; then \
+		echo "CHANGELOG.md already contains an Unreleased section" >&2; \
+		exit 1; \
+	fi; \
+	perl -0pi -e 's/^(# Changelog\n(?:.*\n)*?and this project adheres to \[Semantic Versioning\]\(https:\/\/semver\.org\/spec\/v2\.0\.0\.html\)\.\n)\n/$${1}\n## [Unreleased]\n\n/m' CHANGELOG.md; \
+	if ! grep -qxF '## [Unreleased]' CHANGELOG.md; then \
+		echo "Failed to add CHANGELOG.md Unreleased section" >&2; \
+		exit 1; \
+	fi; \
+	echo "Added CHANGELOG.md Unreleased section"
 
 release-push:
 	@set -e; \
