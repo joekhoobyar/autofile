@@ -149,7 +149,13 @@ async fn main() {
                     .build(handle_slow_job)
             }
         })
-        .on_event(|_, e| tracing::info!("{e}"))
+        .on_event(|_, e| {
+            if matches!(e, Event::HeartBeat) {
+                tracing::debug!("{e}");
+            } else {
+                tracing::info!("{e}");
+            }
+        })
         // Wait 5 seconds after shutdown is triggered to allow any incomplete jobs to complete
         // .shutdown_timeout(Duration::from_secs(5))
         ;
