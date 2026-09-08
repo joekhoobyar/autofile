@@ -8,7 +8,7 @@ use tokio::process::Command;
 use crate::application::document_files::{
     DocumentFileContentType, convert_csv_to_pdf, convert_html_to_pdf, convert_image_to_png,
     convert_markdown_to_pdf, convert_office_document_to_pdf, convert_plaintext_to_pdf,
-    convert_tsv_to_pdf, parse_document_file_content_type,
+    convert_tsv_to_pdf, document_file_exists, parse_document_file_content_type,
     persist_document_file_content_type_fallback, stage_document_file_from_s3, upload_png_to_s3,
 };
 use crate::domain::document_files::DocumentFile;
@@ -40,11 +40,22 @@ async fn generate_thumbnail_inner(
 
     // Load the document file from the database to get the S3 location.
     let mut db = state.db_pool.get().await?;
-    let mut document_file = document_files::table
+    let mut document_file = match document_files::table
         .find(document_file_id)
         .select(DocumentFile::as_select())
         .first::<DocumentFile>(&mut db)
-        .await?;
+        .await
+    {
+        Ok(document_file) => document_file,
+        Err(diesel::result::Error::NotFound) => {
+            tracing::info!(
+                document_file_id,
+                "document file no longer exists; skipping thumbnail generation"
+            );
+            return Ok(());
+        }
+        Err(err) => return Err(err.into()),
+    };
     persist_document_file_content_type_fallback(&mut db, &mut document_file).await?;
 
     // Download the file from S3 into a temp file.
@@ -88,6 +99,14 @@ async fn generate_thumbnail_inner(
             DocumentFileContentType::Image => {
                 generate_image_thumbnail(&temp_file, width, &thumb_path, state.clone()).await?
             }
+        }
+
+        if !document_file_exists(&mut db, document_file_id).await? {
+            tracing::info!(
+                document_file_id,
+                "document file no longer exists; cancelling thumbnail generation"
+            );
+            return Ok(());
         }
 
         let thumb_key = format!("{}/_thumb.png", document_file.s3_prefix);

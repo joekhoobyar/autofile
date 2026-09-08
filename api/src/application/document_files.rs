@@ -1100,7 +1100,7 @@ async fn cleanup_extra_pages(
     Ok(())
 }
 
-async fn document_file_exists(
+pub(crate) async fn document_file_exists(
     db: &mut diesel_async::AsyncPgConnection,
     document_file_id: i64,
 ) -> JobResult<bool> {
