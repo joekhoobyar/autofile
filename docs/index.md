@@ -9,15 +9,19 @@ Autofile is a self-hosted document management application. It stores document fi
 
 ![document grid basic](assets/document-grid-basic.png){ align=left width="100%" style="margin: 0 0 1rem 0;" }
 
-## What Autofile Provides
+## Features
 
-- Upload and manage [document](concepts/documents.md) files.
-- Define [document types and metadata types](concepts/metadata.md).
-- [Organize](concepts/organization.md) documents with cabinets, tags and metadata.
-- Process previews, text, OCR, and thumbnails quickly in the background.
-- Automatically build document [indexes](concepts/indexes.md) with dynamic templates (using [Minijinja](https://docs.rs/minijinja/latest/minijinja/syntax/)).
-- Automatically [classify](concepts/classification.md) documents with custom workflows (using [classifier blocks](concepts/classifier-blocks.md)).
-- Store files in durable object storage (i.e.: [RustFS](https://rustfs.com/), [Garage](https://garagehq.deuxfleurs.fr/), or [SeaweedFS](https://seaweedfs.com/)).
+- A completely self-hosted [document](concepts/documents.md) management solution.
+- Performs OCR on documents, making everything searchable - even images.
+- Supports PDF documents, images, plain text files, Office documents (Word, Excel, PowerPoint, and LibreOffice equivalents) and more.
+- Extracts high-resolution images for all document pages, for quick viewing in the browser.
+- [Organizes](concepts/organization.md) documents with cabinets, tags and metadata.
+- Assigns [metadata](concepts/metadata.md) to documents.
+- Automatically [classify](concepts/classification.md) documents to assign tags, metadata, document types, and organize into cabinets.
+- Filter by tag, metadata, document type, cabinets, and more.
+- Full text search.
+- Automatically builds document [indexes](concepts/indexes.md) with dynamic templates (using [Minijinja](https://docs.rs/minijinja/latest/minijinja/syntax/)).
+- Stores files in durable object storage (i.e.: [RustFS](https://rustfs.com/), [Garage](https://garagehq.deuxfleurs.fr/), or [SeaweedFS](https://seaweedfs.com/)).
 
 ## Quick Links
 
