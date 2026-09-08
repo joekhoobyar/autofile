@@ -108,12 +108,21 @@ async fn main() {
     });
 
     // Spawn apalis workers (in-process).
+    // Worker names must be unique per boot: apalis-redis rejects registering a
+    // worker name that is still marked active in Redis (keep-alive threshold),
+    // so reusing fixed names makes workers exit immediately on quick restarts
+    // and also prevents running workers on multiple API replicas.
+    let worker_id = format!("{:08x}", rand::random::<u32>());
+    let fast_worker_name = format!("fast-job-worker-{worker_id}");
+    let medium_worker_name = format!("medium-job-worker-{worker_id}");
+    let slow_worker_name = format!("slow-job-worker-{worker_id}");
     let monitor = Monitor::new()
         .register({
             let app_state = app_state.clone();
+            let fast_worker_name = fast_worker_name.clone();
             move |_| {
                 // One or more workers pulling from Redis
-                WorkerBuilder::new("fast-job-worker")
+                WorkerBuilder::new(fast_worker_name.clone())
                     .backend(app_state.fast_jobs.as_ref().clone())
                     .catch_panic()
                     .retry(RetryPolicy::retries(7))
@@ -125,8 +134,9 @@ async fn main() {
         })
         .register({
             let app_state = app_state.clone();
+            let medium_worker_name = medium_worker_name.clone();
             move |_| {
-                WorkerBuilder::new("medium-job-worker")
+                WorkerBuilder::new(medium_worker_name.clone())
                     .backend(app_state.medium_jobs.as_ref().clone())
                     .catch_panic()
                     .retry(RetryPolicy::retries(7))
@@ -138,8 +148,9 @@ async fn main() {
         })
         .register({
             let app_state = app_state.clone();
+            let slow_worker_name = slow_worker_name.clone();
             move |_| {
-                WorkerBuilder::new("slow-job-worker")
+                WorkerBuilder::new(slow_worker_name.clone())
                     .backend(app_state.slow_jobs.as_ref().clone())
                     .catch_panic()
                     .retry(RetryPolicy::retries(7))
