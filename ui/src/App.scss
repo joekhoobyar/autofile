@@ -276,11 +276,32 @@ body {
 
   .aut-document-view-layout {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .aut-document-view-content {
+    width: 100%;
   }
 
   .aut-document-view-side {
+    order: -1;
+    width: 100%;
     max-width: 100%;
-    align-items: stretch;
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .aut-document-view-actions {
+    width: auto;
+    margin-bottom: 0;
+    justify-content: flex-start;
+  }
+
+  .aut-document-view-menu-mobile {
+    width: auto;
   }
 
   .aut-document-view-menu {
@@ -313,6 +334,10 @@ body {
   }
 
   .aut-document-preview-jump-label {
+    display: none;
+  }
+
+  .aut-document-file-label {
     display: none;
   }
 }

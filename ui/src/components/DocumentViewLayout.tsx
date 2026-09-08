@@ -108,10 +108,12 @@ export function DocumentViewLayout({ documentId, children }: Readonly<DocumentVi
           />
           <Button
             icon="pi pi-bars"
-            text
+            outlined
+            size="small"
             onClick={(event) => menuRef.current?.toggle(event)}
             aria-controls={menuId}
             aria-haspopup
+            aria-label="Document menu"
           />
         </div>
         <div className="aut-document-view-menu aut-document-view-menu-desktop">

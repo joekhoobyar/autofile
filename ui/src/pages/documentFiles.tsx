@@ -739,7 +739,7 @@ export function ListDocumentFilePageTextContent() {
 
         <div className="flex flex-column gap-3">
           <div className="flex flex-wrap gap-2 align-items-center">
-            <span className="font-medium">File</span>
+            <span className="font-medium aut-document-file-label">File</span>
             <Dropdown
               value={effectiveFileId}
               onChange={(event) => setSelectedFileId(event.value as number)}
@@ -808,7 +808,7 @@ export function ListDocumentFilePageOcrContent() {
 
         <div className="flex flex-column gap-3">
           <div className="flex flex-wrap gap-2 align-items-center">
-            <span className="font-medium">File</span>
+            <span className="font-medium aut-document-file-label">File</span>
             <Dropdown
               value={effectiveFileId}
               onChange={(event) => setSelectedFileId(event.value as number)}
@@ -1296,7 +1296,7 @@ export function DocumentFilePagePreview() {
 
         <div className="flex flex-column gap-3">
           <div className="flex flex-wrap gap-2 align-items-center">
-            <span className="font-medium">File</span>
+            <span className="font-medium aut-document-file-label">File</span>
             <Dropdown
               value={effectiveFileId}
               onChange={(event) => selectFile(event.value as number)}
