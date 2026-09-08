@@ -98,11 +98,17 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  padding: 0.4rem 0.5rem;
+  padding: 0.35rem 0.5rem;
   border: 0;
   border-radius: 0;
   background: var(--surface-card);
-  font-size: 0.875rem;
+  font-size: 0.85rem;
+}
+
+.aut-document-preview-toolbar .p-button {
+  font-size: 0.85rem;
+  padding: 0.5rem 0.8rem;
+  line-height: 1.2;
 }
 
 .aut-document-preview-page-status {
@@ -119,9 +125,9 @@ body {
 
 .aut-document-preview-page-input {
   width: 4.75rem;
-  padding-top: 0.35rem;
-  padding-bottom: 0.35rem;
-  font-size: 0.875rem;
+  padding-top: 0.32rem;
+  padding-bottom: 0.32rem;
+  font-size: 0.85rem;
 }
 
 .aut-document-preview-virtual-list {
