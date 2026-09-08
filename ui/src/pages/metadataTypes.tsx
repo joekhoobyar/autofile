@@ -303,7 +303,7 @@ export function ViewMetadataType() {
                   ) : (
                     <Tag
                       value={inUseByDocumentMetadata ? 'Used by document' : 'Not used by document'}
-                      severity={inUseByDocumentMetadata ? 'warning' : 'success'}
+                      severity={inUseByDocumentMetadata ? 'info' : 'secondary'}
                     />
                   )}
                 </span>
