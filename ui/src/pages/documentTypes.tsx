@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
 
 import { DataTable, type DataTableStateEvent } from 'primereact/datatable';
 import { Column } from 'primereact/column';
@@ -9,6 +10,7 @@ import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
 import { MultiSelect } from 'primereact/multiselect';
 import { Checkbox } from 'primereact/checkbox';
+import { Chip } from 'primereact/chip';
 import { classNames } from 'primereact/utils';
 
 import type { ListParams } from '../api';
@@ -17,17 +19,25 @@ import { type DocumentType } from '../models/documentType';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
-import { type Toast } from 'primereact/toast';
+import { type Toast, type ToastMessage } from 'primereact/toast';
 import { useDocumentTypeMetadataTypes, useDocumentTypeSaveMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 import { useHashListParams } from '../util/listParamsHash';
 import { AppToast } from '../components/AppToast';
+import { canAdminister, useAuth } from '../auth';
 
 const DOCUMENT_TYPE_LIST_DEFAULT_PARAMS: ListParams = { sf: 'name' };
 
+function formatDate(value: string): string {
+  return format(new Date(value), 'MM/dd/yyyy HH:mm');
+}
+
 export function ListDocumentTypes() {
+  const auth = useAuth();
+  const canManageTypes = canAdminister(auth);
   const toast = useRef<Toast>(null);
   const deleteDocumentType = useDeleteDocumentType();
+  const location = useLocation();
   const { listParams, updateListParams } = useHashListParams(DOCUMENT_TYPE_LIST_DEFAULT_PARAMS);
   const appliedSearchText = listParams.q ?? '';
   const [searchDraft, setSearchDraft] = useState({ appliedSearchText, value: appliedSearchText });
@@ -36,15 +46,23 @@ export function ListDocumentTypes() {
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useDocumentTypes(listParams);
 
+  useEffect(() => {
+    const state = location.state as { toast?: ToastMessage } | null;
+    if (!state?.toast) return;
+
+    toast.current?.show(state.toast);
+    navigate('/document-types', { replace: true, state: null });
+  }, [location.state, navigate]);
+
   const slugTemplate = (c: DocumentType) => {
     return (
-      <Link className="title" to={`${c.id}/edit`}>{c.slug}</Link>
+      <Link className="title" to={`${c.id}`}>{c.slug}</Link>
     );
   }
 
   const nameTemplate = (c: DocumentType) => {
     return (
-      <Link className="title" to={`${c.id}/edit`}>{c.name}</Link>
+      <Link className="title" to={`${c.id}`}>{c.name}</Link>
     );
   }
 
@@ -103,9 +121,9 @@ export function ListDocumentTypes() {
     updateListParams({ ...listParams, q: undefined, page: 1 });
   };
 
-  return (
-    <>
-    <Link to="new" style={{float: 'right', padding: '1.5rem'}}>New Document Type &raquo;</Link>
+    return (
+      <>
+    {canManageTypes && <Link to="new" style={{float: 'right', padding: '1.5rem'}}>New Document Type &raquo;</Link>}
     <Card title="Document Types">
       <div className="mb-3 w-full md:w-30rem">
         <div className="p-inputgroup w-full">
@@ -158,11 +176,108 @@ export function ListDocumentTypes() {
         <Column field="slug" header="Slug" body={slugTemplate} sortable></Column>
         <Column field="name" header="Name" body={nameTemplate} sortable></Column>
         <Column field="description" header="Description" sortable></Column>
-        <Column body={actionTemplate} headerClassName="w-9rem" />
+        {canManageTypes && <Column body={actionTemplate} headerClassName="w-9rem" />}
       </DataTable>
     </Card>
     <AppToast ref={toast} />
     <ConfirmDialog />
+    </>
+  );
+}
+
+export function ViewDocumentType() {
+  const auth = useAuth();
+  const canManageTypes = canAdminister(auth);
+  const id = useId('id');
+  const navigate = useNavigate();
+  const toast = useRef<Toast>(null);
+  const deleteDocumentType = useDeleteDocumentType();
+  const { isLoading, isError, data, error } = useDocumentType(id);
+  const { data: documentTypeMetadataTypes, isLoading: isLoadingMetadataTypes } = useDocumentTypeMetadataTypes(data?.id);
+  const { data: metadataTypesMap } = useMetadataTypesMap('id');
+
+  if (!id)
+    return <Message severity="error" text="Missing or invalid ID" />;
+  if (isError)
+    return <Message severity="error" text={error.message} />
+  if (isLoading || !data)
+    return <div>Loading</div>;
+
+  const deleteDocumentTypeFromDetail = async (documentType: DocumentType) => {
+    try {
+      await deleteDocumentType.mutateAsync(documentType.id);
+      navigate('/document-types', {
+        state: {
+          toast: { severity: 'success', summary: 'Document type deleted', detail: `Deleted ${documentType.name}.` },
+        },
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Something went wrong';
+      toast.current?.show({ severity: 'error', summary: 'Delete failed', detail });
+    }
+  };
+
+  const confirmDelete = () => {
+    confirmDialog({
+      message: 'Are you sure want to delete this document type?  All related documents will be changed to the default type.',
+      header: `Delete: ${data.name}`,
+      icon: 'pi pi-trash',
+      defaultFocus: 'reject',
+      acceptClassName: 'p-button-danger',
+      accept: () => void deleteDocumentTypeFromDetail(data),
+    });
+  };
+
+  const metadataTypeChips = documentTypeMetadataTypes?.map((item) => {
+    const metadataType = metadataTypesMap?.[String(item.metadata_type_id)];
+    const label = metadataType?.name ?? metadataType?.slug ?? item.metadata_type_id;
+    return {
+      id: item.metadata_type_id,
+      label: `${label}${item.required ? ' (required)' : ''}`,
+    };
+  }) ?? [];
+  const deleteDisabled = data.id === 1;
+  const deleteTitle = deleteDisabled ? 'Default document type cannot be deleted' : 'Delete';
+
+  return (
+    <>
+      <Card title={`Document Type: ${data.name}`}>
+        <ul className="aut-user-details">
+          <li><span>Slug</span>: {data.slug}</li>
+          <li><span>Name</span>: {data.name}</li>
+          <li><span>Description</span>: {data.description || ''}</li>
+          <li>
+            <span>Metadata Types</span>:{' '}
+            {isLoadingMetadataTypes ? 'Loading' : (
+              metadataTypeChips.length ? (
+                <span className="inline-flex flex-wrap gap-2 vertical-align-middle">
+                  {metadataTypeChips.map((metadataType) => (
+                    <Link key={metadataType.id} to={`/metadata-types/${metadataType.id}`} className="no-underline">
+                      <Chip label={metadataType.label} />
+                    </Link>
+                  ))}
+                </span>
+              ) : 'None'
+            )}
+          </li>
+          <li><span>Created</span>: {formatDate(data.created_at)}</li>
+          <li><span>Updated</span>: {formatDate(data.updated_at)}</li>
+        </ul>
+
+        <div className="text-end">
+          {canManageTypes && (
+            <>
+              <Button label="Edit" type="button" icon="pi pi-pencil" raised onClick={() => navigate(`/document-types/${data.id}/edit`)} />
+              <span title={deleteTitle} style={{ display: 'inline-flex', marginLeft: '0.7em' }}>
+                <Button label="Delete" type="button" icon="pi pi-trash" severity="danger" raised disabled={deleteDisabled} onClick={confirmDelete} />
+              </span>
+            </>
+          )}
+          <Button label="Back" type="button" severity="secondary" icon="pi pi-arrow-left" raised onClick={() => navigate('/document-types')} />
+        </div>
+      </Card>
+      <AppToast ref={toast} />
+      <ConfirmDialog />
     </>
   );
 }

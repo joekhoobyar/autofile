@@ -5,6 +5,8 @@ export interface MetadataType {
   data_type: 'string' | 'date' | 'lookup';
   description?: string
   options?: DataTypeOptions
+  created_at: string
+  updated_at: string
 }
 
 export interface LookupOptions {
@@ -12,4 +14,3 @@ export interface LookupOptions {
 }
 
 export type DataTypeOptions = undefined | LookupOptions;
-

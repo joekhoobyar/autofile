@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::domain::document_types_metadata_types::DocumentTypeMetadataType;
 use crate::schema::{document_types_metadata_types, metadata_types};
 use crate::shared::app_state::AppState;
-use crate::shared::auth::AuthUser;
+use crate::shared::auth::{AdminUser, AuthUser};
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, diesel_to_http};
 
@@ -74,7 +74,7 @@ pub async fn get_by_ids(
 }
 
 async fn create(
-    _user: AuthUser,
+    _user: AdminUser,
     DbConn(mut db): DbConn,
     Json(input): Json<NewDocumentTypeMetadataType>,
 ) -> Result<Json<DocumentTypeMetadataType>, ApiError> {
@@ -95,7 +95,7 @@ async fn create(
 }
 
 async fn update(
-    _user: AuthUser,
+    _user: AdminUser,
     DbConn(mut db): DbConn,
     Path((document_type_id, metadata_type_id)): Path<(i64, i64)>,
     Json(input): Json<DocumentTypeMetadataTypeChangeset>,
@@ -126,7 +126,7 @@ async fn update(
 }
 
 async fn document_type_save(
-    _user: AuthUser,
+    _user: AdminUser,
     DbConn(mut db): DbConn,
     Path(document_type_id): Path<i64>,
     Json(input): Json<Vec<DocumentTypeNewMetadataTypeInput>>,
@@ -175,7 +175,7 @@ async fn document_type_save(
 }
 
 async fn delete_junction(
-    _user: AuthUser,
+    _user: AdminUser,
     DbConn(mut db): DbConn,
     Path((document_type_id, metadata_type_id)): Path<(i64, i64)>,
 ) -> Result<Json<()>, ApiError> {

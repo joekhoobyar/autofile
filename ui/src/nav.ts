@@ -168,8 +168,8 @@ export function useBreadcrumbs(): { home: MenuItem; model: MenuItem[] } {
       return items;
     }
 
-    const userDetailMatch = pathname.match(/^\/users\/([^/]+)$/);
-    if (userDetailMatch && id) {
+    const detailMatch = pathname.match(/^\/(document-types|metadata-types|users)\/([^/]+)$/);
+    if (detailMatch && id) {
       const label = resource.loading ? 'Loading…' : (resource.label ?? id);
       items.push({ label });
       return items;

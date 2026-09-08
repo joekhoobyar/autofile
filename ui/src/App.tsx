@@ -12,14 +12,14 @@ import { BreadCrumb } from 'primereact/breadcrumb';
 import './App.scss'
 import UploadDocument, { AdvancedDocumentSearch, EditDocumentProperties, ListDocuments } from './pages/documents.tsx';
 import { EditCabinet, ListCabinets, NewCabinet } from './pages/cabinets.tsx';
-import { EditMetadataType, ListMetadataTypes, NewMetadataType } from './pages/metadataTypes.tsx';
-import { EditDocumentType, ListDocumentTypes, NewDocumentType } from './pages/documentTypes.tsx';
+import { EditMetadataType, ListMetadataTypes, NewMetadataType, ViewMetadataType } from './pages/metadataTypes.tsx';
+import { EditDocumentType, ListDocumentTypes, NewDocumentType, ViewDocumentType } from './pages/documentTypes.tsx';
 import { EditTag, ListTags, NewTag } from './pages/tags.tsx';
 import { NAV, useBreadcrumbs } from './nav.ts';
 import { Button } from 'primereact/button';
 import Login, { Logout, RequireAdmin, RequireAuth } from './pages/auth.tsx';
 import { AuthProvider } from './AuthProvider.tsx';
-import { canManageUsers, useAuth } from './auth.ts';
+import { canAdminister, useAuth } from './auth.ts';
 import { EditDocumentMetadata } from './pages/documentMetadata.tsx';
 import { DocumentFilePagePreview, ListDocumentFilePageOcrContent, ListDocumentFilePageTextContent, ListDocumentFiles, UploadDocumentFile } from './pages/documentFiles.tsx';
 import { ListDocumentIndexMembership } from './pages/documentIndexMembership.tsx';
@@ -36,7 +36,7 @@ import { About } from './pages/about.tsx';
 export function SideNav() {
   const auth = useAuth();
   const location = useLocation();
-  const navItems = NAV.filter((item) => item.key !== 'users' || canManageUsers(auth));
+  const navItems = NAV.filter((item) => item.key !== 'users' || canAdminister(auth));
   const isLogoutActive = location.pathname === '/logout';
 
   return (
@@ -212,15 +212,17 @@ const router = createBrowserRouter([
       { path: 'document-types', 
         children: [
           { index: true, element: <ListDocumentTypes/> },
-          { path: 'new', element: <NewDocumentType/> },
-          { path: ':id/edit', element: <EditDocumentType/> },
+          { path: 'new', element: <RequireAdmin />, children: [{ index: true, element: <NewDocumentType/> }] },
+          { path: ':id', element: <ViewDocumentType/> },
+          { path: ':id/edit', element: <RequireAdmin />, children: [{ index: true, element: <EditDocumentType/> }] },
         ]
       },
       { path: 'metadata-types', 
         children: [
           { index: true, element: <ListMetadataTypes/> },
-          { path: 'new', element: <NewMetadataType/> },
-          { path: ':id/edit', element: <EditMetadataType/> },
+          { path: 'new', element: <RequireAdmin />, children: [{ index: true, element: <NewMetadataType/> }] },
+          { path: ':id', element: <ViewMetadataType/> },
+          { path: ':id/edit', element: <RequireAdmin />, children: [{ index: true, element: <EditMetadataType/> }] },
         ]
       },
       { path: 'tags', 

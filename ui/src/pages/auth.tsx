@@ -11,7 +11,7 @@ import { Button } from "primereact/button";
 import { HttpError } from "../api";
 import type { LoginRequest } from "../models/auth";
 import { Card } from "primereact/card";
-import { canManageUsers, login, logout, useAuth } from "../auth";
+import { canAdminister, login, logout, useAuth } from "../auth";
 
 export function RequireAuth() {
   const auth = useAuth();
@@ -35,7 +35,7 @@ export function RequireAdmin() {
   if (auth.forcePasswordChange && loc.pathname !== "/profile/password") {
     return <Navigate to="/profile/password" replace />;
   }
-  if (!canManageUsers(auth)) return <Navigate to="/documents" replace />;
+  if (!canAdminister(auth)) return <Navigate to="/documents" replace />;
 
   return <Outlet />;
 }

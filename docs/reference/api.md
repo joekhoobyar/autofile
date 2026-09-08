@@ -226,10 +226,10 @@ Base path: `/api/v1/document-types`
 | Method | Path | Behavior |
 | --- | --- | --- |
 | `GET` | `/api/v1/document-types` | List Document Types. |
-| `POST` | `/api/v1/document-types` | Create a Document Type. |
+| `POST` | `/api/v1/document-types` | Create a Document Type. Admin only. |
 | `GET` | `/api/v1/document-types/{id}` | Get a Document Type by ID. |
-| `PATCH` | `/api/v1/document-types/{id}` | Update its name or description. |
-| `DELETE` | `/api/v1/document-types/{id}` | Delete it and reassign its documents to the default type. |
+| `PATCH` | `/api/v1/document-types/{id}` | Update its name or description. Admin only. |
+| `DELETE` | `/api/v1/document-types/{id}` | Delete it and reassign its documents to the default type. Admin only. |
 | `GET` | `/api/v1/document-types/by-slug/{slug}` | Get a Document Type by exact slug. |
 
 List query parameters:
@@ -269,7 +269,7 @@ Authorization: Bearer <access_token>
 }
 ```
 
-The slug is required on creation, must be unique, and may contain only lowercase letters, numbers, hyphens, and underscores. It cannot be updated.
+Creating, updating, and deleting Document Types requires an admin user. The slug is required on creation, must be unique, and may contain only lowercase letters, numbers, hyphens, and underscores. It cannot be updated.
 
 Deleting the default Document Type returns `400 Bad Request`. Deleting another type removes its metadata associations and reassigns its documents to the default type. It does not immediately remove all metadata values left on those documents.
 
@@ -305,10 +305,10 @@ Base path: `/api/v1/metadata-types`
 | Method | Path | Behavior |
 | --- | --- | --- |
 | `GET` | `/api/v1/metadata-types` | List Metadata Types. |
-| `POST` | `/api/v1/metadata-types` | Create a Metadata Type. |
+| `POST` | `/api/v1/metadata-types` | Create a Metadata Type. Admin only. |
 | `GET` | `/api/v1/metadata-types/{id}` | Get a Metadata Type by ID. |
-| `PATCH` | `/api/v1/metadata-types/{id}` | Update its mutable fields. |
-| `DELETE` | `/api/v1/metadata-types/{id}` | Delete an unused Metadata Type. |
+| `PATCH` | `/api/v1/metadata-types/{id}` | Update its mutable fields. Admin only. |
+| `DELETE` | `/api/v1/metadata-types/{id}` | Delete an unused Metadata Type. Admin only. |
 | `GET` | `/api/v1/metadata-types/by-slug/{slug}` | Get a Metadata Type by exact slug. |
 
 List query parameters match Document Types. The supported `sf` values are `id`, `slug`, `name`, `data_type`, `description`, `created_at`, and `updated_at`. Search checks slug, name, data type, and description.
@@ -345,7 +345,7 @@ Authorization: Bearer <access_token>
 }
 ```
 
-`PATCH` accepts `name`, `data_type`, `description`, and `options`. The slug cannot be updated. Changing a data type or Lookup choices does not migrate or revalidate existing document values.
+Creating, updating, and deleting Metadata Types requires an admin user. `PATCH` accepts `name`, `data_type`, `description`, and `options`. The slug cannot be updated. Changing a data type or Lookup choices does not migrate or revalidate existing document values.
 
 A Metadata Type cannot be deleted while any Document Type still uses it (`409 Conflict`), and it cannot be deleted while document metadata rows reference it. The API does not cascade deletion to Document Type associations or document values.
 
@@ -371,13 +371,13 @@ An association makes a Metadata Type available to a Document Type. Its `required
 | Method | Path | Behavior |
 | --- | --- | --- |
 | `GET` | `/api/v1/document-types-metadata-types` | List associations. |
-| `POST` | `/api/v1/document-types-metadata-types` | Create one association. |
-| `POST` | `/api/v1/document-types-metadata-types/{document_type_id}` | Replace all associations for a Document Type. |
+| `POST` | `/api/v1/document-types-metadata-types` | Create one association. Admin only. |
+| `POST` | `/api/v1/document-types-metadata-types/{document_type_id}` | Replace all associations for a Document Type. Admin only. |
 | `GET` | `/api/v1/document-types-metadata-types/{document_type_id}/{metadata_type_id}` | Get one association. |
-| `PATCH` | `/api/v1/document-types-metadata-types/{document_type_id}/{metadata_type_id}` | Change required status. |
-| `DELETE` | `/api/v1/document-types-metadata-types/{document_type_id}/{metadata_type_id}` | Remove one association. |
+| `PATCH` | `/api/v1/document-types-metadata-types/{document_type_id}/{metadata_type_id}` | Change required status. Admin only. |
+| `DELETE` | `/api/v1/document-types-metadata-types/{document_type_id}/{metadata_type_id}` | Remove one association. Admin only. |
 
-The list accepts `page`, `per_page`, `q`, `document_type_id`, and `metadata_type_id`. Unlike other list endpoints, it returns a JSON array without a total count. Search checks the associated Metadata Type's slug, name, data type, and description.
+The list and single-association lookup require authentication. Creating, replacing, updating, and deleting associations requires an admin user. The list accepts `page`, `per_page`, `q`, `document_type_id`, and `metadata_type_id`. Unlike other list endpoints, it returns a JSON array without a total count. Search checks the associated Metadata Type's slug, name, data type, and description.
 
 Create one association:
 

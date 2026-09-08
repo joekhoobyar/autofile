@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::domain::document_types::DocumentType;
 use crate::schema::{document_types, document_types_metadata_types, documents};
 use crate::shared::app_state::AppState;
-use crate::shared::auth::AuthUser;
+use crate::shared::auth::{AdminUser, AuthUser};
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http, validate_slug};
 
@@ -90,7 +90,7 @@ pub async fn get_by_slug(
 }
 
 async fn create(
-    user: AuthUser,
+    user: AdminUser,
     DbConn(mut db): DbConn,
     Json(input): Json<NewDocumentType>,
 ) -> Result<Json<DocumentType>, ApiError> {
@@ -111,7 +111,7 @@ async fn create(
 }
 
 async fn update(
-    user: AuthUser,
+    user: AdminUser,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
     Json(input): Json<DocumentTypeChangeset>,
@@ -133,7 +133,7 @@ async fn update(
 }
 
 async fn delete(
-    user: AuthUser,
+    user: AdminUser,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
 ) -> Result<Json<()>, ApiError> {

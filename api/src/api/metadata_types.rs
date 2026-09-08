@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::domain::metadata_types::{DataType, MetadataType};
 use crate::schema::{document_metadatas, document_types_metadata_types, metadata_types};
 use crate::shared::app_state::AppState;
-use crate::shared::auth::AuthUser;
+use crate::shared::auth::{AdminUser, AuthUser};
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, ResourceList, diesel_to_http, validate_slug};
 
@@ -97,7 +97,7 @@ pub async fn get_by_slug(
 }
 
 async fn create(
-    user: AuthUser,
+    user: AdminUser,
     DbConn(mut db): DbConn,
     Json(input): Json<NewMetadataType>,
 ) -> Result<Json<MetadataType>, ApiError> {
@@ -118,7 +118,7 @@ async fn create(
 }
 
 async fn update(
-    user: AuthUser,
+    user: AdminUser,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
     Json(input): Json<MetadataTypeChangeset>,
@@ -140,7 +140,7 @@ async fn update(
 }
 
 async fn delete(
-    _user: AuthUser,
+    _user: AdminUser,
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
 ) -> Result<Json<()>, ApiError> {

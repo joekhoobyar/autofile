@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
 
 import { DataTable, type DataTableStateEvent } from 'primereact/datatable';
 import { Column } from 'primereact/column';
@@ -17,12 +18,17 @@ import { Dropdown } from 'primereact/dropdown';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
-import { type Toast } from 'primereact/toast';
+import { type Toast, type ToastMessage } from 'primereact/toast';
 import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 import { useHashListParams } from '../util/listParamsHash';
 import { AppToast } from '../components/AppToast';
+import { canAdminister, useAuth } from '../auth';
 
 const METADATA_TYPE_LIST_DEFAULT_PARAMS: ListParams = { sf: 'name' };
+
+function formatDate(value: string): string {
+  return format(new Date(value), 'MM/dd/yyyy HH:mm');
+}
 
 function MetadataTypeDeleteButton({ metadataType, onDelete }: Readonly<{ metadataType: MetadataType; onDelete: (c: MetadataType) => void }>) {
   const { data: documentTypeUsages, isPending: isDocumentTypeUsagePending } = useMetadataTypeUsage(metadataType.id);
@@ -60,8 +66,11 @@ function MetadataTypeDeleteButton({ metadataType, onDelete }: Readonly<{ metadat
 }
 
 export function ListMetadataTypes() {
+  const auth = useAuth();
+  const canManageTypes = canAdminister(auth);
   const toast = useRef<Toast>(null);
   const deleteMetadataType = useDeleteMetadataType();
+  const location = useLocation();
   const { listParams, updateListParams } = useHashListParams(METADATA_TYPE_LIST_DEFAULT_PARAMS);
   const appliedSearchText = listParams.q ?? '';
   const [searchDraft, setSearchDraft] = useState({ appliedSearchText, value: appliedSearchText });
@@ -70,15 +79,23 @@ export function ListMetadataTypes() {
   const navigate = useNavigate();
   const { isPending, data, isFetching } = useMetadataTypes(listParams);
 
+  useEffect(() => {
+    const state = location.state as { toast?: ToastMessage } | null;
+    if (!state?.toast) return;
+
+    toast.current?.show(state.toast);
+    navigate('/metadata-types', { replace: true, state: null });
+  }, [location.state, navigate]);
+
   const slugTemplate = (c: MetadataType) => {
     return (
-      <Link className="title" to={`${c.id}/edit`}>{c.slug}</Link>
+      <Link className="title" to={`${c.id}`}>{c.slug}</Link>
     );
   }
 
   const nameTemplate = (c: MetadataType) => {
     return (
-      <Link className="title" to={`${c.id}/edit`}>{c.name}</Link>
+      <Link className="title" to={`${c.id}`}>{c.name}</Link>
     );
   }
 
@@ -135,9 +152,9 @@ export function ListMetadataTypes() {
     updateListParams({ ...listParams, q: undefined, page: 1 });
   };
 
-  return (
-    <>
-    <Link to="new" style={{float: 'right', padding: '1.5rem'}}>New Metadata Type &raquo;</Link>
+    return (
+      <>
+    {canManageTypes && <Link to="new" style={{float: 'right', padding: '1.5rem'}}>New Metadata Type &raquo;</Link>}
     <Card title="Metadata Types">
       <div className="mb-3 w-full md:w-30rem">
         <div className="p-inputgroup w-full">
@@ -191,11 +208,101 @@ export function ListMetadataTypes() {
         <Column field="name" header="Name" body={nameTemplate} sortable></Column>
         <Column field="data_type" header="Data Type" sortable></Column>
         <Column field="description" header="Description" sortable></Column>
-        <Column body={actionTemplate} headerClassName="w-9rem" />
+        {canManageTypes && <Column body={actionTemplate} headerClassName="w-9rem" />}
       </DataTable>
     </Card>
     <AppToast ref={toast} />
     <ConfirmDialog />
+    </>
+  );
+}
+
+export function ViewMetadataType() {
+  const auth = useAuth();
+  const canManageTypes = canAdminister(auth);
+  const id = useId('id');
+  const navigate = useNavigate();
+  const toast = useRef<Toast>(null);
+  const deleteMetadataType = useDeleteMetadataType();
+  const { isLoading, isError, data, error } = useMetadataType(id);
+  const { data: documentTypeUsages, isPending: isDocumentTypeUsagePending } = useMetadataTypeUsage(data?.id);
+  const { data: documentUsages, isPending: isDocumentUsagePending } = useMetadataTypeDocumentUsage(data?.id);
+
+  if (!id)
+    return <Message severity="error" text="Missing or invalid ID" />;
+  if (isError)
+    return <Message severity="error" text={error.message} />
+  if (isLoading || !data)
+    return <div>Loading</div>;
+
+  const inUseByDocumentType = (documentTypeUsages?.length ?? 0) > 0;
+  const inUseByDocumentMetadata = (documentUsages?.total ?? 0) > 0;
+  const isUsagePending = isDocumentTypeUsagePending || isDocumentUsagePending;
+  const deleteDisabled = isUsagePending || inUseByDocumentType || inUseByDocumentMetadata;
+  const deleteTitle = isUsagePending
+    ? 'Checking usage'
+    : inUseByDocumentMetadata
+      ? 'In use by document metadata'
+      : inUseByDocumentType
+        ? 'In use by a document type'
+        : 'Delete';
+
+  const deleteMetadataTypeFromDetail = async (metadataType: MetadataType) => {
+    try {
+      await deleteMetadataType.mutateAsync(metadataType.id);
+      navigate('/metadata-types', {
+        state: {
+          toast: { severity: 'success', summary: 'Metadata type deleted', detail: `Deleted ${metadataType.name}.` },
+        },
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Something went wrong';
+      toast.current?.show({ severity: 'error', summary: 'Delete failed', detail });
+    }
+  };
+
+  const confirmDelete = () => {
+    confirmDialog({
+      message: 'Are you sure you want to delete this metadata type? A metadata type that is in use by a document type cannot be deleted.',
+      header: `Delete: ${data.name}`,
+      icon: 'pi pi-trash',
+      defaultFocus: 'reject',
+      acceptClassName: 'p-button-danger',
+      accept: () => void deleteMetadataTypeFromDetail(data),
+    });
+  };
+
+  const choices = data.options?.choices?.join(', ') ?? '';
+
+  return (
+    <>
+      <Card title={`Metadata Type: ${data.name}`}>
+        <ul className="aut-user-details">
+          <li><span>Slug</span>: {data.slug}</li>
+          <li><span>Name</span>: {data.name}</li>
+          <li><span>Data Type</span>: {data.data_type}</li>
+          <li><span>Description</span>: {data.description || ''}</li>
+          {data.data_type === 'lookup' && <li><span>Choices</span>: {choices}</li>}
+          <li><span>Used by a Document Type?</span>: {isDocumentTypeUsagePending ? 'Loading' : inUseByDocumentType ? 'Yes' : 'No'}</li>
+          <li><span>Used by a Document?</span>: {isDocumentUsagePending ? 'Loading' : inUseByDocumentMetadata ? 'Yes' : 'No'}</li>
+          <li><span>Created</span>: {formatDate(data.created_at)}</li>
+          <li><span>Updated</span>: {formatDate(data.updated_at)}</li>
+        </ul>
+
+        <div className="text-end">
+          {canManageTypes && (
+            <>
+              <Button label="Edit" type="button" icon="pi pi-pencil" raised onClick={() => navigate(`/metadata-types/${data.id}/edit`)} />
+              <span title={deleteTitle} style={{ display: 'inline-flex', marginLeft: '0.7em' }}>
+                <Button label="Delete" type="button" icon="pi pi-trash" severity="danger" raised disabled={deleteDisabled} onClick={confirmDelete} />
+              </span>
+            </>
+          )}
+          <Button label="Back" type="button" severity="secondary" icon="pi pi-arrow-left" raised onClick={() => navigate('/metadata-types')} />
+        </div>
+      </Card>
+      <AppToast ref={toast} />
+      <ConfirmDialog />
     </>
   );
 }
