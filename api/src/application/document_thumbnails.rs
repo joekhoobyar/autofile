@@ -26,10 +26,8 @@ pub async fn generate_thumbnail(
     page: u32,
     width: u32,
     state: Data<Arc<AppState>>,
-) -> Result<(), Error> {
-    generate_thumbnail_inner(document_file_id, page, width, state)
-        .await
-        .map_err(Into::into)
+) -> JobResult<()> {
+    generate_thumbnail_inner(document_file_id, page, width, state).await
 }
 
 async fn generate_thumbnail_inner(

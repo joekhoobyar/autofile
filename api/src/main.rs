@@ -108,39 +108,65 @@ async fn main() {
     });
 
     // Spawn apalis workers (in-process).
+    // Worker names must be unique per boot: apalis-redis rejects registering a
+    // worker name that is still marked active in Redis (keep-alive threshold),
+    // so reusing fixed names makes workers exit immediately on quick restarts
+    // and also prevents running workers on multiple API replicas.
+    let worker_id = format!("{:08x}", rand::random::<u32>());
+    let fast_worker_name = format!("fast-job-worker-{worker_id}");
+    let medium_worker_name = format!("medium-job-worker-{worker_id}");
+    let slow_worker_name = format!("slow-job-worker-{worker_id}");
     let monitor = Monitor::new()
         .register({
-            // One or more workers pulling from Redis
-            WorkerBuilder::new("fast-job-worker")
-                .catch_panic()
-                .retry(RetryPolicy::retries(7))
-                .enable_tracing()
-                .concurrency(6) // Adjust concurrency as needed
-                .data(app_state.clone())
-                .backend(app_state.fast_jobs.as_ref().clone())
-                .build_fn(handle_fast_job)
+            let app_state = app_state.clone();
+            let fast_worker_name = fast_worker_name.clone();
+            move |_| {
+                // One or more workers pulling from Redis
+                WorkerBuilder::new(fast_worker_name.clone())
+                    .backend(app_state.fast_jobs.as_ref().clone())
+                    .catch_panic()
+                    .retry(RetryPolicy::retries(7))
+                    .enable_tracing()
+                    .concurrency(6) // Adjust concurrency as needed
+                    .data(app_state.clone())
+                    .build(handle_fast_job)
+            }
         })
         .register({
-            WorkerBuilder::new("medium-job-worker")
-                .catch_panic()
-                .retry(RetryPolicy::retries(7))
-                .enable_tracing()
-                .concurrency(4)
-                .data(app_state.clone())
-                .backend(app_state.medium_jobs.as_ref().clone())
-                .build_fn(handle_medium_job)
+            let app_state = app_state.clone();
+            let medium_worker_name = medium_worker_name.clone();
+            move |_| {
+                WorkerBuilder::new(medium_worker_name.clone())
+                    .backend(app_state.medium_jobs.as_ref().clone())
+                    .catch_panic()
+                    .retry(RetryPolicy::retries(7))
+                    .enable_tracing()
+                    .concurrency(4)
+                    .data(app_state.clone())
+                    .build(handle_medium_job)
+            }
         })
         .register({
-            WorkerBuilder::new("slow-job-worker")
-                .catch_panic()
-                .retry(RetryPolicy::retries(7))
-                .enable_tracing()
-                .concurrency(2)
-                .data(app_state.clone())
-                .backend(app_state.slow_jobs.as_ref().clone())
-                .build_fn(handle_slow_job)
+            let app_state = app_state.clone();
+            let slow_worker_name = slow_worker_name.clone();
+            move |_| {
+                WorkerBuilder::new(slow_worker_name.clone())
+                    .backend(app_state.slow_jobs.as_ref().clone())
+                    .catch_panic()
+                    .retry(RetryPolicy::retries(7))
+                    .enable_tracing()
+                    .concurrency(2)
+                    .data(app_state.clone())
+                    .build(handle_slow_job)
+            }
         })
-        .on_event(|e| tracing::info!("{e}"))
+        .on_event(|_, e| {
+            if matches!(e, Event::HeartBeat) {
+                tracing::debug!("{e}");
+            } else {
+                tracing::info!("{e}");
+            }
+        })
         // Wait 5 seconds after shutdown is triggered to allow any incomplete jobs to complete
         // .shutdown_timeout(Duration::from_secs(5))
         ;

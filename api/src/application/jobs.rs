@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use apalis::prelude::*;
+use apalis::prelude::Data;
 
 use crate::application::classifier_blocks::classify_document;
 use crate::application::document_files::process_file_pages;
@@ -11,6 +11,7 @@ use crate::application::document_index_documents::{
 };
 use crate::application::document_thumbnails::generate_thumbnail;
 use crate::shared::app_state::AppState;
+use crate::shared::util::JobResult;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FastJob {
@@ -39,9 +40,9 @@ pub enum SlowJob {
 /**
  * Handles a fast job by matching on the job type and calling the appropriate function to process it.
  *
- * The function takes a `FastJob` and an `Arc<AppState>` as parameters and returns a `Result<(), Error>`.
+ * The function takes a `FastJob` and an `Arc<AppState>` as parameters and returns a `JobResult<()>`.
  */
-pub async fn handle_fast_job(job: FastJob, state: Data<Arc<AppState>>) -> Result<(), Error> {
+pub async fn handle_fast_job(job: FastJob, state: Data<Arc<AppState>>) -> JobResult<()> {
     match job {
         FastJob::GenerateThumbnail {
             document_file_id,
@@ -58,9 +59,9 @@ pub async fn handle_fast_job(job: FastJob, state: Data<Arc<AppState>>) -> Result
 /**
  * Handles a medium job by matching on the job type and calling the appropriate function to process it.
  *
- * The function takes a `MediumJob` and an `Arc<AppState>` as parameters and returns a `Result<(), Error>`.
+ * The function takes a `MediumJob` and an `Arc<AppState>` as parameters and returns a `JobResult<()>`.
  */
-pub async fn handle_medium_job(job: MediumJob, state: Data<Arc<AppState>>) -> Result<(), Error> {
+pub async fn handle_medium_job(job: MediumJob, state: Data<Arc<AppState>>) -> JobResult<()> {
     match job {
         MediumJob::ProcessFilePages { document_file_id } => {
             process_file_pages(document_file_id, state).await
@@ -72,7 +73,7 @@ pub async fn handle_medium_job(job: MediumJob, state: Data<Arc<AppState>>) -> Re
     }
 }
 
-pub async fn handle_slow_job(job: SlowJob, state: Data<Arc<AppState>>) -> Result<(), Error> {
+pub async fn handle_slow_job(job: SlowJob, state: Data<Arc<AppState>>) -> JobResult<()> {
     match job {
         SlowJob::RebuildDocumentIndex { document_index_id } => {
             // Call the appropriate function to rebuild the document index

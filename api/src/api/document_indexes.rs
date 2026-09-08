@@ -13,7 +13,7 @@ use crate::shared::util::{ApiError, ResourceList, diesel_to_http, validate_slug}
 
 use serde::Deserialize;
 
-use apalis::prelude::Storage;
+use apalis::prelude::TaskSink;
 use axum::{
     Json, Router,
     extract::{Path, Query, State},

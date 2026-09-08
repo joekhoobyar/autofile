@@ -69,10 +69,8 @@ pub async fn classify_document(
     document_id: i64,
     user_id: i64,
     state: Data<Arc<AppState>>,
-) -> Result<(), Error> {
-    classify_document_inner(document_id, user_id, state)
-        .await
-        .map_err(Into::into)
+) -> JobResult<()> {
+    classify_document_inner(document_id, user_id, state).await
 }
 
 async fn classify_document_inner(
