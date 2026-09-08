@@ -347,7 +347,7 @@ Authorization: Bearer <access_token>
 
 `PATCH` accepts `name`, `data_type`, `description`, and `options`. The slug cannot be updated. Changing a data type or Lookup choices does not migrate or revalidate existing document values.
 
-A Metadata Type cannot be deleted while document metadata rows reference it. The API removes Document Type associations as part of a successful deletion, but does not cascade deletion to document values.
+A Metadata Type cannot be deleted while any Document Type still uses it (`409 Conflict`), and it cannot be deleted while document metadata rows reference it. The API does not cascade deletion to Document Type associations or document values.
 
 See the [Metadata Types guide](../concepts/metadata-types.md).
 

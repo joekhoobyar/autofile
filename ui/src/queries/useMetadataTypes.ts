@@ -15,6 +15,15 @@ export function useDocumentTypeMetadataTypes(document_type_id: string | number |
   });
 }
 
+export function useMetadataTypeUsage(metadata_type_id: string | number | undefined, options = {}): UseQueryResult<DocumentTypeMetadataType[], HttpError> {
+  return useQuery({
+    queryKey: ['documentTypeMetadataType', 'by-metadata-type', {metadata_type_id}],
+    enabled: !!metadata_type_id,
+    ...options,
+    queryFn: () => apiFetch<DocumentTypeMetadataType[]>(`api/v1/document-types-metadata-types?metadata_type_id=${metadata_type_id}&per_page=1`),
+  });
+}
+
 type DocumentTypeSaveMetadataTypesInput = {
   documentTypeId: string | number;
   payload: DocumentTypeNewMetadataType[];

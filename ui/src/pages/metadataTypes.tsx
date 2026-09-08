@@ -11,7 +11,7 @@ import { InputTextarea } from 'primereact/inputtextarea';
 import { classNames } from 'primereact/utils';
 
 import type { ListParams } from '../api';
-import { useMetadataType, useMetadataTypes, useSaveMetadataType, useDeleteMetadataType } from '../queries/useMetadataTypes';
+import { useMetadataType, useMetadataTypes, useSaveMetadataType, useDeleteMetadataType, useMetadataTypeUsage } from '../queries/useMetadataTypes';
 import { type MetadataType } from '../models/metadataType';
 import { Dropdown } from 'primereact/dropdown';
 import { Message } from 'primereact/message';
@@ -23,6 +23,30 @@ import { useHashListParams } from '../util/listParamsHash';
 import { AppToast } from '../components/AppToast';
 
 const METADATA_TYPE_LIST_DEFAULT_PARAMS: ListParams = { sf: 'name' };
+
+function MetadataTypeDeleteButton({ metadataType, onDelete }: Readonly<{ metadataType: MetadataType; onDelete: (c: MetadataType) => void }>) {
+  const { data: usages } = useMetadataTypeUsage(metadataType.id);
+  const inUse = (usages?.length ?? 0) > 0;
+
+  return (
+    <span
+      title={inUse ? 'In use by a document type' : 'Delete'}
+      style={{ display: 'inline-flex' }}
+    >
+      <Button
+        type="button"
+        icon="pi pi-trash"
+        severity="danger"
+        rounded
+        text
+        raised
+        aria-description="Delete"
+        disabled={inUse}
+        onClick={() => onDelete(metadataType)}
+      ></Button>
+    </span>
+  );
+}
 
 export function ListMetadataTypes() {
   const toast = useRef<Toast>(null);
@@ -53,9 +77,7 @@ export function ListMetadataTypes() {
         <Button type="button" icon="pi pi-pencil" severity="success" rounded text raised aria-description="Edit"
           onClick={() => navigate(`${c.id}/edit`)}
         ></Button>
-        <Button type="button" icon="pi pi-trash" severity="danger" rounded text raised aria-description="Delete"
-          onClick={() => confirmDeleteMetadataType(c)}
-        ></Button>
+        <MetadataTypeDeleteButton metadataType={c} onDelete={confirmDeleteMetadataType} />
       </div>
     );
   };
@@ -72,7 +94,7 @@ export function ListMetadataTypes() {
 
   const confirmDeleteMetadataType = (c: MetadataType) => {
     confirmDialog({
-      message: 'Are you sure you want to delete this metadata type? Deletion will fail if any document metadata values still reference it.',
+      message: 'Are you sure you want to delete this metadata type? A metadata type that is in use by a document type cannot be deleted.',
       header: `Delete: ${c.name}`,
       icon: 'pi pi-trash',
       defaultFocus: 'reject',

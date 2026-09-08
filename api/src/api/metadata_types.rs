@@ -14,8 +14,9 @@ use axum::{
     extract::{Path, Query},
     routing::get,
 };
+use diesel::dsl::exists;
 use diesel::prelude::*;
-use diesel_async::{AsyncConnection, RunQueryDsl};
+use diesel_async::RunQueryDsl;
 use serde_json::Value;
 
 #[derive(Debug, Deserialize, Insertable)]
@@ -143,34 +144,28 @@ async fn delete(
     DbConn(mut db): DbConn,
     Path(id): Path<i64>,
 ) -> Result<Json<()>, ApiError> {
-    db.transaction::<_, diesel::result::Error, _>(async move |conn| {
-        // Delete the join table records
-        diesel::delete(
-            document_types_metadata_types::table
-                .filter(document_types_metadata_types::metadata_type_id.eq(id)),
-        )
-        .execute(conn)
-        .await?;
-
-        // Delete the metadata type
-        let affected = diesel::delete(metadata_types::table.filter(metadata_types::id.eq(id)))
-            .execute(conn)
-            .await?;
-
-        if affected == 0 {
-            return Err(diesel::result::Error::NotFound);
-        }
-
-        Ok(())
-    })
+    let in_use: bool = diesel::select(exists(
+        document_types_metadata_types::table
+            .filter(document_types_metadata_types::metadata_type_id.eq(id)),
+    ))
+    .get_result(&mut db)
     .await
-    .map_err(|e| {
-        if matches!(e, diesel::result::Error::NotFound) {
-            ApiError::not_found("Metadata type not found")
-        } else {
-            ApiError::new(diesel_to_http(e), "Failed to delete metadata_type")
-        }
-    })?;
+    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to check metadata_type usage"))?;
+
+    if in_use {
+        return Err(ApiError::conflict(
+            "Metadata type is in use by a document type and cannot be deleted",
+        ));
+    }
+
+    let affected = diesel::delete(metadata_types::table.filter(metadata_types::id.eq(id)))
+        .execute(&mut db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete metadata_type"))?;
+
+    if affected == 0 {
+        return Err(ApiError::not_found("Metadata type not found"));
+    }
 
     Ok(Json(()))
 }

@@ -78,7 +78,7 @@ The name, description, data type, and Lookup choices can be edited. The slug rem
 
 ## Delete A Metadata Type
 
-A Metadata Type can be deleted only when no document metadata values still reference it. Remove or migrate those values first. Deleting an unused Metadata Type also removes its associations with Document Types.
+A Metadata Type can be deleted only when no Document Type still uses it and no document metadata values still reference it. Remove the Metadata Type from every Document Type first, then remove or migrate those values.
 
 ## Use Metadata Slugs
 
