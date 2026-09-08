@@ -90,6 +90,7 @@ Malformed JSON and invalid path or query input can instead return an Axum framew
 ## Health
 
 - `GET /api/v1/health/ready`
+- `GET /api/v1/ping` requires authentication and returns `{}`. Use it to verify that the current access token is still accepted.
 
 ## Route Families
 
@@ -102,6 +103,7 @@ Malformed JSON and invalid path or query input can instead return an Axum framew
 - `/api/v1/document-types-metadata-types`
 - `/api/v1/documents`
 - `/api/v1/metadata-types`
+- `/api/v1/ping`
 - `/api/v1/profile`
 - `/api/v1/tags`
 - `/api/v1/users`
