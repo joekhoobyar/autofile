@@ -15,7 +15,7 @@ The top of the form contains the block-level settings:
 - **Name:** the human-readable block name.
 - **Description:** optional context for other users.
 - **Enabled:** disabled blocks are ignored during classification.
-- **Order:** managed by drag-and-drop on the list page.
+- **Order:** the order that the block is evaluated in (lowest numbers first)
 
 ![screenshot: classifier block form top section with name, description, enabled, and order](../assets/classifier-block-form-top.png){width="100%"}
 
