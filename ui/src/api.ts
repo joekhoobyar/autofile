@@ -196,3 +196,7 @@ export async function apiMutate<TResponse, TBody = unknown>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 }
+
+export async function ensureAuthenticated(): Promise<void> {
+  await apiFetch<Record<string, never>>("api/v1/ping");
+}

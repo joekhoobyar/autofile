@@ -10,7 +10,7 @@ import { Dialog } from 'primereact/dialog';
 import { classNames } from 'primereact/utils';
 import { format } from "date-fns";
 
-import { apiUrl, getAccessToken } from '../api';
+import { apiUrl, ensureAuthenticated, getAccessToken } from '../api';
 import { useDocuments, useDocument, useSaveDocument, useDocumentThumbnail } from '../queries/useDocuments';
 import { useDocumentIndex } from '../queries/useDocumentIndexes';
 import { useDocumentIndexValueAncestors } from '../queries/useDocumentIndexValues';
@@ -1517,6 +1517,14 @@ export default function UploadDocument() {
 
         const files = event.files ?? [];
         if (!files.length) return;
+
+        try {
+            await ensureAuthenticated();
+        } catch (error) {
+            const detail = error instanceof Error ? error.message : 'Please sign in again before uploading.';
+            toast.current?.show({ severity: 'error', summary: 'Authentication failed', detail });
+            return;
+        }
 
         setIsUploading(true);
         setUploadProgress(0);

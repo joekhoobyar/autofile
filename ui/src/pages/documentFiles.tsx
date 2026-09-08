@@ -20,7 +20,7 @@ import { Tooltip } from 'primereact/tooltip';
 import { classNames } from 'primereact/utils';
 import { format } from 'date-fns';
 
-import { HttpError, apiFetch, apiUrl, getAccessToken } from '../api';
+import { HttpError, apiFetch, apiUrl, ensureAuthenticated, getAccessToken } from '../api';
 import { AppToast } from '../components/AppToast';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { type DocumentFile } from '../models/documentFile';
@@ -406,6 +406,14 @@ export function UploadDocumentFile() {
   const uploadHandler = async (event: FileUploadHandlerEvent) => {
     const files = event.files ?? [];
     if (!files.length) return;
+
+    try {
+      await ensureAuthenticated();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Please sign in again before uploading.';
+      toast.current?.show({ severity: 'error', summary: 'Authentication failed', detail });
+      return;
+    }
 
     setIsUploading(true);
     setUploadProgress(0);

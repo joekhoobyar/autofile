@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add read-only detail pages for document types and metadata types, including linked metadata type chips and usage indicators.
 - Prevent users from deleting their own account in both the API and UI.
 - Add an authenticated `GET /api/v1/ping` endpoint for checking whether credentials are still valid.
+- Check authentication with `GET /api/v1/ping` before document and document-file uploads so expired access tokens can refresh before file transfer starts.
 
 ## [0.4.4] - 2026-09-07
 
