@@ -2,7 +2,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use apalis::prelude::*;
+use diesel::dsl::select;
 use diesel::prelude::*;
+use diesel::result::{DatabaseErrorKind, Error as DieselError};
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use tokio::io::AsyncRead;
 use tokio::process::Command;
@@ -204,11 +206,22 @@ async fn process_file_pages_inner(
 
     // Load the document file from the database.
     let mut db = state.db_pool.get().await?;
-    let mut document_file = document_files::table
+    let mut document_file = match document_files::table
         .find(document_file_id)
         .select(DocumentFile::as_select())
         .first::<DocumentFile>(&mut db)
-        .await?;
+        .await
+    {
+        Ok(document_file) => document_file,
+        Err(diesel::result::Error::NotFound) => {
+            tracing::info!(
+                document_file_id,
+                "document file no longer exists; skipping page processing"
+            );
+            return Ok(());
+        }
+        Err(err) => return Err(err.into()),
+    };
     persist_document_file_content_type_fallback(&mut db, &mut document_file).await?;
 
     // Download the file from S3 into a temp file.
@@ -929,20 +942,54 @@ async fn process_file_pages_pdf(
     tracing::info!(document_file_id, "counting pages");
     let pages = count_pages(temp_file.to_owned(), state.clone()).await?;
 
-    diesel::update(document_files::table.find(document_file_id))
+    let affected = diesel::update(document_files::table.find(document_file_id))
         .set(document_files::pages.eq(pages as i32))
         .execute(&mut db)
         .await?;
+    if affected == 0 {
+        tracing::info!(
+            document_file_id,
+            "document file no longer exists; cancelling page processing"
+        );
+        return Ok(());
+    }
 
     for page in 1..=pages {
+        if !document_file_exists(&mut db, document_file_id).await? {
+            tracing::info!(
+                document_file_id,
+                page,
+                "document file no longer exists; cancelling page processing"
+            );
+            return Ok(());
+        }
+
         {
             tracing::info!(document_file_id, page, "extracting text for page");
             let text =
                 extract_pdf_page_text(temp_file.to_owned(), page, temp_dir, state.clone()).await?;
-            upsert_document_file_page(&mut db, document_file_id, page as i32, Some(text)).await?;
+            if !upsert_document_file_page(&mut db, document_file_id, page as i32, Some(text))
+                .await?
+            {
+                tracing::info!(
+                    document_file_id,
+                    page,
+                    "document file no longer exists; cancelling page processing"
+                );
+                return Ok(());
+            }
         }
 
         {
+            if !document_file_exists(&mut db, document_file_id).await? {
+                tracing::info!(
+                    document_file_id,
+                    page,
+                    "document file no longer exists; cancelling page processing"
+                );
+                return Ok(());
+            }
+
             tracing::info!(document_file_id, page, "extracting image for page");
             let image_path = extract_pdf_page_image(
                 temp_file.to_owned(),
@@ -955,8 +1002,21 @@ async fn process_file_pages_pdf(
 
             tracing::info!(document_file_id, page, "extracting OCR text for page");
             let ocr_text = extract_page_ocr(&image_path, temp_dir, state.clone()).await?;
-            upsert_document_file_ocr_page(&mut db, document_file_id, page as i32, Some(ocr_text))
-                .await?;
+            if !upsert_document_file_ocr_page(
+                &mut db,
+                document_file_id,
+                page as i32,
+                Some(ocr_text),
+            )
+            .await?
+            {
+                tracing::info!(
+                    document_file_id,
+                    page,
+                    "document file no longer exists; cancelling page processing"
+                );
+                return Ok(());
+            }
             remove_temp_file_best_effort(&image_path, "page image").await;
         }
     }
@@ -985,12 +1045,36 @@ async fn process_file_pages_image(
 
     let prev_pages = document_file.pages.max(0) as u32;
 
-    diesel::update(document_files::table.find(document_file_id))
+    let affected = diesel::update(document_files::table.find(document_file_id))
         .set(document_files::pages.eq(1))
         .execute(&mut db)
         .await?;
+    if affected == 0 {
+        tracing::info!(
+            document_file_id,
+            page = 1,
+            "document file no longer exists; cancelling image page processing"
+        );
+        return Ok(());
+    }
 
-    upsert_document_file_page(&mut db, document_file_id, 1, None).await?;
+    if !upsert_document_file_page(&mut db, document_file_id, 1, None).await? {
+        tracing::info!(
+            document_file_id,
+            page = 1,
+            "document file no longer exists; cancelling image page processing"
+        );
+        return Ok(());
+    }
+
+    if !document_file_exists(&mut db, document_file_id).await? {
+        tracing::info!(
+            document_file_id,
+            page = 1,
+            "document file no longer exists; cancelling image page processing"
+        );
+        return Ok(());
+    }
 
     let image_path = temp_dir.join("page-1.png");
     convert_image_to_png(temp_file.to_owned(), &image_path, state.clone()).await?;
@@ -1007,7 +1091,14 @@ async fn process_file_pages_image(
         "extracting OCR text for image page"
     );
     let ocr_text = extract_page_ocr(&image_path, temp_dir, state.clone()).await?;
-    upsert_document_file_ocr_page(&mut db, document_file_id, 1, Some(ocr_text)).await?;
+    if !upsert_document_file_ocr_page(&mut db, document_file_id, 1, Some(ocr_text)).await? {
+        tracing::info!(
+            document_file_id,
+            page = 1,
+            "document file no longer exists; cancelling image page processing"
+        );
+        return Ok(());
+    }
     remove_temp_file_best_effort(&image_path, "image page").await;
 
     cleanup_extra_pages(
@@ -1037,6 +1128,19 @@ async fn cleanup_extra_pages(
     delete_s3_keys_best_effort(document_file_id, &stale_keys, state).await;
 
     Ok(())
+}
+
+async fn document_file_exists(
+    db: &mut diesel_async::AsyncPgConnection,
+    document_file_id: i64,
+) -> JobResult<bool> {
+    let exists = select(diesel::dsl::exists(
+        document_files::table.filter(document_files::id.eq(document_file_id)),
+    ))
+    .get_result::<bool>(db)
+    .await?;
+
+    Ok(exists)
 }
 
 pub async fn cleanup_extra_page_rows(
@@ -1097,8 +1201,8 @@ async fn upsert_document_file_page(
     document_file_id: i64,
     page_number: i32,
     text_content: Option<String>,
-) -> JobResult<()> {
-    diesel::insert_into(document_file_pages::table)
+) -> JobResult<bool> {
+    let result = diesel::insert_into(document_file_pages::table)
         .values(&NewDocumentFilePage {
             document_file_id,
             page_number,
@@ -1114,9 +1218,13 @@ async fn upsert_document_file_page(
                 .eq(diesel::upsert::excluded(document_file_pages::text_content)),
         )
         .execute(db)
-        .await?;
+        .await;
 
-    Ok(())
+    match result {
+        Ok(_) => Ok(true),
+        Err(err) if is_foreign_key_violation(&err) => Ok(false),
+        Err(err) => Err(err.into()),
+    }
 }
 
 async fn upsert_document_file_ocr_page(
@@ -1124,8 +1232,8 @@ async fn upsert_document_file_ocr_page(
     document_file_id: i64,
     page_number: i32,
     ocr_content: Option<String>,
-) -> JobResult<()> {
-    diesel::insert_into(document_file_ocr_pages::table)
+) -> JobResult<bool> {
+    let result = diesel::insert_into(document_file_ocr_pages::table)
         .values(&NewDocumentFileOcrPage {
             document_file_id,
             page_number,
@@ -1142,9 +1250,20 @@ async fn upsert_document_file_ocr_page(
             )),
         )
         .execute(db)
-        .await?;
+        .await;
 
-    Ok(())
+    match result {
+        Ok(_) => Ok(true),
+        Err(err) if is_foreign_key_violation(&err) => Ok(false),
+        Err(err) => Err(err.into()),
+    }
+}
+
+fn is_foreign_key_violation(err: &DieselError) -> bool {
+    matches!(
+        err,
+        DieselError::DatabaseError(DatabaseErrorKind::ForeignKeyViolation, _)
+    )
 }
 
 /**

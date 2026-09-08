@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Cancel document file page processing when the document file is deleted mid-job to avoid repeated retry noise.
+
 ## [0.4.5] - 2026-09-08
 
 ### Added
