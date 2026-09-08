@@ -21,9 +21,57 @@ permissions:
   packages: write
 
 jobs:
+  draft-release:
+    name: Draft GitHub Release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Skip non-tag release prep
+        if: github.ref_type != 'tag'
+        run: echo "GitHub release prep is only needed for tag builds."
+
+      - name: Extract release notes
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          .github/scripts/extract-changelog-section.sh "${version}" CHANGELOG.md --output /tmp/release-notes.md
+
+      - name: Create or update draft release
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          prerelease_args=()
+          if [[ "${version}" == *-* ]]; then
+            prerelease_args=(--prerelease)
+          fi
+
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release edit "${GITHUB_REF_NAME}" \
+              --draft=true \
+              --title "${GITHUB_REF_NAME}" \
+              --notes-file /tmp/release-notes.md \
+              "${prerelease_args[@]}"
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              --draft \
+              --title "${GITHUB_REF_NAME}" \
+              --notes-file /tmp/release-notes.md \
+              "${prerelease_args[@]}"
+          fi
+
   images:
     name: Build ${{ matrix.arch }} Images
     runs-on: ${{ matrix.runner }}
+    needs: draft-release
     strategy:
       fail-fast: false
       matrix:
@@ -209,3 +257,38 @@ jobs:
         run: |
           chart_packages=(/tmp/charts/autofile-*.tgz)
           helm push "${chart_packages[0]}" oci://ghcr.io/${{ github.repository_owner }}/charts
+
+  publish-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-24.04
+    needs: helm-chart
+    if: github.ref_type == 'tag'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Extract release notes
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          .github/scripts/extract-changelog-section.sh "${version}" CHANGELOG.md --output /tmp/release-notes.md
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          prerelease_args=()
+          if [[ "${version}" == *-* ]]; then
+            prerelease_args=(--prerelease)
+          fi
+
+          gh release edit "${GITHUB_REF_NAME}" \
+            --draft=false \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file /tmp/release-notes.md \
+            "${prerelease_args[@]}"
