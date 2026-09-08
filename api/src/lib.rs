@@ -6,6 +6,7 @@ use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 pub mod schema;
 pub mod api {
     pub mod about;
+    pub mod app_settings;
     pub mod auth;
     pub mod cabinet_documents;
     pub mod cabinets;
@@ -27,6 +28,7 @@ pub mod api {
     pub mod users;
 }
 pub mod application {
+    pub mod app_settings;
     pub mod classifier_blocks;
     pub mod classifier_rule_validation;
     pub mod document_files;
@@ -39,6 +41,7 @@ pub mod application {
     pub mod users;
 }
 pub mod domain {
+    pub mod app_settings;
     pub mod cabinet_documents;
     pub mod cabinets;
     pub mod classifier_blocks;

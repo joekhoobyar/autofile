@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add an admin-only Settings page and `/api/v1/settings` API for controlling app behavior, starting with an `allow_user_registration` toggle that blocks `POST /api/v1/auth/register` when disabled.
+
 ### Changed
 
 - Upgrade background job processing to Apalis 1.0 (`apalis` 1.0.0-rc.9, `apalis-redis` 1.0.0-rc.8) and Redis client 1.x, migrating worker registration to the 1.0 factory-based APIs while keeping job handlers on the project-owned `JobResult` error type.

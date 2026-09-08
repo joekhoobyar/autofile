@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::application::app_settings::get_app_settings;
 use crate::domain::users::{User, UserRole};
 use crate::is_production;
 use crate::schema::users;
@@ -44,6 +45,14 @@ pub async fn register(
     DbConn(mut db): DbConn,
     Json(req): Json<RegisterRequest>,
 ) -> Result<Json<User>, ApiError> {
+    let settings = get_app_settings(&mut db).await?;
+    if !settings.allow_user_registration {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "User registration is disabled",
+        ));
+    }
+
     let pw_hash = hash_password(&req.password).map_err(ApiError::bad_request)?;
 
     let inserted: User = diesel::insert_into(users::table)

@@ -30,7 +30,7 @@ password: admin123!
 Change the default password before using Autofile in any shared or persistent environment.
 The default admin is required to change this password before using other authenticated APIs.
 
-New users can also be created through `POST /api/v1/auth/register`. Registered users receive the `user` role. Registration passwords must contain at least 12 characters.
+New users can also be created through `POST /api/v1/auth/register` when user registration is enabled. Registered users receive the `user` role. Registration passwords must contain at least 12 characters. When registration is disabled, the endpoint returns `403 Forbidden`.
 
 Log in and save the refresh-token cookie with:
 
@@ -105,8 +105,43 @@ Malformed JSON and invalid path or query input can instead return an Axum framew
 - `/api/v1/metadata-types`
 - `/api/v1/ping`
 - `/api/v1/profile`
+- `/api/v1/settings`
 - `/api/v1/tags`
 - `/api/v1/users`
+
+## Settings
+
+Base path: `/api/v1/settings`
+
+Settings endpoints require an admin access token.
+
+### Resource
+
+```json
+{
+  "id": 1,
+  "allow_user_registration": true,
+  "created_at": "2026-09-08T12:00:00Z",
+  "updated_at": "2026-09-08T12:00:00Z"
+}
+```
+
+### Endpoints
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| `GET` | `/api/v1/settings` | Get app settings. |
+| `PATCH` | `/api/v1/settings` | Update app settings. |
+
+`PATCH /api/v1/settings` accepts:
+
+```json
+{
+  "allow_user_registration": false
+}
+```
+
+When `allow_user_registration` is `false`, `POST /api/v1/auth/register` returns `403 Forbidden` and no user is created.
 
 ## Profile
 

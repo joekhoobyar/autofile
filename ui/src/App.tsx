@@ -32,11 +32,14 @@ import { DocumentTemplateTest } from './pages/documentTemplateTest.tsx';
 import { EditUser, ListUsers, ViewUser } from './pages/users.tsx';
 import { Profile } from './pages/profile.tsx';
 import { About } from './pages/about.tsx';
+import { Settings } from './pages/settings.tsx';
+
+const ADMIN_NAV_KEYS = new Set(['users', 'settings']);
 
 export function SideNav() {
   const auth = useAuth();
   const location = useLocation();
-  const navItems = NAV.filter((item) => item.key !== 'users' || canAdminister(auth));
+  const navItems = NAV.filter((item) => !ADMIN_NAV_KEYS.has(item.key) || canAdminister(auth));
   const isLogoutActive = location.pathname === '/logout';
 
   return (
@@ -240,6 +243,11 @@ const router = createBrowserRouter([
           { path: ':id', element: <ViewUser/> },
           { path: ':id/edit', element: <EditUser/> },
         ],
+      },
+      {
+        path: 'settings',
+        element: <RequireAdmin />,
+        children: [{ index: true, element: <Settings /> }],
       },
       {
         path: 'profile',

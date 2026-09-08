@@ -1,6 +1,15 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    app_settings (id) {
+        id -> Int8,
+        allow_user_registration -> Bool,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     cabinet_documents (cabinet_id, document_id) {
         cabinet_id -> Int8,
         document_id -> Int8,
@@ -252,6 +261,7 @@ diesel::joinable!(tag_documents -> tags (tag_id));
 diesel::joinable!(tag_documents -> users (updated_by));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    app_settings,
     cabinet_documents,
     cabinets,
     classifier_blocks,
