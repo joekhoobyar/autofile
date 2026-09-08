@@ -1,6 +1,6 @@
 # Document Types
 
-A Document Type describes a class of documents and controls which metadata fields are available for documents of that type. Examples include Invoice, Bank Statement, Receipt, Letter, and Contract.
+A Document Type describes a class of documents and controls which metadata fields are available for documents of that type. Examples of document types might be an Invoice, Financial Statement, Receipt, Letter, or Contract.
 
 Each document has exactly one Document Type.
 
@@ -85,7 +85,7 @@ Deleting a Document Type does not queue index updates for its reassigned documen
 
 ## Use Document Type Slugs
 
-Classifier actions select a type by slug:
+Classifier actions select a type by slug, when editing the YAML:
 
 ```yaml
 actions:
