@@ -4,10 +4,78 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#111827" />
+    <meta name="color-scheme" content="dark" />
     <title>Autofile</title>
+    <style>
+      /* Critical first-paint styles: match the lara-dark-indigo theme so a
+         refresh never flashes a white/unstyled page while the bundle and
+         theme CSS load. Kept inline so it applies before any JS or CSS. */
+      html {
+        background-color: #111827;
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        background-color: #111827;
+        color: rgba(255, 255, 255, 0.87);
+      }
+      html, body, #root {
+        height: 100%;
+      }
+      #root-boot {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        font-size: 1.1rem;
+        letter-spacing: 0.04em;
+        color: rgba(255, 255, 255, 0.6);
+      }
+
+      /*
+       * PrimeReact v10 injects component base styles at runtime from a
+       * post-paint effect (see primereact/componentbase useStyle), so the
+       * BreadCrumb <ol> renders with default numbered-list styling for a
+       * frame before its CSS arrives. Inline a copy of the structural rules
+       * (from primereact/breadcrumb) so the first paint is already correct.
+       * Kept in the same @layer primereact layer as the runtime copy so the
+       * cascade is unchanged once it loads; re-sync on PrimeReact upgrades.
+       */
+      @layer primereact {
+        .p-breadcrumb {
+          overflow-x: auto;
+          display: flex;
+        }
+        .p-breadcrumb ol {
+          margin: 0;
+          padding: 0;
+          list-style-type: none;
+          display: flex;
+          align-items: center;
+          flex-wrap: nowrap;
+        }
+        .p-breadcrumb .p-menuitem-text {
+          line-height: 1;
+        }
+        .p-breadcrumb .p-menuitem-link {
+          text-decoration: none;
+          display: flex;
+          align-items: center;
+        }
+        .p-breadcrumb .p-menuitem-separator {
+          display: flex;
+          align-items: center;
+        }
+        .p-breadcrumb::-webkit-scrollbar {
+          display: none;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div id="root-boot" aria-hidden="true">Autofile</div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

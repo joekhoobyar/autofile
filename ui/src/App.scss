@@ -5,6 +5,10 @@ html, body, #root {
 body {
   margin: 0;
   overscroll-behavior: none;
+  // Fallbacks match the lara-dark-indigo theme so there is no unstyled gap
+  // before the theme CSS variables are available.
+  background-color: var(--surface-ground, #111827);
+  color: var(--text-color, rgba(255, 255, 255, 0.87));
 }
 
 .app-shell {
