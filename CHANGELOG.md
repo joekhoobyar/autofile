@@ -7,13 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+### Added
 
 - Automate cutting and reopening CHANGELOG.md release sections in `make release`.
-- Restrict document type, metadata type, and document type metadata association administration to admin users while preserving read access for regular users.
 - Add read-only detail pages for document types and metadata types, including linked metadata type chips and usage indicators.
-- Prevent users from deleting their own account in both the API and UI.
 - Add an authenticated `GET /api/v1/ping` endpoint for checking whether credentials are still valid.
+
+### Changed
+
+- Restrict document type, metadata type, and document type metadata association administration to admin users while preserving read access for regular users.
+
+### Fixed
+
+- Prevent users from deleting their own account in both the API and UI.
 - Check authentication with `GET /api/v1/ping` before document and document-file uploads so expired access tokens can refresh before file transfer starts.
 
 ## [0.4.4] - 2026-09-07
