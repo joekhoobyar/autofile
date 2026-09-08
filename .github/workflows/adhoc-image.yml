@@ -1,0 +1,158 @@
+name: Adhoc Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "What to build"
+        type: choice
+        default: adhoc
+        options:
+          - adhoc
+          - base
+          - rust-base
+          - runtime-base
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  images:
+    name: Build ${{ matrix.arch }} Images
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Prepare build variables
+        id: build-vars
+        shell: bash
+        run: |
+          case "${{ inputs.target }}" in
+            adhoc|base)
+              bake_group="${{ inputs.target }}"
+              ;;
+            rust-base)
+              bake_group="autofile-api-rust-base"
+              ;;
+            runtime-base)
+              bake_group="autofile-api-runtime-base"
+              ;;
+            *)
+              echo "Unsupported manual build target: ${{ inputs.target }}" >&2
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "GIT_SHA=$(git rev-parse --short HEAD)"
+            echo "RELEASE_TAG=dev"
+            echo "BUILD_CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "BASE_TAG=latest"
+            echo "ARCH=${{ matrix.arch }}"
+          } >> "$GITHUB_ENV"
+          echo "bake_group=${bake_group}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/bake-action@v7
+        with:
+          files: docker-bake.hcl
+          targets: ${{ steps.build-vars.outputs.bake_group }}
+          push: true
+
+  manifests:
+    name: Push Multi-Arch Manifests
+    runs-on: ubuntu-24.04
+    needs: images
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Prepare manifest variables
+        id: manifest-vars
+        shell: bash
+        run: |
+          case "${{ inputs.target }}" in
+            adhoc|base)
+              bake_group="${{ inputs.target }}"
+              ;;
+            rust-base)
+              bake_group="autofile-api-rust-base"
+              ;;
+            runtime-base)
+              bake_group="autofile-api-runtime-base"
+              ;;
+            *)
+              echo "Unsupported manual build target: ${{ inputs.target }}" >&2
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "git_sha=$(git rev-parse --short HEAD)"
+            echo "release_tag=dev"
+            echo "bake_group=${bake_group}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push manifests
+        shell: bash
+        env:
+          GIT_SHA: ${{ steps.manifest-vars.outputs.git_sha }}
+          RELEASE_TAG: ${{ steps.manifest-vars.outputs.release_tag }}
+          BAKE_GROUP: ${{ steps.manifest-vars.outputs.bake_group }}
+        run: |
+          export GIT_SHA RELEASE_TAG
+          BUILD_CREATED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          export BUILD_CREATED
+          export BASE_TAG="latest"
+          export ARCH="amd64"
+
+          create_manifest() {
+            tag="$1"
+
+            docker buildx imagetools create \
+              -t "${tag}" \
+              "${tag}-amd64" \
+              "${tag}-arm64"
+          }
+
+          docker buildx bake --print "${BAKE_GROUP}" \
+            | jq -r '.target[]?.tags[]?' \
+            | while IFS= read -r arch_tag; do
+                case "${arch_tag}" in
+                  *-amd64)
+                    create_manifest "${arch_tag%-amd64}"
+                    ;;
+                esac
+              done

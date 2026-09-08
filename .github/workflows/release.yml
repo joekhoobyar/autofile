@@ -4,17 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
-    inputs:
-      target:
-        description: "What to build"
-        type: choice
-        default: adhoc
-        options:
-          - adhoc
-          - base
-          - rust-base
-          - runtime-base
 
 permissions:
   contents: read
@@ -31,19 +20,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Skip non-tag release prep
-        if: github.ref_type != 'tag'
-        run: echo "GitHub release prep is only needed for tag builds."
-
       - name: Extract release notes
-        if: github.ref_type == 'tag'
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
           .github/scripts/extract-changelog-section.sh "${version}" CHANGELOG.md --output /tmp/release-notes.md
 
       - name: Create or update draft release
-        if: github.ref_type == 'tag'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -89,38 +72,14 @@ jobs:
         id: build-vars
         shell: bash
         run: |
-          bake_group="adhoc"
-          release_tag="dev"
-
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            bake_group="release"
-            release_tag="${GITHUB_REF_NAME}"
-          else
-            case "${{ inputs.target }}" in
-              adhoc|base)
-                bake_group="${{ inputs.target }}"
-                ;;
-              rust-base)
-                bake_group="autofile-api-rust-base"
-                ;;
-              runtime-base)
-                bake_group="autofile-api-runtime-base"
-                ;;
-              *)
-                echo "Unsupported manual build target: ${{ inputs.target }}" >&2
-                exit 1
-                ;;
-            esac
-          fi
-
           {
             echo "GIT_SHA=$(git rev-parse --short HEAD)"
-            echo "RELEASE_TAG=${release_tag}"
+            echo "RELEASE_TAG=${GITHUB_REF_NAME}"
             echo "BUILD_CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "BASE_TAG=latest"
             echo "ARCH=${{ matrix.arch }}"
           } >> "$GITHUB_ENV"
-          echo "bake_group=${bake_group}" >> "$GITHUB_OUTPUT"
+          echo "bake_group=release" >> "$GITHUB_OUTPUT"
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
@@ -152,34 +111,10 @@ jobs:
         id: manifest-vars
         shell: bash
         run: |
-          bake_group="adhoc"
-          release_tag="dev"
-
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            bake_group="release"
-            release_tag="${GITHUB_REF_NAME}"
-          else
-            case "${{ inputs.target }}" in
-              adhoc|base)
-                bake_group="${{ inputs.target }}"
-                ;;
-              rust-base)
-                bake_group="autofile-api-rust-base"
-                ;;
-              runtime-base)
-                bake_group="autofile-api-runtime-base"
-                ;;
-              *)
-                echo "Unsupported manual build target: ${{ inputs.target }}" >&2
-                exit 1
-                ;;
-            esac
-          fi
-
           {
             echo "git_sha=$(git rev-parse --short HEAD)"
-            echo "release_tag=${release_tag}"
-            echo "bake_group=${bake_group}"
+            echo "release_tag=${GITHUB_REF_NAME}"
+            echo "bake_group=release"
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up Buildx
@@ -228,7 +163,6 @@ jobs:
     name: Publish Helm Chart
     runs-on: ubuntu-24.04
     needs: manifests
-    if: github.ref_type == 'tag'
 
     steps:
       - name: Checkout
@@ -262,7 +196,6 @@ jobs:
     name: Publish GitHub Release
     runs-on: ubuntu-24.04
     needs: helm-chart
-    if: github.ref_type == 'tag'
     permissions:
       contents: write
 
