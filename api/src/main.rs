@@ -110,37 +110,46 @@ async fn main() {
     // Spawn apalis workers (in-process).
     let monitor = Monitor::new()
         .register({
-            // One or more workers pulling from Redis
-            WorkerBuilder::new("fast-job-worker")
-                .catch_panic()
-                .retry(RetryPolicy::retries(7))
-                .enable_tracing()
-                .concurrency(6) // Adjust concurrency as needed
-                .data(app_state.clone())
-                .backend(app_state.fast_jobs.as_ref().clone())
-                .build_fn(handle_fast_job)
+            let app_state = app_state.clone();
+            move |_| {
+                // One or more workers pulling from Redis
+                WorkerBuilder::new("fast-job-worker")
+                    .backend(app_state.fast_jobs.as_ref().clone())
+                    .catch_panic()
+                    .retry(RetryPolicy::retries(7))
+                    .enable_tracing()
+                    .concurrency(6) // Adjust concurrency as needed
+                    .data(app_state.clone())
+                    .build(handle_fast_job)
+            }
         })
         .register({
-            WorkerBuilder::new("medium-job-worker")
-                .catch_panic()
-                .retry(RetryPolicy::retries(7))
-                .enable_tracing()
-                .concurrency(4)
-                .data(app_state.clone())
-                .backend(app_state.medium_jobs.as_ref().clone())
-                .build_fn(handle_medium_job)
+            let app_state = app_state.clone();
+            move |_| {
+                WorkerBuilder::new("medium-job-worker")
+                    .backend(app_state.medium_jobs.as_ref().clone())
+                    .catch_panic()
+                    .retry(RetryPolicy::retries(7))
+                    .enable_tracing()
+                    .concurrency(4)
+                    .data(app_state.clone())
+                    .build(handle_medium_job)
+            }
         })
         .register({
-            WorkerBuilder::new("slow-job-worker")
-                .catch_panic()
-                .retry(RetryPolicy::retries(7))
-                .enable_tracing()
-                .concurrency(2)
-                .data(app_state.clone())
-                .backend(app_state.slow_jobs.as_ref().clone())
-                .build_fn(handle_slow_job)
+            let app_state = app_state.clone();
+            move |_| {
+                WorkerBuilder::new("slow-job-worker")
+                    .backend(app_state.slow_jobs.as_ref().clone())
+                    .catch_panic()
+                    .retry(RetryPolicy::retries(7))
+                    .enable_tracing()
+                    .concurrency(2)
+                    .data(app_state.clone())
+                    .build(handle_slow_job)
+            }
         })
-        .on_event(|e| tracing::info!("{e}"))
+        .on_event(|_, e| tracing::info!("{e}"))
         // Wait 5 seconds after shutdown is triggered to allow any incomplete jobs to complete
         // .shutdown_timeout(Duration::from_secs(5))
         ;

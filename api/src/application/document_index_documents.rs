@@ -76,12 +76,12 @@ pub async fn update_document_index_document(
     document_index_id: i64,
     document_id: i64,
     state: Data<Arc<AppState>>,
-) -> Result<(), Error> {
+) -> JobResult<()> {
     match do_update_document_index_document(document_index_id, document_id, state).await {
         Ok(()) => Ok(()),
         Err(err) => {
             tracing::error!(error = %err, "document_index {:?} update job failed for document {:?}", document_index_id, document_id);
-            Err(err.into())
+            Err(err)
         }
     }
 }
@@ -89,12 +89,12 @@ pub async fn update_document_index_document(
 pub async fn rebuild_document_index(
     document_index_id: i64,
     state: Data<Arc<AppState>>,
-) -> Result<(), Error> {
+) -> JobResult<()> {
     match rebuild_document_index_inner(document_index_id, state.db_pool.clone()).await {
         Ok(()) => Ok(()),
         Err(err) => {
             tracing::error!(error = %err, "document_index {:?} rebuild job failed", document_index_id);
-            Err(err.into())
+            Err(err)
         }
     }
 }

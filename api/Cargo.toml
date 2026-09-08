@@ -36,9 +36,9 @@ aws-config = "1.1"
 aws-sdk-s3 = { version = "1.15", default-features = false, features = ["sigv4a", "http-1x", "default-https-client", "rt-tokio"] }
 uuid = { version = "1.7", features = ["v4"] }
 
-apalis = { version = "0.7", features = ["limit", "retry", "catch-panic"] }
-apalis-redis = "0.7"
-redis = { version = "0.32", features = ["tokio-comp"] }
+apalis = { version = "1.0.0-rc.9", features = ["limit", "retry", "catch-panic"] }
+apalis-redis = "1.0.0-rc.8"
+redis = { version = "1", features = ["tokio-comp"] }
 
 minijinja = { version = "2.18" } 
 regex = "1.12.3"

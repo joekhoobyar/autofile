@@ -1,8 +1,7 @@
 use std::fmt;
-use std::sync::Arc;
 
 use anyhow::Error as AnyhowError;
-use apalis::prelude::*;
+use apalis::prelude::BoxDynError;
 use axum::{
     Json,
     http::StatusCode,
@@ -162,10 +161,9 @@ where
     }
 }
 
-impl From<JobError> for Error {
+impl From<JobError> for BoxDynError {
     fn from(err: JobError) -> Self {
-        let boxed: BoxDynError = Box::new(AnyhowJobError(err.0));
-        Error::Failed(Arc::new(boxed))
+        Box::new(AnyhowJobError(err.0))
     }
 }
 

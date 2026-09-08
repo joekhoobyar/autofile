@@ -188,10 +188,8 @@ async fn run_process<R: ProcessRunner + ?Sized>(
 pub async fn process_file_pages(
     document_file_id: i64,
     state: Data<Arc<AppState>>,
-) -> Result<(), Error> {
-    process_file_pages_inner(document_file_id, state)
-        .await
-        .map_err(Into::into)
+) -> JobResult<()> {
+    process_file_pages_inner(document_file_id, state).await
 }
 
 /**
