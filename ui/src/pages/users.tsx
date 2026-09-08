@@ -11,6 +11,7 @@ import { Checkbox } from "primereact/checkbox";
 import { InputText } from "primereact/inputtext";
 import { Dropdown } from "primereact/dropdown";
 import { Message } from "primereact/message";
+import { Tag } from "primereact/tag";
 import { ConfirmDialog, confirmDialog } from "primereact/confirmdialog";
 import { type Toast, type ToastMessage } from "primereact/toast";
 import { classNames } from "primereact/utils";
@@ -23,6 +24,7 @@ import { useDeleteUser, useSaveUser, useUser, useUsers } from "../queries/useUse
 import { canManageUsers, type AuthState, useAuth } from "../auth";
 import { useHashListParams } from "../util/listParamsHash";
 import { AppToast } from "../components/AppToast";
+import { DescriptionList } from "../components/DescriptionList";
 
 const SYSTEM_USER_ID = 1;
 const USER_LIST_DEFAULT_PARAMS: ListParams = { sf: "username" };
@@ -297,37 +299,28 @@ export function ViewUser() {
           <Message severity="warn" text="System user cannot be edited or deleted." className="mb-3" />
         )}
 
-        <ul className="aut-user-details">
-          <li>
-            <span>Username</span>: {data.username}
-          </li>
-          <li>
-            <span>Display Name</span>: {data.display_name}
-          </li>
-          <li>
-            <span>Email</span>: {data.email}
-          </li>
-          <li>
-            <span>Role</span>: {formatRole(data.role)}
-          </li>
-          <li>
-            <span>Enabled</span>: {data.enabled ? "Yes" : "No"}
-          </li>
-          <li>
-            <span>Password Change Required</span>: {data.force_password_change ? "Yes" : "No"}
-          </li>
-          <li>
-            <span>Created</span>: {formatDate(data.created_at)}
-          </li>
-          <li>
-            <span>Updated</span>: {formatDate(data.updated_at)}
-          </li>
-          {!isSystemUser(data.id) && (
-            <li>
-              <span>Password Changed</span>: {formatDate(data.password_changed_at)}
-            </li>
-          )}
-        </ul>
+        <DescriptionList
+          items={[
+            { label: "Username", value: data.username },
+            { label: "Display Name", value: data.display_name },
+            { label: "Email", value: data.email },
+            { label: "Role", value: formatRole(data.role) },
+            {
+              label: "Status",
+              value: (
+                <span className="aut-description-list-status">
+                  <Tag value={data.enabled ? "Enabled" : "Disabled"} severity={data.enabled ? "success" : "danger"} />
+                  {data.force_password_change && <Tag value="Password change required" severity="warning" />}
+                </span>
+              ),
+            },
+            { label: "Created", value: formatDate(data.created_at) },
+            { label: "Updated", value: formatDate(data.updated_at) },
+            ...(!isSystemUser(data.id)
+              ? [{ label: "Password Changed", value: formatDate(data.password_changed_at) }]
+              : []),
+          ]}
+        />
 
         <div className="text-end">
           <Button

@@ -5,6 +5,7 @@ import { Card } from "primereact/card";
 import { Dialog } from "primereact/dialog";
 import { Message } from "primereact/message";
 
+import { DescriptionList } from "../components/DescriptionList";
 import { useAppInfo, useAppLicense } from "../queries/useAppInfo";
 
 export function About() {
@@ -23,33 +24,30 @@ export function About() {
   return (
     <>
       <Card title="About Autofile">
-        <ul className="aut-about-details">
-          <li>
-            <span>Application</span>: Autofile
-          </li>
-          <li>
-            <span>Version</span>: {data.version}
-          </li>
-          <li>
-            <span>Backend Package</span>: {data.name}
-          </li>
-          <li>
-            <span>Author</span>: {data.authors}
-          </li>
-          <li className="aut-about-license-row">
-            <span>License</span>: {data.license}
-            <Button
-              label="View License"
-              icon="pi pi-file"
-              size="small"
-              text
-              onClick={() => setLicenseVisible(true)}
-            />
-          </li>
-          <li>
-            <span>Copyright</span>: {data.copyright}
-          </li>
-        </ul>
+        <DescriptionList
+          items={[
+            { label: "Application", value: "Autofile" },
+            { label: "Version", value: data.version },
+            { label: "Backend Package", value: data.name },
+            { label: "Author", value: data.authors },
+            { label: "Copyright", value: data.copyright },
+            {
+              label: "License",
+              value: (
+                <span className="aut-description-list-status">
+                  <span>{data.license}</span>
+                  <Button
+                    label="View License"
+                    icon="pi pi-file"
+                    size="small"
+                    text
+                    onClick={() => setLicenseVisible(true)}
+                  />
+                </span>
+              ),
+            },
+          ]}
+        />
       </Card>
 
       <Dialog

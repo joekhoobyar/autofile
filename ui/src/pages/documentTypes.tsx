@@ -24,6 +24,7 @@ import { useDocumentTypeMetadataTypes, useDocumentTypeSaveMetadataTypes, useMeta
 import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 import { useHashListParams } from '../util/listParamsHash';
 import { AppToast } from '../components/AppToast';
+import { DescriptionList } from '../components/DescriptionList';
 import { canAdminister, useAuth } from '../auth';
 
 const DOCUMENT_TYPE_LIST_DEFAULT_PARAMS: ListParams = { sf: 'name' };
@@ -242,27 +243,29 @@ export function ViewDocumentType() {
   return (
     <>
       <Card title={`Document Type: ${data.name}`}>
-        <ul className="aut-user-details">
-          <li><span>Slug</span>: {data.slug}</li>
-          <li><span>Name</span>: {data.name}</li>
-          <li><span>Description</span>: {data.description || ''}</li>
-          <li>
-            <span>Metadata Types</span>:{' '}
-            {isLoadingMetadataTypes ? 'Loading' : (
-              metadataTypeChips.length ? (
-                <span className="inline-flex flex-wrap gap-2 vertical-align-middle">
-                  {metadataTypeChips.map((metadataType) => (
-                    <Link key={metadataType.id} to={`/metadata-types/${metadataType.id}`} className="no-underline">
-                      <Chip label={metadataType.label} />
-                    </Link>
-                  ))}
-                </span>
-              ) : 'None'
-            )}
-          </li>
-          <li><span>Created</span>: {formatDate(data.created_at)}</li>
-          <li><span>Updated</span>: {formatDate(data.updated_at)}</li>
-        </ul>
+        <DescriptionList
+          items={[
+            { label: 'Slug', value: data.slug },
+            { label: 'Name', value: data.name },
+            { label: 'Description', value: data.description || '' },
+            {
+              label: 'Metadata Types',
+              value: isLoadingMetadataTypes ? 'Loading' : (
+                metadataTypeChips.length ? (
+                  <span className="inline-flex flex-wrap gap-2 vertical-align-middle">
+                    {metadataTypeChips.map((metadataType) => (
+                      <Link key={metadataType.id} to={`/metadata-types/${metadataType.id}`} className="no-underline">
+                        <Chip label={metadataType.label} />
+                      </Link>
+                    ))}
+                  </span>
+                ) : 'None'
+              ),
+            },
+            { label: 'Created', value: formatDate(data.created_at) },
+            { label: 'Updated', value: formatDate(data.updated_at) },
+          ]}
+        />
 
         <div className="text-end">
           {canManageTypes && (

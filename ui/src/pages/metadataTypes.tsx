@@ -22,7 +22,9 @@ import { type Toast, type ToastMessage } from 'primereact/toast';
 import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 import { useHashListParams } from '../util/listParamsHash';
 import { AppToast } from '../components/AppToast';
+import { DescriptionList } from '../components/DescriptionList';
 import { canAdminister, useAuth } from '../auth';
+import { Tag } from 'primereact/tag';
 
 const METADATA_TYPE_LIST_DEFAULT_PARAMS: ListParams = { sf: 'name' };
 
@@ -277,17 +279,40 @@ export function ViewMetadataType() {
   return (
     <>
       <Card title={`Metadata Type: ${data.name}`}>
-        <ul className="aut-user-details">
-          <li><span>Slug</span>: {data.slug}</li>
-          <li><span>Name</span>: {data.name}</li>
-          <li><span>Data Type</span>: {data.data_type}</li>
-          <li><span>Description</span>: {data.description || ''}</li>
-          {data.data_type === 'lookup' && <li><span>Choices</span>: {choices}</li>}
-          <li><span>Used by a Document Type?</span>: {isDocumentTypeUsagePending ? 'Loading' : inUseByDocumentType ? 'Yes' : 'No'}</li>
-          <li><span>Used by a Document?</span>: {isDocumentUsagePending ? 'Loading' : inUseByDocumentMetadata ? 'Yes' : 'No'}</li>
-          <li><span>Created</span>: {formatDate(data.created_at)}</li>
-          <li><span>Updated</span>: {formatDate(data.updated_at)}</li>
-        </ul>
+        <DescriptionList
+          items={[
+            { label: 'Slug', value: data.slug },
+            { label: 'Name', value: data.name },
+            { label: 'Data Type', value: data.data_type },
+            { label: 'Description', value: data.description || '' },
+            ...(data.data_type === 'lookup' ? [{ label: 'Choices', value: choices }] : []),
+            {
+              label: 'Usage',
+              value: (
+                <span className="aut-description-list-status">
+                  {isDocumentTypeUsagePending ? (
+                    <Tag value="Checking document types" severity="info" />
+                  ) : (
+                    <Tag
+                      value={inUseByDocumentType ? 'Used by document type' : 'Not used by document type'}
+                      severity={inUseByDocumentType ? 'info' : 'secondary'}
+                    />
+                  )}
+                  {isDocumentUsagePending ? (
+                    <Tag value="Checking documents" severity="info" />
+                  ) : (
+                    <Tag
+                      value={inUseByDocumentMetadata ? 'Used by document' : 'Not used by document'}
+                      severity={inUseByDocumentMetadata ? 'warning' : 'success'}
+                    />
+                  )}
+                </span>
+              ),
+            },
+            { label: 'Created', value: formatDate(data.created_at) },
+            { label: 'Updated', value: formatDate(data.updated_at) },
+          ]}
+        />
 
         <div className="text-end">
           {canManageTypes && (

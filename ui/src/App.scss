@@ -190,16 +190,6 @@ body {
   opacity: 1;
 }
 
-.aut-about-license-row {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.aut-about-license-row .p-button {
-  margin-left: 1rem;
-}
-
 .aut-license-text {
   max-height: 70vh;
   overflow: auto;
@@ -834,19 +824,67 @@ ul.aut-user-details {
   }
 }
 
-ul.aut-about-details {
-  list-style: none;
+.aut-description-list {
   margin: 0;
-  padding-inline-start: 0;
+  display: grid;
+  grid-template-columns: minmax(9rem, 14rem) minmax(0, 1fr);
+  border-top: 1px solid var(--surface-border);
+}
 
-  li {
-    margin-bottom: 0.55rem;
+.aut-description-list-row {
+  display: contents;
+
+  dt,
+  dd {
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--surface-border);
   }
 
-  li > span {
-    display: inline-block;
-    min-width: 10rem;
+  dt {
     color: var(--text-color-secondary);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding-right: 1.25rem;
+  }
+
+  dd {
+    margin: 0;
+    min-width: 0;
+  }
+
+  &.is-full-width dd {
+    grid-column: 2;
+  }
+}
+
+.aut-description-list-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+@media (max-width: 700px) {
+  .aut-description-list {
+    display: block;
+  }
+
+  .aut-description-list-row {
+    display: block;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--surface-border);
+
+    dt,
+    dd {
+      padding: 0;
+      border-bottom: 0;
+    }
+
+    dt {
+      margin-bottom: 0.25rem;
+    }
   }
 }
 
