@@ -6,8 +6,7 @@ import 'primereact/resources/primereact.min.css';
 import 'primereact/resources/themes/lara-dark-indigo/theme.css';
 import 'primeicons/primeicons.css';
 import 'primeflex/primeflex.css';
-import { BreadCrumb } from 'primereact/breadcrumb';
-        
+
 // app
 import './App.scss'
 import UploadDocument, { AdvancedDocumentSearch, EditDocumentProperties, ListDocuments } from './pages/documents.tsx';
@@ -15,6 +14,7 @@ import { EditCabinet, ListCabinets, NewCabinet } from './pages/cabinets.tsx';
 import { EditMetadataType, ListMetadataTypes, NewMetadataType, ViewMetadataType } from './pages/metadataTypes.tsx';
 import { EditDocumentType, ListDocumentTypes, NewDocumentType, ViewDocumentType } from './pages/documentTypes.tsx';
 import { EditTag, ListTags, NewTag } from './pages/tags.tsx';
+import { BreadCrumb } from 'primereact/breadcrumb';
 import { NAV, useBreadcrumbs } from './nav.ts';
 import { Button } from 'primereact/button';
 import Login, { Logout, RequireAdmin, RequireAuth } from './pages/auth.tsx';
