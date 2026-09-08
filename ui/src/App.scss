@@ -111,6 +111,11 @@ body {
   line-height: 1.2;
 }
 
+.aut-document-preview-toolbar .aut-document-preview-step.p-button-icon-only {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
 .aut-document-preview-page-status {
   min-width: 8.5rem;
   text-align: center;
@@ -291,17 +296,24 @@ body {
   }
 
   .aut-document-preview-toolbar {
-    justify-content: stretch;
-  }
-
-  .aut-document-preview-toolbar .p-button {
-    flex: 1 1 8rem;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 0.35rem;
   }
 
   .aut-document-preview-page-status,
   .aut-document-preview-page-jump {
-    flex: 1 1 100%;
+    flex: 0 1 auto;
+    min-width: 0;
     justify-content: center;
+  }
+
+  .aut-document-preview-page-status {
+    white-space: nowrap;
+  }
+
+  .aut-document-preview-jump-label {
+    display: none;
   }
 }
 

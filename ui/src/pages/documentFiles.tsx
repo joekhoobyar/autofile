@@ -1180,8 +1180,9 @@ function VirtualizedPagePreview({
     <div ref={readerRef} className="aut-document-preview-reader">
       <div ref={toolbarRef} className="aut-document-preview-toolbar">
         <Button
+          className="aut-document-preview-step"
           icon="pi pi-angle-left"
-          label="Previous"
+          aria-label="Previous page"
           size="small"
           outlined
           disabled={currentPage <= 1}
@@ -1191,7 +1192,7 @@ function VirtualizedPagePreview({
           Page {currentPage.toLocaleString()} of {pageCount.toLocaleString()}
         </div>
         <div className="aut-document-preview-page-jump">
-          <span className="font-medium">Jump to</span>
+          <span className="font-medium aut-document-preview-jump-label">Jump to</span>
           <InputNumber
             value={pageInput}
             min={1}
@@ -1211,9 +1212,9 @@ function VirtualizedPagePreview({
           <Button label="Go" size="small" outlined disabled={pageInput === null} onClick={() => pageInput !== null && scrollToPage(pageInput)} />
         </div>
         <Button
+          className="aut-document-preview-step"
           icon="pi pi-angle-right"
-          iconPos="right"
-          label="Next"
+          aria-label="Next page"
           size="small"
           outlined
           disabled={currentPage >= pageCount}
