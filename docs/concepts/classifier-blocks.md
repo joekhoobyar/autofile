@@ -21,7 +21,7 @@ The top of the form contains the block-level settings:
 
 ## When Classifier Blocks Run
 
-Autofile runs classifier blocks during document classification. Classification can be triggered after document processing or manually from a document action.
+Autofile runs classifier blocks during document classification. Classification is automatically triggered after document file processing complete. It can also be triggered manually from a document's **Actions** menu.
 
 When classification starts, Autofile loads:
 
@@ -40,7 +40,7 @@ The Classifiers list page shows the block order and allows reordering when the l
 Order matters because:
 
 - Earlier blocks run first.
-- Earlier blocks can compute metadata actions that later blocks use for metadata matching.
+- Earlier blocks can compute metadata actions that later blocks use for metadata matching or modifier pipelines.
 - Later actions overwrite earlier actions with the same key.
 - A matching block can stop the entire classification run unless the continue option is enabled.
 
@@ -51,7 +51,7 @@ The Rules section is organized in the same order Autofile evaluates a block:
 - Match patterns decide whether the block applies.
 - Actions when matched run as soon as the block matches.
 - Child rules run after the block matches and can extract more specific values.
-- The continue checkbox controls whether later classifier blocks still run after this block matches.
+- The **Continue processing later classifier blocks after this block matches** checkbox controls whether later classifier blocks still run after this block matches.
 
 ![screenshot: classifier block rules editor](../assets/classifier-block-form-rules.png){width="100%"}
 
