@@ -1008,6 +1008,8 @@ function VirtualizedPagePreview({
     return cachedHeight ?? fileEstimatedPageHeight ?? estimatedPageHeight;
   };
 
+  // TanStack Virtual returns non-memoizable functions by design; React Compiler skips this component.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: pageCount,
     getScrollElement: () => scrollElement,
