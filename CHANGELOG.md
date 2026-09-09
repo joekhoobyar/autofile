@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Support adding scratch values as classifier pattern metadata conditions.
+
 ## [0.4.6] - 2026-09-08
 
 ### Added

@@ -223,8 +223,8 @@ body {
 .app-backdrop { display: none; }
 
 .p-breadcrumb {
-  background: var(--surface-50);
-  border-color: var(--surface-50);
+  background: var(--surface-card);
+  border-color: var(--surface-border);
   border-top-left-radius: 0;
   border-top-right-radius: 0;
 
@@ -951,6 +951,7 @@ ul.aut-user-details {
 
   > .surface-border {
     border-color: var(--surface-border) !important;
+    box-shadow: 2px 2px 0px #222222;
   }
 
   &.is-selected {
@@ -969,7 +970,6 @@ ul.aut-user-details {
       display: flex;
       align-items: flex-start;
       gap: 0.5rem;
-      background-color: var(--surface-0) !important;
       padding: 0.5rem;
       font-weight: normal;
       text-align: left;

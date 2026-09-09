@@ -109,9 +109,11 @@ export default function Login() {
             />
             {errMsg('password') && <small className="p-error">{errMsg('password')}</small>}
           </div>
-        </div>
 
-        <Button label="Login" type="submit" icon="pi pi-check" disabled={!isValid || isSubmitting} />
+          <div className="col-12 md:col-6 lg:col-4">
+            <Button label="Login" type="submit" icon="pi pi-check" disabled={!isValid || isSubmitting} style={{ width: 'auto' }} />
+          </div>
+        </div>
 
       </form>
     </Card>

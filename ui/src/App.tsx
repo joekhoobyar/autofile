@@ -2,10 +2,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createBrowserRouter, Navigate, RouterProvider, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { PrimeReactProvider } from 'primereact/api';
-import 'primereact/resources/primereact.min.css';
-import 'primereact/resources/themes/lara-dark-indigo/theme.css';
-import 'primeicons/primeicons.css';
-import 'primeflex/primeflex.css';
 
 // app
 import './App.scss'

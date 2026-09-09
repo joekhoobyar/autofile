@@ -326,7 +326,7 @@ function DocumentListItem({ doc, index, onImageClick, selected, onSelectionChang
                   {cabinetItems.map((cabinet) => (
                     <li key={cabinet.id}>
                       <Link to={`/cabinets/${cabinet.id}/documents`}>
-                        <Badge value={`🗄️ ${cabinet.displayName ?? cabinet.name ?? cabinet.slug}`} severity="secondary" />
+                        <Badge value={`🗄️ ${cabinet.displayName ?? cabinet.name ?? cabinet.slug}`} severity="info" />
                       </Link>
                     </li>
                   ))}
@@ -423,7 +423,7 @@ function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange, cabi
                   {cabinetItems.map((cabinet) => (
                     <li key={cabinet.id}>
                       <Link to={`/cabinets/${cabinet.id}/documents`}>
-                        <Badge value={`🗄️ ${cabinet.displayName ?? cabinet.name ?? cabinet.slug}`} severity="secondary" />
+                        <Badge value={`🗄️ ${cabinet.displayName ?? cabinet.name ?? cabinet.slug}`} severity="info" />
                       </Link>
                     </li>
                   ))}
@@ -1363,7 +1363,7 @@ export function EditDocumentProperties() {
                   {cabinetItems.map((cabinet) => (
                     <li key={cabinet.id}>
                       <Link to={`/cabinets/${cabinet.id}/documents`}>
-                        <Badge value={`🗄️ ${cabinet.displayName ?? cabinet.name ?? cabinet.slug}`} severity="secondary" />
+                        <Badge value={`🗄️ ${cabinet.displayName ?? cabinet.name ?? cabinet.slug}`} severity="info" />
                       </Link>
                     </li>
                   ))}
