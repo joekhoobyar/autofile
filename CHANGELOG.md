@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Support adding scratch values as classifier pattern metadata conditions.
+- Add **Download** to Actions menu, supporting multi-file downloads.
 
 ### Changed
 
