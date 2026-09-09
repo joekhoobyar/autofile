@@ -1,20 +1,18 @@
 # Document Classification
 
-Document classification is the process where by Autofile recognizes documents and apply structured updates automatically. Many documents contain predictable text, labels, account numbers, dates, vendor names, or other values that can be detected with rules - and these rules can be used to automatically classify documents.
+Document classification is the process where by Autofile recognizes documents and apply structured updates automatically. Many documents contain predictable text - account numbers, dates, vendor names, or other values that can be detected with rules. These rules can be used to automatically classify documents.
 
-Autofile implements document classification with a rules engine.  Rules are grouped into a blocks called classifier blocks.  Each block contains structured rules that describe when the block matches a document and what actions it should take on matched documents.
+Autofile implements document classification with a rules engine. Rules are grouped into a blocks called classifier blocks. Each block contains structured rules that describe when the block matches a document and what actions it should take on matched documents.
 
 ## What Document Classification Can Do
 
-Document classification can apply:
+Document classification can match document text and/or document metadata to select a document to be classified. It can also extract captured text from a document and transform it into useful values, such as normalized dates, account numbers, or cleaned currency amounts. Finally, documentation classification can apply:
 
 - A document type.
 - A document title.
 - Tags.
 - Cabinets.
 - Document metadata values.
-
-Classifier block rules can also extract captured text from a document and transform it into useful values, such as normalized dates, padded account numbers, or cleaned currency amounts.
 
 ## How to Learn the System
 
