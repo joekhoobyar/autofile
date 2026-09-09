@@ -832,7 +832,7 @@ export function ListDocuments() {
           />
         ))}
         <span className="aut-documents-paginator-count">
-          {options.first} - {options.last} of {options.totalRecords}
+          {options.first} - {options.last} of {options.totalRecords} documents
         </span>
       </div>
     ),
