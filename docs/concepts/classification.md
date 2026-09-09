@@ -1,21 +1,31 @@
 # Document Classification
 
-Document classification is the process where by Autofile recognizes documents and apply structured updates automatically. Many documents contain predictable text - account numbers, dates, vendor names, or other values that can be detected with rules. These rules can be used to automatically classify documents.
+Document classification is the process Autofile uses to recognize documents and automatically apply structured updates to them.
 
-Autofile implements document classification with a rules engine. Rules are grouped into a blocks called classifier blocks. Each block contains structured rules that describe when the block matches a document and what actions it should take on matched documents.
+Many documents contain predictable text, such as account numbers, dates, vendor names, and other identifiable values. Autofile can detect these values using rules and use the results to classify documents automatically.
+
+Autofile's classification system is built around a rules engine. Rules are organized into [classifier blocks](classifier-blocks.md). Each classifier block contains a structured set of rules that defines when the block matches a document and which actions Autofile should perform when a match occurs.
 
 ## What Document Classification Can Do
 
-Document classification can match document text and/or document metadata to select a document to be classified. It can also extract captured text from a document and transform it into useful values, such as normalized dates, account numbers, or cleaned currency amounts. Finally, documentation classification can apply:
+Document classification can match against document text, document metadata, or both to determine which documents should be classified. It can also capture text from a document and transform it into useful values, such as normalized dates, account numbers, or cleaned currency amounts.
 
-- A document type.
-- A document title.
-- Tags.
-- Cabinets.
-- Document metadata values.
+When a document matches, classification can automatically apply or update:
+
+- Document type
+- Document title
+- Tags
+- Cabinets
+- Document metadata values
+
+## When Document Classification Runs
+
+Document classification runs automatically when a document with a document type of **Unspecified** has been uploaded and all of it's text contents have been processed (including OCR).
+
+Document classification can also be run manually by choosing **Classify Document** from the document actions menu.
 
 ## How to Learn the System
 
-The classifier editor provides visual controls for patterns, metadata conditions, actions, child rules, capture replacements, and modifier pipelines. Start with the [classifier block guide](classifier-blocks.md) to understand how blocks run from a user's perspective.
+The classifier editor provides visual controls for defining patterns, metadata conditions, actions, child rules, capture replacements, and modifier pipelines. Start with the [classifier block guide](classifier-blocks.md) for an overview of how classifier blocks work from a user's perspective.
 
-_Edit as YAML_ mode remains available for direct editing and export/import. Advanced users that prefer editing YAML may refer to the [YAML reference](../reference/classifier-rules-yaml.md) when writing or debugging rules.
+For users who prefer to work directly with YAML, *Edit as YAML* mode is available for editing, importing, and exporting rules. The [YAML reference](../reference/classifier-rules-yaml.md) provides detailed syntax and structure for writing or troubleshooting classifier rules.
