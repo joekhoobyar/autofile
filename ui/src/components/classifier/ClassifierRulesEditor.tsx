@@ -438,6 +438,15 @@ function PatternEditor({
   const metadataEntries = Object.entries(metadata);
   const availableMetadataOptions = metadataOptions(options, scratchOptions);
   const singleLineText = (pattern.text ?? '').replace(/[\r\n]+/g, '');
+  const [scratchDialogVisible, setScratchDialogVisible] = useState(false);
+  const canAddCondition = availableMetadataOptions.some((option) => !Object.hasOwn(metadata, option.value));
+  const addConditionMenuItems: MenuItem[] = [
+    {
+      label: 'Add scratch condition',
+      icon: 'pi pi-plus',
+      command: () => setScratchDialogVisible(true),
+    },
+  ];
 
   return (
     <div className="aut-pattern-editor">
@@ -504,23 +513,31 @@ function PatternEditor({
       })}
 
       <div className="aut-section-actions">
-        <Button
-          type="button"
+        <SplitButton
           label="Add metadata condition"
           icon="pi pi-plus"
           severity="secondary"
           outlined
           size="small"
+          model={addConditionMenuItems}
           className="aut-inline-button"
+          menuClassName="aut-split-menu"
           onClick={() => onChange({
             ...pattern,
             metadata: addRecordEntry(metadata, availableMetadataOptions.map((option) => option.value)),
           })}
-          disabled={availableMetadataOptions.every((option) => Object.hasOwn(metadata, option.value))}
+          buttonProps={{ disabled: !canAddCondition }}
         />
       </div>
 
       {issues.map((issue) => <small className="p-error block mt-2" key={issue}>{issue}</small>)}
+      <ScratchNameDialog
+        visible={scratchDialogVisible}
+        existingKeys={Object.keys(metadata)}
+        title="Add Scratch Condition"
+        onAdd={(key) => onChange({ ...pattern, metadata: { ...metadata, [key]: '' } })}
+        onHide={() => setScratchDialogVisible(false)}
+      />
     </div>
   );
 }
@@ -698,6 +715,7 @@ function ActionsEditor({
           size="small"
           model={addActionMenuItems}
           className="aut-inline-button"
+          menuClassName="aut-split-menu"
           onClick={() => onChange(addRecordEntry(actions, addActionKeys))}
           buttonProps={{ disabled: !canAddAction }}
         />

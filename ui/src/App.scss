@@ -562,6 +562,15 @@ body {
   flex: 0 0 auto;
 }
 
+.aut-split-menu {
+  width: max-content;
+  max-width: min(20rem, 90vw);
+}
+
+.aut-split-menu .p-menuitem-text {
+  white-space: nowrap;
+}
+
 .aut-rule-panel {
   margin-top: 0.75rem;
 }
