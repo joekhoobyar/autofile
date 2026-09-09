@@ -406,7 +406,7 @@ function TemplateInput({
               type="button"
               label={`\\${token}`}
               severity="secondary"
-              text
+              outlined
               size="small"
               title={`Insert snippet \\${token}`}
               onMouseDown={(event) => event.preventDefault()}
