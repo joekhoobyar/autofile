@@ -6,9 +6,9 @@ Many documents contain predictable text, such as account numbers, dates, vendor 
 
 Autofile's classification system is built around a rules engine. Rules are organized into [classifier blocks](classifier-blocks.md). Each classifier block contains a structured set of rules that defines when the block matches a document and which actions Autofile should perform when a match occurs.
 
-## What Document Classification Can Do
+## What Can Document Classification Do?
 
-Document classification can match against document text, document metadata, or both to determine which documents should be classified. It can also capture text from a document and transform it into useful values, such as normalized dates, account numbers, or cleaned currency amounts.
+Document classification can match document text, document metadata, or both to determine which documents should be classified. It can also capture text from a document and transform it into useful values, such as normalized dates, account numbers, or cleaned currency amounts.
 
 When a document matches, classification can automatically apply or update:
 
@@ -18,7 +18,9 @@ When a document matches, classification can automatically apply or update:
 - Cabinets
 - Document metadata values
 
-## When Document Classification Runs
+It can even integrate previously captured text into the above values.
+
+## When Does Document Classification Run?
 
 Document classification runs automatically when a document with a document type of **Unspecified** has been uploaded and all of it's text contents have been processed (including OCR).
 
