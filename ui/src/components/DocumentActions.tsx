@@ -13,6 +13,7 @@ import { AppToast } from './AppToast';
 import { useCabinetTree } from '../queries/useCabinets';
 import { useTags } from '../queries/useTags';
 import { useClassifyDocument, useDeleteDocument, useGenerateThumbnail, useProcessDocumentFilePages, useRemoveCabinetDocument, useRemoveTagDocument, useSaveCabinetDocument, useSaveTagDocument } from '../queries/useDocuments';
+import { downloadFirstDocumentFile } from '../queries/useDocumentFiles';
 
 type DocumentActionsProps = {
   documentIds: number[];
@@ -55,6 +56,7 @@ export function DocumentActions({
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [removeTagVisible, setRemoveTagVisible] = useState(false);
   const [removeTagId, setRemoveTagId] = useState<number | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const showSuccess = (summary: string, detail: string) => {
     toast.current?.show({ severity: 'success', summary, detail });
@@ -220,6 +222,40 @@ export function DocumentActions({
     }
   };
 
+  const downloadSelectedDocuments = async () => {
+    const currentDocumentIds = [...documentIds];
+    if (currentDocumentIds.length === 0 || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      let downloadedCount = 0;
+      let failedCount = 0;
+      for (const [index, id] of currentDocumentIds.entries()) {
+        // Stagger downloads so the browser has a chance to start each one
+        // before the next anchor click fires.
+        if (index > 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, 500));
+        }
+        try {
+          const downloaded = await downloadFirstDocumentFile(id);
+          if (downloaded) downloadedCount += 1;
+        } catch (error) {
+          failedCount += 1;
+          showError(`Download failed (document ${id})`, error);
+        }
+      }
+      if (downloadedCount > 0) {
+        const detail = currentDocumentIds.length > 1
+          ? `Downloading first file from ${documentCountLabel(downloadedCount, 'document')}. If your browser blocked additional files, allow multiple automatic downloads for this site and try again.`
+          : `Downloading first file from ${documentCountLabel(downloadedCount, 'document')}.`;
+        showSuccess('Download started', detail);
+      } else if (failedCount === 0) {
+        showSuccess('Nothing to download', 'The selected documents have no files.');
+      }
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const confirmDeleteSelectedDocuments = () => {
     if (!hasSelection) return;
     const count = documentIds.length;
@@ -286,9 +322,10 @@ export function DocumentActions({
     ...(includeNewDocument
       ? [
           { icon: 'pi pi-upload', label: 'New Document', url: '/documents/new' },
-          { separator: true },
         ]
       : []),
+    { icon: 'pi pi-download', label: 'Download', command: () => { void downloadSelectedDocuments(); }, disabled: !hasSelection || isDownloading },
+    { separator: true },
     { icon: 'pi pi-plus-circle', label: 'Add to Cabinet', command: () => { openAddToCabinetDialog(); }, disabled: !hasSelection },
     { icon: 'pi pi-minus-circle', label: 'Remove from Cabinet', command: () => { openRemoveFromCabinetDialog(); }, disabled: !hasSelection },
     { separator: true },

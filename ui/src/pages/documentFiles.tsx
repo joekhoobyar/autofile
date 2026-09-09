@@ -19,13 +19,14 @@ import { type Toast } from 'primereact/toast';
 import { Tooltip } from 'primereact/tooltip';
 import { classNames } from 'primereact/utils';
 
-import { HttpError, apiFetch, apiUrl, ensureAuthenticated, getAccessToken } from '../api';
+import { HttpError, apiUrl, ensureAuthenticated, getAccessToken } from '../api';
 import { AppToast } from '../components/AppToast';
 import { DateText } from '../components/DateText';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { type DocumentFile } from '../models/documentFile';
 import { useDocument } from '../queries/useDocuments';
 import {
+  downloadDocumentFile,
   useDocumentFiles,
   useDocumentFileOcrPages,
   useDocumentFilePageImage,
@@ -589,15 +590,7 @@ export function ListDocumentFiles() {
     setDownloadingIds((current) => new Set(current).add(file.id));
 
     try {
-      const ticket = await apiFetch<{ url: string }>(`api/v1/documents/${documentId}/files/${file.id}/download-ticket`, {
-        method: 'POST',
-      });
-      const link = window.document.createElement('a');
-      link.href = apiUrl(ticket.url);
-      link.download = file.filename;
-      window.document.body.appendChild(link);
-      link.click();
-      link.remove();
+      await downloadDocumentFile(documentId, file);
     } catch (error) {
       setDownloadError(error instanceof HttpError ? error.message : 'Failed to download file');
     } finally {

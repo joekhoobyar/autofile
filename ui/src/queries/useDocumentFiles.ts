@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
-import { apiFetch, apiFetchRaw, apiMutate, HttpError, parseApiError } from '../api';
+import { apiFetch, apiFetchRaw, apiMutate, apiUrl, HttpError, parseApiError } from '../api';
 import { type DocumentFile, type DocumentFileOcrPage, type DocumentFilePage } from '../models/documentFile';
 import { useBlobObjectUrl } from './blobUrl';
 
@@ -14,6 +14,31 @@ export function useDocumentFiles(documentId: string | number): UseQueryResult<Do
     enabled: !!documentId,
     queryFn: () => apiFetch<DocumentFile[]>(`api/v1/documents/${documentId}/files`),
   });
+}
+
+export async function downloadDocumentFile(documentId: string | number, file: DocumentFile): Promise<void> {
+  const ticket = await apiFetch<{ url: string }>(`api/v1/documents/${documentId}/files/${file.id}/download-ticket`, {
+    method: 'POST',
+  });
+  const link = window.document.createElement('a');
+  link.href = apiUrl(ticket.url);
+  link.download = file.filename;
+  // Same-tab anchor (no target=_blank): the endpoint returns
+  // Content-Disposition: attachment, so the page never navigates and no
+  // popup blocker is triggered. _blank would force a new tab per file.
+  window.document.body.appendChild(link);
+  link.click();
+  // Defer cleanup: removing the anchor synchronously can cancel subsequent
+  // programmatic downloads in some browsers.
+  window.setTimeout(() => link.remove(), 10_000);
+}
+
+export async function downloadFirstDocumentFile(documentId: string | number): Promise<boolean> {
+  const files = await apiFetch<DocumentFile[]>(`api/v1/documents/${documentId}/files`);
+  const first = files[0];
+  if (!first) return false;
+  await downloadDocumentFile(documentId, first);
+  return true;
 }
 
 export function useDeleteDocumentFile(): UseMutationResult<void, HttpError, DeleteDocumentFileInput> {
