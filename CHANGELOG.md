@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Support adding scratch values as classifier pattern metadata conditions.
 
+### Changed
+
+- Changed to bootstrap dark blue theme.
+
 ## [0.4.6] - 2026-09-08
 
 ### Added
