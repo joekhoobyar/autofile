@@ -4,12 +4,14 @@ site_description: Documentation for Autofile, a self-hosted document management 
 repo_url: https://github.com/joekhoobyar/autofile
 repo_name: joekhoobyar/autofile
 docs_dir: docs
+exclude_docs: overrides/*
 
 # Copyright
 copyright: Copyright &copy; 2024 - 2026 Joseph Khoobyar
 
 theme:
   name: material
+  custom_dir: docs/overrides
   language: en
   logo: assets/favicon.png
   favicon: assets/favicon.png
@@ -63,6 +65,12 @@ nav:
   - Reference:
       - API: reference/api.md
       - Classifier Rules YAML: reference/classifier-rules-yaml.md
+
+plugins:
+  - search
+  - glightbox:
+      skip_classes:
+        - skip-lightbox
 
 markdown_extensions:
   - admonition
