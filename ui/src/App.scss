@@ -1161,6 +1161,30 @@ section.aut-document {
   }
 }
 
+.aut-quick-filter-dropdown {
+  width: auto;
+  min-width: 0;
+
+  .p-dropdown-label,
+  .p-treeselect-label {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 6px 1rem 6px 12px;
+  }
+
+  .p-dropdown-clear-icon {
+    right: 1.85rem;
+  }
+}
+
+.aut-quick-filter-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+}
+
 .aut-document-file-card {
   cursor: pointer;
 }

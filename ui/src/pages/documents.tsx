@@ -204,6 +204,81 @@ function serializeDocumentListHash(params: DocumentListParams): string {
   return urlParams.toString();
 }
 
+function tagSearchOptionTemplate(tag: TagModel) {
+  return (
+    <div className="aut-search-option-row">
+      <span className="aut-search-option-label">
+        <DocumentTagBadge tag={tag} />
+      </span>
+      <span className="aut-search-option-count">{tag.document_count}</span>
+    </div>
+  );
+}
+
+function tagQuickFilterValueTemplate() {
+  return (
+    <span className="aut-quick-filter-value">
+      <span aria-hidden="true">🏷️</span>
+      <span>Tags</span>
+    </span>
+  );
+}
+
+function cabinetSearchNodeTemplate(node: TreeNode) {
+  const cabinet = node.data as Cabinet;
+  return (
+    <div className="aut-search-option-row">
+      <span className="aut-search-option-label">
+        <span aria-hidden="true">🗄️</span>
+        <span className="aut-search-option-text">{cabinet.name}</span>
+      </span>
+      <span className="aut-search-option-count">{cabinet.document_count}</span>
+    </div>
+  );
+}
+
+function cabinetSearchValueTemplate(selectedNodes: TreeNode | TreeNode[]) {
+  const selectedNode = Array.isArray(selectedNodes) ? selectedNodes[0] : selectedNodes;
+  if (!selectedNode) return 'Any cabinet';
+
+  const cabinet = selectedNode.data as Cabinet;
+  return (
+    <span className="aut-search-selected-option">
+      <span aria-hidden="true">🗄️</span>
+      <span>{cabinet.name}</span>
+    </span>
+  );
+}
+
+function cabinetQuickFilterValueTemplate() {
+  return (
+    <span className="aut-quick-filter-value">
+      <span aria-hidden="true">🗄️</span>
+      <span>Cabinets</span>
+    </span>
+  );
+}
+
+function documentTypeSearchOptionTemplate(documentType: DocumentType) {
+  return (
+    <div className="aut-search-option-row">
+      <span className="aut-search-option-label">
+        <span className="aut-search-option-text">{documentType.name}</span>
+      </span>
+      <span className="aut-search-option-count">{documentType.document_count}</span>
+    </div>
+  );
+}
+
+function documentTypeQuickFilterValueTemplate() {
+  return (
+    <span className="aut-quick-filter-value">
+      <span aria-hidden="true">📄</span>
+      <span>Document Type</span>
+    </span>
+  );
+}
+
 function DocumentThumbnail({
   src,
   alt,
@@ -476,7 +551,9 @@ export function ListDocuments() {
   const visibleDocumentIds = useMemo(() => data?.items.map((doc) => doc.id) ?? [], [data?.items]);
   const allVisibleSelected = visibleDocumentIds.length > 0 && visibleDocumentIds.every((id) => selectedIds.has(id));
   const { data: cabinetOptions } = useCabinets({ page: 1, per_page: MAX_CABINETS });
-  const { data: tagOptions } = useTags({ page: 1, per_page: 200 });
+  const { data: cabinetTreeOptions, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinetTree({ keyField: 'id' });
+  const { data: tagOptions, isPending: isTagsPending, isFetching: isTagsFetching } = useTags({ page: 1, per_page: 200 });
+  const { data: documentTypeOptions, isPending: isDocumentTypesPending, isFetching: isDocumentTypesFetching } = useDocumentTypes({ page: 1, per_page: 200, sf: 'name' });
   const { data: documentTypeLookup } = useDocumentTypesMap();
   const { data: metadataTypeLookup } = useMetadataTypesMap('id');
   const cabinetLookup = useMemo(() => {
@@ -590,6 +667,18 @@ export function ListDocuments() {
     });
   };
 
+  const onTagQuickFilterChange = (value: number | null | undefined) => {
+    updateListParams({ ...listParams, tag_id: value ?? undefined, page: 1 });
+  };
+
+  const onCabinetQuickFilterChange = (value: string | null | undefined) => {
+    updateListParams({ ...listParams, cabinet_id: value ? Number(value) : undefined, page: 1 });
+  };
+
+  const onDocumentTypeQuickFilterChange = (value: number | null | undefined) => {
+    updateListParams({ ...listParams, document_type_id: value ?? undefined, page: 1 });
+  };
+
   const applySearch = () => {
     navigate({
       pathname: location.pathname,
@@ -690,7 +779,36 @@ export function ListDocuments() {
       return <div className="grid grid-nogutter">{docs.map((doc, index) => itemTemplate(doc, layout, index))}</div>;
   };
 
+  const listActions = (
+    <div className="flex justify-content-end align-items-center gap-3 flex-wrap">
+      <DocumentActions
+        documentIds={Array.from(selectedIds)}
+        onAfterAction={() => setSelectedIds(new Set())}
+        includeNewDocument
+      />
+      <div className="flex align-items-center gap-2">
+        <Checkbox
+          inputId="documents-select-all"
+          checked={allVisibleSelected}
+          onChange={(event) => handleSelectAllChange(!!event.checked)}
+          disabled={visibleDocumentIds.length === 0}
+          aria-label="Select all documents on this page"
+        />
+        <label htmlFor="documents-select-all" className="text-base font-normal">Select all</label>
+      </div>
+      <DataViewLayoutOptions layout={layout} onChange={(e) => setLayout(e.value as 'list' | 'grid')} />
+    </div>
+  );
+
+  const listCardTitle = (
+    <div className="flex justify-content-between align-items-center gap-3 flex-wrap">
+      <span>Documents</span>
+      {listActions}
+    </div>
+  );
+
   const header = () => {
+    const showMainListQuickFilters = !tagId && !cabinetId && !documentIndexValueId;
     const advancedSearchParams: DocumentListParams = {
       ...listParams,
       cabinet_id: cabinetId ?? listParams.cabinet_id,
@@ -700,7 +818,52 @@ export function ListDocuments() {
     return (
       <div className="flex flex-column gap-1 md:flex-row md:justify-content-between md:align-items-center">
         <div className="flex flex-column gap-1 md:flex-row md:align-items-center w-full md:w-auto">
-          <div className="p-inputgroup w-full md:w-20rem">
+          {showMainListQuickFilters && (
+            <>
+              <Dropdown
+                value={listParams.tag_id ?? null}
+                onChange={(event) => onTagQuickFilterChange(event.value)}
+                optionLabel="name"
+                optionValue="id"
+                options={tagOptions?.items ?? []}
+                loading={isTagsPending || isTagsFetching}
+                placeholder="Tags"
+                itemTemplate={tagSearchOptionTemplate}
+                valueTemplate={tagQuickFilterValueTemplate}
+                panelClassName="aut-search-dropdown-panel"
+                className="aut-quick-filter-dropdown md:ml-2"
+                showClear
+              />
+              <TreeSelect
+                value={listParams.cabinet_id ? String(listParams.cabinet_id) : null}
+                onChange={(event) => onCabinetQuickFilterChange(event.value as string | null | undefined)}
+                options={cabinetTreeOptions ?? []}
+                disabled={isCabinetsPending || isCabinetsFetching}
+                placeholder="Cabinets"
+                nodeTemplate={cabinetSearchNodeTemplate}
+                valueTemplate={cabinetQuickFilterValueTemplate}
+                panelClassName="aut-search-tree-panel"
+                className="aut-quick-filter-dropdown md:ml-2"
+                filter
+                showClear
+              />
+              <Dropdown
+                value={listParams.document_type_id ?? null}
+                onChange={(event) => onDocumentTypeQuickFilterChange(event.value)}
+                optionLabel="name"
+                optionValue="id"
+                options={documentTypeOptions?.items ?? []}
+                loading={isDocumentTypesPending || isDocumentTypesFetching}
+                placeholder="Document Type"
+                itemTemplate={documentTypeSearchOptionTemplate}
+                valueTemplate={documentTypeQuickFilterValueTemplate}
+                panelClassName="aut-search-dropdown-panel"
+                className="aut-quick-filter-dropdown md:ml-2"
+                showClear
+              />
+            </>
+          )}
+          <div className="p-inputgroup w-full md:w-20rem ml-2">
             <InputText
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
@@ -748,25 +911,7 @@ export function ListDocuments() {
               pathname: '/documents/search',
               hash: serializeDocumentListHash(advancedSearchParams),
             })}
-            className="align-self-start md:align-self-center p-0 md:ml-5"
-          />
-        </div>
-        <div className="flex justify-content-end align-items-center gap-3">
-          <div className="flex align-items-center gap-2">
-            <Checkbox
-              inputId="documents-select-all"
-              checked={allVisibleSelected}
-              onChange={(event) => handleSelectAllChange(!!event.checked)}
-              disabled={visibleDocumentIds.length === 0}
-              aria-label="Select all documents on this page"
-            />
-            <label htmlFor="documents-select-all">Select all</label>
-          </div>
-          <DataViewLayoutOptions layout={layout} onChange={(e) => setLayout(e.value as 'list' | 'grid')} />
-          <DocumentActions
-            documentIds={Array.from(selectedIds)}
-            onAfterAction={() => setSelectedIds(new Set())}
-            includeNewDocument
+            className="align-self-start md:align-self-center p-0 md:ml-2"
           />
         </div>
       </div>
@@ -864,7 +1009,7 @@ export function ListDocuments() {
 
   const mainContent = (
     <>
-    <Card className="aut-documents-card">
+    <Card className="aut-documents-card" title={listCardTitle}>
       <DataView className="aut-documents-data-view" value={data?.items ?? []}
           loading={isPending || isFetching}
           lazy
@@ -995,50 +1140,6 @@ export function AdvancedDocumentSearch() {
     });
   };
 
-  const cabinetNodeTemplate = (node: TreeNode) => {
-    const cabinet = node.data as Cabinet;
-    return (
-      <div className="aut-search-option-row">
-        <span className="aut-search-option-label">
-          <span aria-hidden="true">🗄️</span>
-          <span className="aut-search-option-text">{cabinet.name}</span>
-        </span>
-        <span className="aut-search-option-count">{cabinet.document_count}</span>
-      </div>
-    );
-  };
-
-  const cabinetValueTemplate = (selectedNodes: TreeNode | TreeNode[]) => {
-    const selectedNode = Array.isArray(selectedNodes) ? selectedNodes[0] : selectedNodes;
-    if (!selectedNode) return 'Any cabinet';
-
-    const cabinet = selectedNode.data as Cabinet;
-    return (
-      <span className="aut-search-selected-option">
-        <span aria-hidden="true">🗄️</span>
-        <span>{cabinet.name}</span>
-      </span>
-    );
-  };
-
-  const tagOptionTemplate = (tag: TagModel) => (
-    <div className="aut-search-option-row">
-      <span className="aut-search-option-label">
-        <DocumentTagBadge tag={tag} />
-      </span>
-      <span className="aut-search-option-count">{tag.document_count}</span>
-    </div>
-  );
-
-  const documentTypeOptionTemplate = (documentType: DocumentType) => (
-    <div className="aut-search-option-row">
-      <span className="aut-search-option-label">
-        <span className="aut-search-option-text">{documentType.name}</span>
-      </span>
-      <span className="aut-search-option-count">{documentType.document_count}</span>
-    </div>
-  );
-
   return (
     <Card title="Advanced Document Search">
       <form onSubmit={handleSubmit(onSubmit)}>
@@ -1157,8 +1258,8 @@ export function AdvancedDocumentSearch() {
                   options={cabinetOptions ?? []}
                   disabled={isCabinetsPending || isCabinetsFetching}
                   placeholder="Any cabinet"
-                  nodeTemplate={cabinetNodeTemplate}
-                  valueTemplate={cabinetValueTemplate}
+                  nodeTemplate={cabinetSearchNodeTemplate}
+                  valueTemplate={cabinetSearchValueTemplate}
                   panelClassName="aut-search-tree-panel"
                   filter
                   showClear
@@ -1182,7 +1283,7 @@ export function AdvancedDocumentSearch() {
                   options={tags?.items ?? []}
                   loading={isTagsPending || isTagsFetching}
                   placeholder="Any tag"
-                  itemTemplate={tagOptionTemplate}
+                  itemTemplate={tagSearchOptionTemplate}
                   panelClassName="aut-search-dropdown-panel"
                   showClear
                 />
@@ -1205,7 +1306,7 @@ export function AdvancedDocumentSearch() {
                   options={documentTypes?.items ?? []}
                   loading={isDocumentTypesPending || isDocumentTypesFetching}
                   placeholder="Any document type"
-                  itemTemplate={documentTypeOptionTemplate}
+                  itemTemplate={documentTypeSearchOptionTemplate}
                   panelClassName="aut-search-dropdown-panel"
                   showClear
                 />
