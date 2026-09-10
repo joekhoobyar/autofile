@@ -98,6 +98,7 @@ export function useSaveDocument(): UseMutationResult<Document, HttpError, Partia
 
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['document'] });
+      qc.invalidateQueries({ queryKey: ['documentType'] });
     },
   });
 }
@@ -153,6 +154,9 @@ export function useDeleteDocument(): UseMutationResult<void, HttpError, number> 
         }
       );
       qc.invalidateQueries({ queryKey: ['document', 'list'] });
+      qc.invalidateQueries({ queryKey: ['documentType'] });
+      qc.invalidateQueries({ queryKey: ['tag'] });
+      qc.invalidateQueries({ queryKey: ['cabinet'] });
     },
   });
 }
@@ -235,6 +239,7 @@ export function useSaveCabinetDocument(): UseMutationResult<CabinetDocument[], H
     onSuccess: () => {
       // invalidate by prefix (works with table params in the queryKey)
       qc.invalidateQueries({ queryKey: ["document"] });
+      qc.invalidateQueries({ queryKey: ["cabinet"] });
     },
   });
 }
@@ -253,6 +258,7 @@ export function useRemoveCabinetDocument(): UseMutationResult<CabinetDocument[],
     onSuccess: () => {
       // invalidate by prefix (works with table params in the queryKey)
       qc.invalidateQueries({ queryKey: ["document"] });
+      qc.invalidateQueries({ queryKey: ["cabinet"] });
     },
   });
 }
@@ -271,6 +277,7 @@ export function useSaveTagDocument(): UseMutationResult<TagDocument[], HttpError
     onSuccess: () => {
       // invalidate by prefix (works with table params in the queryKey)
       qc.invalidateQueries({ queryKey: ["document"] });
+      qc.invalidateQueries({ queryKey: ["tag"] });
     },
   });
 }
@@ -289,6 +296,7 @@ export function useRemoveTagDocument(): UseMutationResult<TagDocument[], HttpErr
     onSuccess: () => {
       // invalidate by prefix (works with table params in the queryKey)
       qc.invalidateQueries({ queryKey: ["document"] });
+      qc.invalidateQueries({ queryKey: ["tag"] });
     },
   });
 }
