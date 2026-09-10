@@ -1180,9 +1180,15 @@ section.aut-document {
 .aut-quick-filter-value {
   display: inline-flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 0.6rem;
-  width: 100%;
+}
+
+@media (max-width: 767px) {
+  .aut-quick-filter-dropdown .p-dropdown-label {
+    flex: 1 1 auto;
+    width: 1%;
+  }
 }
 
 .aut-document-file-card {

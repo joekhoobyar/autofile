@@ -274,7 +274,7 @@ function documentTypeQuickFilterValueTemplate() {
   return (
     <span className="aut-quick-filter-value">
       <span aria-hidden="true">📄</span>
-      <span>Document Type</span>
+      <span>Document type</span>
     </span>
   );
 }
@@ -817,7 +817,7 @@ export function ListDocuments() {
 
     return (
       <div className="flex flex-column gap-1 md:flex-row md:justify-content-between md:align-items-center">
-        <div className="flex flex-column gap-1 md:flex-row md:align-items-center w-full md:w-auto">
+        <div className="flex flex-column gap-2 md:flex-row flex-wrap md:align-items-center w-full md:w-auto">
           {showMainListQuickFilters && (
             <>
               <Dropdown
@@ -831,8 +831,7 @@ export function ListDocuments() {
                 itemTemplate={tagSearchOptionTemplate}
                 valueTemplate={tagQuickFilterValueTemplate}
                 panelClassName="aut-search-dropdown-panel"
-                className="aut-quick-filter-dropdown md:ml-2"
-                showClear
+                className="aut-quick-filter-dropdown"
               />
               <TreeSelect
                 value={listParams.cabinet_id ? String(listParams.cabinet_id) : null}
@@ -843,9 +842,8 @@ export function ListDocuments() {
                 nodeTemplate={cabinetSearchNodeTemplate}
                 valueTemplate={cabinetQuickFilterValueTemplate}
                 panelClassName="aut-search-tree-panel"
-                className="aut-quick-filter-dropdown md:ml-2"
+                className="aut-quick-filter-dropdown"
                 filter
-                showClear
               />
               <Dropdown
                 value={listParams.document_type_id ?? null}
@@ -854,16 +852,15 @@ export function ListDocuments() {
                 optionValue="id"
                 options={documentTypeOptions?.items ?? []}
                 loading={isDocumentTypesPending || isDocumentTypesFetching}
-                placeholder="Document Type"
+                placeholder="Document type"
                 itemTemplate={documentTypeSearchOptionTemplate}
                 valueTemplate={documentTypeQuickFilterValueTemplate}
                 panelClassName="aut-search-dropdown-panel"
-                className="aut-quick-filter-dropdown md:ml-2"
-                showClear
+                className="aut-quick-filter-dropdown"
               />
             </>
           )}
-          <div className="p-inputgroup w-full md:w-20rem ml-2">
+          <div className="p-inputgroup w-full md:w-20rem">
             <InputText
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
@@ -911,7 +908,7 @@ export function ListDocuments() {
               pathname: '/documents/search',
               hash: serializeDocumentListHash(advancedSearchParams),
             })}
-            className="align-self-start md:align-self-center p-0 md:ml-2"
+            className="align-self-start md:align-self-center p-0"
           />
         </div>
       </div>
@@ -927,7 +924,7 @@ export function ListDocuments() {
           options={sortOptions}
           placeholder="Sort by"
           onChange={(event) => onSortChange(event.value as string | undefined)}
-          className="w-15rem"
+          className="w-auto"
           aria-label="Sort documents"
         />
         {activeFilterChips.map((chip) => (
