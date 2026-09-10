@@ -1,4 +1,4 @@
-![Autofile logo](assets/favicon.png){ align=left width="180" style="margin: 0 1.25rem 1rem 0;" }
+![Autofile logo](assets/favicon.png){ align=left width="180" style="margin: 0 1.25rem 1rem 0;" class="skip-lightbox" }
 
 # Autofile Documentation
 
@@ -7,7 +7,7 @@ Autofile is a self-hosted document management application. It stores document fi
 !!! warning Alpha software
     Autofile is relatively stable, but it is still alpha software. We will avoid breaking changes to APIs whenever possible. Expect installation instructions, administration, and documentation to continue to mature.
 
-![document grid basic](assets/document-grid-basic.png){ align=left width="100%" style="margin: 0 0 1rem 0;"  class="skip-lightbox" }
+![document grid basic](assets/document-grid-basic.png){ align=left width="100%" style="margin: 0 0 1rem 0;" }
 
 ## Features
 
