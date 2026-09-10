@@ -281,6 +281,8 @@ List query parameters:
 | `sf` | Sort field: `id`, `slug`, `name`, `description`, `created_at`, or `updated_at`. |
 | `sd` | Set to `true` for descending order. |
 
+List responses include `document_count`, the number of documents assigned to each Document Type.
+
 Create a Document Type:
 
 ```http

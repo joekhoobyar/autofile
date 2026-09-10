@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use crate::domain::document_types::DocumentType;
+use crate::domain::document_types::{DocumentType, DocumentTypeView};
 use crate::schema::{document_types, document_types_metadata_types, documents};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::{AdminUser, AuthUser};
@@ -190,7 +190,7 @@ pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
     Query(params): Query<ListDocumentTypesQuery>,
-) -> Result<Json<ResourceList<DocumentType>>, ApiError> {
+) -> Result<Json<ResourceList<DocumentTypeView>>, ApiError> {
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
@@ -256,13 +256,55 @@ pub async fn list(
         _ => query.order(document_types::id.asc()),
     };
 
-    let items = query
+    let document_types = query
         .limit(per_page)
         .offset(offset)
         .select(DocumentType::as_select())
         .load::<DocumentType>(&mut db)
         .await
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_types"))?;
+    let document_type_ids: Vec<i64> = document_types
+        .iter()
+        .map(|document_type| document_type.id)
+        .collect();
+
+    let mut document_counts_by_type: HashMap<i64, i64> = HashMap::new();
+    if !document_type_ids.is_empty() {
+        let document_count_rows: Vec<(i64, i64)> = documents::table
+            .filter(documents::document_type_id.eq_any(&document_type_ids))
+            .group_by(documents::document_type_id)
+            .select((
+                documents::document_type_id,
+                diesel::dsl::count(documents::id),
+            ))
+            .load::<(i64, i64)>(&mut db)
+            .await
+            .map_err(|e| {
+                ApiError::new(diesel_to_http(e), "Failed to count document_type documents")
+            })?;
+
+        for (document_type_id, document_count) in document_count_rows {
+            document_counts_by_type.insert(document_type_id, document_count);
+        }
+    }
+
+    let items = document_types
+        .into_iter()
+        .map(|document_type| DocumentTypeView {
+            id: document_type.id,
+            slug: document_type.slug,
+            name: document_type.name,
+            created_by: document_type.created_by,
+            created_at: document_type.created_at,
+            updated_by: document_type.updated_by,
+            updated_at: document_type.updated_at,
+            description: document_type.description,
+            document_count: document_counts_by_type
+                .get(&document_type.id)
+                .cloned()
+                .unwrap_or(0),
+        })
+        .collect();
 
     Ok(Json(ResourceList {
         total,

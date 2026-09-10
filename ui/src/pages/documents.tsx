@@ -15,6 +15,7 @@ import { useDocuments, useDocument, useSaveDocument, useDocumentThumbnail } from
 import { useDocumentIndex } from '../queries/useDocumentIndexes';
 import { useDocumentIndexValueAncestors } from '../queries/useDocumentIndexValues';
 import { type Document, type DocumentListParams } from '../models/document';
+import type { DocumentType } from '../models/documentType';
 import { useMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { useDocumentTypes, useDocumentTypesMap } from '../queries/useDocumentTypes';
 import { Menu } from 'primereact/menu';
@@ -1029,6 +1030,15 @@ export function AdvancedDocumentSearch() {
     </div>
   );
 
+  const documentTypeOptionTemplate = (documentType: DocumentType) => (
+    <div className="aut-search-option-row">
+      <span className="aut-search-option-label">
+        <span className="aut-search-option-text">{documentType.name}</span>
+      </span>
+      <span className="aut-search-option-count">{documentType.document_count}</span>
+    </div>
+  );
+
   return (
     <Card title="Advanced Document Search">
       <form onSubmit={handleSubmit(onSubmit)}>
@@ -1195,6 +1205,8 @@ export function AdvancedDocumentSearch() {
                   options={documentTypes?.items ?? []}
                   loading={isDocumentTypesPending || isDocumentTypesFetching}
                   placeholder="Any document type"
+                  itemTemplate={documentTypeOptionTemplate}
+                  panelClassName="aut-search-dropdown-panel"
                   showClear
                 />
               )}
