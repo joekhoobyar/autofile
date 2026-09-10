@@ -1101,6 +1101,66 @@ section.aut-document {
   box-shadow: 2px 2px 0px #101010;
 }
 
+.aut-search-option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.aut-search-option-label,
+.aut-search-selected-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.aut-search-option-label {
+  flex: 1 1 auto;
+}
+
+.aut-search-option-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aut-search-option-count {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--text-color-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.aut-search-tree-panel {
+  .p-treenode-content,
+  .p-treenode-label {
+    min-width: 0;
+  }
+
+  .p-treenode-label {
+    flex: 1 1 auto;
+  }
+}
+
+.aut-search-dropdown-panel {
+  .p-dropdown-item {
+    display: flex;
+    min-width: 0;
+  }
+
+  .p-dropdown-item-label {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
 .aut-document-file-card {
   cursor: pointer;
 }

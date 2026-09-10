@@ -8,7 +8,6 @@ import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
 import { classNames } from 'primereact/utils';
-import { Badge } from 'primereact/badge';
 
 import type { ListParams } from '../api';
 import { useTag, useTags, useSaveTag, useDeleteTag } from '../queries/useTags';
@@ -21,6 +20,7 @@ import { ColorPicker } from 'primereact/colorpicker';
 import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 import { useHashListParams } from '../util/listParamsHash';
 import { AppToast } from '../components/AppToast';
+import { DocumentTagBadge } from '../components/DocumentTagBadge';
 
 const TAG_LIST_DEFAULT_PARAMS: ListParams = { sf: 'name' };
 
@@ -50,7 +50,7 @@ export function ListTags() {
   const previewTemplate = (c: Tag) => {
     return (
       <Link to={`${c.id}/documents`}>
-        <Badge value={c.name} className="aut-document-tag" style={{ backgroundColor: `#${c.color}` }} />
+        <DocumentTagBadge tag={c} />
       </Link>
     );
   };

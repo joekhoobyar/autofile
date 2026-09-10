@@ -7,6 +7,7 @@ import { Checkbox } from 'primereact/checkbox';
 import { DataView, DataViewLayoutOptions, type DataViewPageEvent } from 'primereact/dataview';
 import { Dropdown } from 'primereact/dropdown';
 import { Dialog } from 'primereact/dialog';
+import { TreeSelect } from 'primereact/treeselect';
 import { classNames } from 'primereact/utils';
 
 import { apiUrl, ensureAuthenticated, getAccessToken } from '../api';
@@ -19,11 +20,12 @@ import { useDocumentTypes, useDocumentTypesMap } from '../queries/useDocumentTyp
 import { Menu } from 'primereact/menu';
 import type { MenuItem } from 'primereact/menuitem';
 import { Button } from 'primereact/button';
-import { useCabinets } from '../queries/useCabinets';
+import { useCabinetTree, useCabinets } from '../queries/useCabinets';
 import { MAX_CABINETS, type Cabinet } from '../models/cabinet';
 import { useTags } from '../queries/useTags';
 import type { Tag as TagModel } from '../models/tag';
 import { type Toast } from 'primereact/toast';
+import type { TreeNode } from 'primereact/treenode';
 import { Tooltip } from 'primereact/tooltip';
 import { FileUpload, type FileUploadFile, type FileUploadHandlerEvent, type FileUploadSelectEvent, type FileUploadUploadEvent, type ItemTemplateOptions } from 'primereact/fileupload';
 import { ProgressBar } from 'primereact/progressbar';
@@ -34,6 +36,7 @@ import { Chip } from 'primereact/chip';
 import { DocumentActions } from '../components/DocumentActions';
 import { AppToast } from '../components/AppToast';
 import { DateText } from '../components/DateText';
+import { DocumentTagBadge } from '../components/DocumentTagBadge';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
@@ -315,7 +318,7 @@ function DocumentListItem({ doc, index, onImageClick, selected, onSelectionChang
                   {tagItems.map((tag) => (
                     <li key={tag.id}>
                       <Link to={`/tags/${tag.id}/documents`}>
-                        <Badge value={tag.name} className="aut-document-tag" style={{ backgroundColor: `#${tag.color}` }} />
+                        <DocumentTagBadge tag={tag} />
                       </Link>
                     </li>
                   ))}
@@ -412,7 +415,7 @@ function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange, cabi
                   {tagItems.map((tag) => (
                     <li key={tag.id}>
                       <Link to={`/tags/${tag.id}/documents`}>
-                        <Badge value={tag.name} className="aut-document-tag" style={{ backgroundColor: `#${tag.color}` }} />
+                        <DocumentTagBadge tag={tag} />
                       </Link>
                     </li>
                   ))}
@@ -694,9 +697,9 @@ export function ListDocuments() {
     };
 
     return (
-      <div className="flex flex-column gap-3 md:flex-row md:justify-content-between md:align-items-center">
-        <div className="flex flex-column gap-2 md:flex-row md:align-items-center w-full md:w-auto">
-          <div className="p-inputgroup w-full md:w-30rem">
+      <div className="flex flex-column gap-1 md:flex-row md:justify-content-between md:align-items-center">
+        <div className="flex flex-column gap-1 md:flex-row md:align-items-center w-full md:w-auto">
+          <div className="p-inputgroup w-full md:w-20rem">
             <InputText
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
@@ -707,7 +710,7 @@ export function ListDocuments() {
                 }
               }}
               className="p-inputtext-sm"
-              placeholder="Search title and document text"
+              placeholder="Title and content"
               aria-label="Search documents"
             />
             {searchText && (
@@ -929,7 +932,7 @@ export function AdvancedDocumentSearch() {
   const existingParams = useMemo(() => parseDocumentListHash(location.hash), [location.hash]);
   const { data: documentTypes, isPending: isDocumentTypesPending, isFetching: isDocumentTypesFetching } = useDocumentTypes({ page: 1, per_page: 200, sf: 'name' });
   const { data: metadataTypes, isPending: isMetadataTypesPending, isFetching: isMetadataTypesFetching } = useMetadataTypes({ page: 1, per_page: 200, sf: 'name' });
-  const { data: cabinets, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinets({ page: 1, per_page: MAX_CABINETS, sf: 'name' });
+  const { data: cabinetOptions, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinetTree({ keyField: 'id' });
   const { data: tags, isPending: isTagsPending, isFetching: isTagsFetching } = useTags({ page: 1, per_page: 200, sf: 'name' });
   const { control, handleSubmit, reset, formState: { isSubmitting } } = useForm<AdvancedDocumentSearchFormValues>({
     defaultValues: {
@@ -990,6 +993,41 @@ export function AdvancedDocumentSearch() {
       duplicate_checksum: false,
     });
   };
+
+  const cabinetNodeTemplate = (node: TreeNode) => {
+    const cabinet = node.data as Cabinet;
+    return (
+      <div className="aut-search-option-row">
+        <span className="aut-search-option-label">
+          <span aria-hidden="true">🗄️</span>
+          <span className="aut-search-option-text">{cabinet.name}</span>
+        </span>
+        <span className="aut-search-option-count">{cabinet.document_count}</span>
+      </div>
+    );
+  };
+
+  const cabinetValueTemplate = (selectedNodes: TreeNode | TreeNode[]) => {
+    const selectedNode = Array.isArray(selectedNodes) ? selectedNodes[0] : selectedNodes;
+    if (!selectedNode) return 'Any cabinet';
+
+    const cabinet = selectedNode.data as Cabinet;
+    return (
+      <span className="aut-search-selected-option">
+        <span aria-hidden="true">🗄️</span>
+        <span>{cabinet.name}</span>
+      </span>
+    );
+  };
+
+  const tagOptionTemplate = (tag: TagModel) => (
+    <div className="aut-search-option-row">
+      <span className="aut-search-option-label">
+        <DocumentTagBadge tag={tag} />
+      </span>
+      <span className="aut-search-option-count">{tag.document_count}</span>
+    </div>
+  );
 
   return (
     <Card title="Advanced Document Search">
@@ -1120,15 +1158,17 @@ export function AdvancedDocumentSearch() {
               name="cabinet_id"
               control={control}
               render={({ field }) => (
-                <Dropdown
-                  id="advanced-search-cabinet"
-                  value={field.value}
-                  onChange={(event) => field.onChange(event.value ?? null)}
-                  optionLabel="displayName"
-                  optionValue="id"
-                  options={cabinets?.items ?? []}
-                  loading={isCabinetsPending || isCabinetsFetching}
+                <TreeSelect
+                  inputId="advanced-search-cabinet"
+                  value={field.value ? String(field.value) : null}
+                  onChange={(event) => field.onChange(event.value ? Number(event.value) : null)}
+                  options={cabinetOptions ?? []}
+                  disabled={isCabinetsPending || isCabinetsFetching}
                   placeholder="Any cabinet"
+                  nodeTemplate={cabinetNodeTemplate}
+                  valueTemplate={cabinetValueTemplate}
+                  panelClassName="aut-search-tree-panel"
+                  filter
                   showClear
                 />
               )}
@@ -1150,6 +1190,8 @@ export function AdvancedDocumentSearch() {
                   options={tags?.items ?? []}
                   loading={isTagsPending || isTagsFetching}
                   placeholder="Any tag"
+                  itemTemplate={tagOptionTemplate}
+                  panelClassName="aut-search-dropdown-panel"
                   showClear
                 />
               )}
@@ -1346,7 +1388,7 @@ export function EditDocumentProperties() {
                   {tagItems.map((tag) => (
                     <li key={tag.id}>
                       <Link to={`/tags/${tag.id}/documents`}>
-                        <Badge value={tag.name} className="aut-document-tag" style={{ backgroundColor: `#${tag.color}` }} />
+                        <DocumentTagBadge tag={tag} />
                       </Link>
                     </li>
                   ))}
