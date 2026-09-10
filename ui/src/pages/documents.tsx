@@ -1033,25 +1033,7 @@ export function AdvancedDocumentSearch() {
     <Card title="Advanced Document Search">
       <form onSubmit={handleSubmit(onSubmit)}>
         <div className="grid p-fluid">
-          <div className="col-12">
-            <Controller
-              name="match_any"
-              control={control}
-              render={({ field }) => (
-                <div className="flex align-items-center gap-2">
-                  <Checkbox
-                    inputId="advanced-search-match-any"
-                    checked={field.value}
-                    onChange={(event) => field.onChange(!!event.checked)}
-                  />
-                  <label htmlFor="advanced-search-match-any">Match Any</label>
-                </div>
-              )}
-            />
-            <small className="text-color-secondary block mt-2">When checked, documents can match any search criterion instead of all criteria.</small>
-          </div>
-
-          <div className="col-12 md:col-6">
+          <div className="col-12 md:col-6 xl:col-4">
             <label htmlFor="advanced-search-title" className="font-medium mb-2 block">Title</label>
             <Controller
               name="q"
@@ -1067,7 +1049,7 @@ export function AdvancedDocumentSearch() {
             />
           </div>
 
-          <div className="col-12 md:col-6">
+          <div className="col-12 md:col-6 xl:col-4">
             <label htmlFor="advanced-search-text" className="font-medium mb-2 block">Document Text / OCR Search</label>
             <Controller
               name="text"
@@ -1083,7 +1065,23 @@ export function AdvancedDocumentSearch() {
             />
           </div>
 
-          <div className="col-12 md:col-6">
+          <div className="col-12 md:col-6 xl:col-4">
+            <label htmlFor="advanced-search-filename" className="font-medium mb-2 block">Filename</label>
+            <Controller
+              name="filename"
+              control={control}
+              render={({ field }) => (
+                <InputText
+                  id="advanced-search-filename"
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder="Filename contains..."
+                />
+              )}
+            />
+          </div>
+
+          <div className="col-12 md:col-6 xl:col-4">
             <label htmlFor="advanced-search-metadata-value" className="font-medium mb-2 block">Metadata Value</label>
             <Controller
               name="metadata_value"
@@ -1099,7 +1097,7 @@ export function AdvancedDocumentSearch() {
             />
           </div>
 
-          <div className="col-12 md:col-6">
+          <div className="col-12 md:col-6 xl:col-4">
             <label htmlFor="advanced-search-metadata-type" className="font-medium mb-2 block">Metadata Type</label>
             <Controller
               name="metadata_type_id"
@@ -1120,23 +1118,7 @@ export function AdvancedDocumentSearch() {
             />
           </div>
 
-          <div className="col-12 md:col-6">
-            <label htmlFor="advanced-search-filename" className="font-medium mb-2 block">Filename</label>
-            <Controller
-              name="filename"
-              control={control}
-              render={({ field }) => (
-                <InputText
-                  id="advanced-search-filename"
-                  value={field.value}
-                  onChange={field.onChange}
-                  placeholder="Filename contains..."
-                />
-              )}
-            />
-          </div>
-
-          <div className="col-12 md:col-6">
+          <div className="col-12 md:col-6 xl:col-4">
             <label htmlFor="advanced-search-file-content-type" className="font-medium mb-2 block">File Content Type</label>
             <Controller
               name="file_content_type"
@@ -1152,7 +1134,7 @@ export function AdvancedDocumentSearch() {
             />
           </div>
 
-          <div className="col-12 md:col-6">
+          <div className="col-12 md:col-6 xl:col-4">
             <label htmlFor="advanced-search-cabinet" className="font-medium mb-2 block">Cabinet</label>
             <Controller
               name="cabinet_id"
@@ -1175,7 +1157,7 @@ export function AdvancedDocumentSearch() {
             />
           </div>
 
-          <div className="col-12 md:col-6">
+          <div className="col-12 md:col-6 xl:col-4">
             <label htmlFor="advanced-search-tag" className="font-medium mb-2 block">Tag</label>
             <Controller
               name="tag_id"
@@ -1198,7 +1180,7 @@ export function AdvancedDocumentSearch() {
             />
           </div>
 
-          <div className="col-12 md:col-6">
+          <div className="col-12 md:col-6 xl:col-4">
             <label htmlFor="advanced-search-document-type" className="font-medium mb-2 block">Document Type</label>
             <Controller
               name="document_type_id"
@@ -1219,7 +1201,24 @@ export function AdvancedDocumentSearch() {
             />
           </div>
 
-          <div className="col-12 md:col-6 flex align-items-end">
+          <div className="col-12 md:col-6 xl:col-4">
+            <Controller
+              name="match_any"
+              control={control}
+              render={({ field }) => (
+                <div className="flex align-items-center gap-2">
+                  <Checkbox
+                    inputId="advanced-search-match-any"
+                    checked={field.value}
+                    onChange={(event) => field.onChange(!!event.checked)}
+                  />
+                  <label htmlFor="advanced-search-match-any">Match any search criterion instead of all criteria</label>
+                </div>
+              )}
+            />
+          </div>
+
+          <div className="col-12 md:col-6 xl:col-4 flex align-items-end">
             <Controller
               name="duplicates"
               control={control}
@@ -1236,7 +1235,7 @@ export function AdvancedDocumentSearch() {
             />
           </div>
 
-          <div className="col-12 md:col-6 flex align-items-end">
+          <div className="col-12 md:col-6 xl:col-4 flex align-items-end">
             <Controller
               name="duplicate_checksum"
               control={control}
