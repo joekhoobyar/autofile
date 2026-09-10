@@ -46,16 +46,16 @@ Order matters because:
 
 ## The Rules Editor
 
-The Rules section is organized in the same order Autofile evaluates a block:
+Autofile evaluates a block in the same order as the **Rules** section:
 
-- Match patterns decide whether the block applies.
-- Actions when matched run as soon as the block matches.
-- Child rules run after the block matches and can extract more specific values.
+- **Match patterns** decide whether the block applies.
+- **Actions when matched** run as soon as the block matches.
+- **Child rules** run after the block matches and can extract more specific values.
 - The **Continue processing later classifier blocks after this block matches** checkbox controls whether later classifier blocks still run after this block matches.
 
 ![screenshot: classifier block rules editor](../assets/classifier-block-form-rules.png){width="100%"}
 
-Use the visual editor for normal changes. Use **Edit as YAML instead >>** only when you need direct access to the serialized rule structure.
+Use the visual editor for normal changes. Use **Edit as YAML instead &raquo;** only when you need direct access to the serialized rule structure.
 
 ## Match Patterns
 
@@ -65,12 +65,10 @@ The block matches when any top-level pattern matches. If no top-level patterns a
 
 Each pattern can contain:
 
-- **Text pattern:** a regular expression matched against the document text.
-- **Metadata conditions:** exact string comparisons against computed actions or stored document metadata.
+- **Text pattern:** a regular expression matched against the document text (case insensitive).
+- **Metadata conditions:** exact string comparisons against [computed actions](#computed-actions) or stored document metadata.
 
 ![screenshot: match patterns section with one expanded pattern showing text and metadata conditions](../assets/classifier-block-form-match_patterns.png){width="100%"}
-
-Text matching is case-insensitive and multiline. Metadata matching checks computed actions first, then existing document metadata.
 
 Use **Add pattern** to add another top-level pattern. Use the pattern controls to move or remove patterns.
 
