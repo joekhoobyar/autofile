@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Show document counts in the advanced search tag, cabinet, and document type dropdowns, with counts right-aligned.
+- Add compact Tags, Cabinets, and Document Type quick-filter dropdowns to the main documents list header, after the Advanced Search link.
+- Add a document count column to the document types list page and include `document_count` in `GET /api/v1/document-types` list responses.
+
+### Changed
+
+- Use a hierarchical cabinet tree selector on advanced search, showing unjoined cabinet names with document counts.
+- Adjust the layout of the controls on the documents list page.
+
 ## [0.4.7] - 2026-09-09
 
 ### Added
