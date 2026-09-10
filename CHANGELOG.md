@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Adjust the layout of the quick filter controls on the documents list page.
+
+### Fixed
+
+- Refresh tag, cabinet, and document type document counts after adding/removing documents to/from tags or cabinets, changing a document's type, or deleting a document.
+
 ## [0.4.8] - 2026-09-10
 
 ### Added
