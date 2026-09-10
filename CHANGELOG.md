@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Adjust the layout of the quick filter controls on the documents list page.
+- Migrated documentation to Zensical
 
 ### Fixed
 
