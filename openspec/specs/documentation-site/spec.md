@@ -2,19 +2,19 @@
 
 ## Purpose
 
-Autofile's user-facing documentation: content, structure, and publishing of the MkDocs Material site at `autofile.dev`.
+Autofile's user-facing documentation: content, structure, and publishing of the Zensical site at `autofile.dev`.
 
 ## Requirements
 
-### Requirement: MkDocs Material Documentation Site
+### Requirement: Zensical Documentation Site
 
-Autofile SHALL provide a MkDocs Material documentation site whose source content is stored under the repository `docs/` directory.
+Autofile SHALL provide a Zensical documentation site whose source content is stored under the repository `docs/` directory.
 
 #### Scenario: Build documentation locally
 
 - **GIVEN** the docs dependencies are installed from `requirements-docs.txt`
-- **WHEN** a maintainer runs `mkdocs build --strict` from the repository root
-- **THEN** MkDocs builds the site successfully using `docs/` as the content source
+- **WHEN** a maintainer runs `zensical build --strict` from the repository root
+- **THEN** Zensical builds the site successfully using `docs/` as the content source
 
 ### Requirement: Initial Documentation Coverage
 
@@ -50,7 +50,7 @@ Autofile SHALL publish the documentation site to GitHub Pages from the `main` br
 
 - **GIVEN** a docs-related change is pushed to `main`
 - **WHEN** the GitHub Pages workflow runs
-- **THEN** the workflow builds the MkDocs site and deploys the generated artifact to GitHub Pages
+- **THEN** the workflow builds the Zensical site and deploys the generated artifact to GitHub Pages
 
 ### Requirement: Custom Domain
 

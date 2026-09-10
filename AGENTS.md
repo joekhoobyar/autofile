@@ -8,7 +8,7 @@ Autofile is a self-hosted document management application composed of:
 
 - `api/`: Rust 2024, Axum, Tokio, Diesel/Diesel Async, PostgreSQL, Apalis/Redis, and S3-compatible storage.
 - `ui/`: React 19, TypeScript, Vite, PrimeReact/PrimeFlex, TanStack Query, and React Router.
-- `docs/`: MkDocs Material documentation published at `autofile.dev`.
+- `docs/`: Zensical documentation published at `autofile.dev`.
 - `charts/autofile/`: Helm chart with optional bundled CloudNativePG, Valkey, and RustFS services.
 - `docker-compose.yml`: the complete local stack and the easiest way to run the application.
 
@@ -112,7 +112,7 @@ Documentation checks from the repository root:
 
 ```bash
 pip install -r requirements-docs.txt
-mkdocs build --strict
+zensical build --strict
 ```
 
 Helm checks from the repository root:

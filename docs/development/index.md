@@ -54,11 +54,11 @@ pip install -r requirements-docs.txt
 Build the documentation site:
 
 ```bash
-mkdocs build --strict
+zensical build --strict
 ```
 
 Serve the documentation locally:
 
 ```bash
-mkdocs serve
+zensical serve
 ```
