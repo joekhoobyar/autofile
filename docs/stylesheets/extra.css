@@ -1,0 +1,11 @@
+/* Use the primary color for the top navigation background,
+   matching the classic theme appearance. */
+.md-header {
+  background-color: var(--md-primary-fg-color);
+  color: var(--md-primary-bg-color);
+}
+
+.md-tabs {
+  background-color: var(--md-primary-fg-color);
+  color: var(--md-primary-bg-color);
+}

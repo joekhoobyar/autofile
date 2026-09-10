@@ -4,13 +4,15 @@ site_description: Documentation for Autofile, a self-hosted document management 
 repo_url: https://github.com/joekhoobyar/autofile
 repo_name: joekhoobyar/autofile
 docs_dir: docs
+extra_css:
+  - stylesheets/extra.css
 
 # Copyright
 copyright: Copyright &copy; 2024 - 2026 Joseph Khoobyar
 
 theme:
   name: zensical
-  variant: classic
+  variant: modern
   language: en
   logo: assets/favicon.png
   favicon: assets/favicon.png
@@ -23,16 +25,22 @@ theme:
     - search.highlight
   palette:
     - media: "(prefers-color-scheme)"
+      primary: indigo
+      accent: indigo
       toggle:
         icon: lucide/sun-moon
         name: Switch to light mode
     - media: "(prefers-color-scheme: light)"
-      scheme: default 
+      scheme: default
+      primary: indigo
+      accent: indigo
       toggle:
         icon: lucide/sun
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
+      primary: indigo
+      accent: indigo
       toggle:
         icon: lucide/moon
         name: Switch to system preference
