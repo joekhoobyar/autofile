@@ -870,7 +870,6 @@ export function ListDocuments() {
                   applySearch();
                 }
               }}
-              className="p-inputtext-sm"
               placeholder="Title and content"
               aria-label="Search documents"
             />
