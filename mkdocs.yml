@@ -72,6 +72,7 @@ nav:
   - Reference:
       - API: reference/api.md
       - Classifier Rules YAML: reference/classifier-rules-yaml.md
+  - Changelog: changelog.md
 
 plugins:
   - search
