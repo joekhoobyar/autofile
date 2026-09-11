@@ -114,8 +114,6 @@ describe('EditDocumentMetadata', () => {
     expect(await screen.findByDisplayValue('Globex')).toBeInTheDocument();
     fireEvent.blur(input);
 
-    await new Promise((resolve) => window.setTimeout(resolve, 250));
-
     fireEvent.click(screen.getByRole('button', { name: /save/i }));
 
     await waitFor(() => {
