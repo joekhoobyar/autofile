@@ -1,11 +1,29 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  advancedFormDefaults,
+  advancedResetValues,
+  advancedSubmitParams,
+  buildActiveFilterChips,
+  buildAdvancedSearchParams,
+  buildEffectiveListParams,
+  chipRemoveResult,
+  clearSearchParams,
+  isAllVisibleSelected,
+  nextParamsForPage,
+  nextParamsForQuickFilter,
+  nextParamsForSort,
+  paginatorReportText,
   parseBasicDocumentSearchHash,
   parseDocumentListHash,
+  parseSortValue,
+  resolveSearchText,
+  resolveSortValue,
   serializeBasicDocumentSearchHash,
   serializeDocumentListHash,
   serializeDocumentListUpdate,
+  toggleAllVisibleSelected,
+  toggleSelectedId,
 } from '../util/documentListHash';
 
 describe('document list hash helpers', () => {
@@ -183,5 +201,147 @@ describe('document list hash helpers', () => {
       cabinet_id: 2,
       document_index_value_id: 11,
     });
+  });
+
+  it('clears only text search and preserves narrowing filters', () => {
+    expect(
+      clearSearchParams({
+        q: 'invoice',
+        text: 'invoice',
+        match_any: true,
+        document_type_id: 2,
+        metadata_value: 'Acme',
+        cabinet_id: 5,
+        tag_id: 6,
+        document_index_value_id: 7,
+        duplicates: true,
+        page: 3,
+      }),
+    ).toEqual({
+      document_type_id: 2,
+      metadata_value: 'Acme',
+      cabinet_id: 5,
+      tag_id: 6,
+      document_index_value_id: 7,
+      duplicates: true,
+      page: 1,
+    });
+  });
+
+  it('overrides hash filters with route scope', () => {
+    expect(
+      buildEffectiveListParams({ cabinet_id: 1, tag_id: 2, document_index_value_id: 3 }, {
+        cabinetId: 9,
+        tagId: 8,
+        documentIndexValueId: 7,
+      }),
+    ).toMatchObject({ cabinet_id: 9, tag_id: 8, document_index_value_id: 7 });
+    expect(buildEffectiveListParams({ cabinet_id: 1 }, {})).toMatchObject({ cabinet_id: 1 });
+  });
+
+  it('merges route scope into advanced search params', () => {
+    expect(buildAdvancedSearchParams({ q: 'a' }, { cabinetId: 2 })).toMatchObject({ q: 'a', cabinet_id: 2 });
+  });
+
+  it('resolves sort values in both directions', () => {
+    expect(resolveSortValue('title', true)).toBe('title:desc');
+    expect(resolveSortValue('title', false)).toBe('title:asc');
+    expect(resolveSortValue(undefined, true)).toBeUndefined();
+    expect(parseSortValue('title:desc')).toEqual({ sf: 'title', sd: true });
+    expect(parseSortValue(undefined)).toEqual({ sf: undefined, sd: undefined });
+  });
+
+  it('resolves search text from draft or applied value', () => {
+    expect(resolveSearchText({ appliedSearchText: 'a', value: 'b' }, 'a')).toBe('b');
+    expect(resolveSearchText({ appliedSearchText: 'a', value: 'b' }, 'c')).toBe('c');
+  });
+
+  it('builds advanced form defaults and submit params', () => {
+    expect(advancedFormDefaults(parseDocumentListHash('#search=alpha&cabinet_id=2'), 'alpha')).toMatchObject({
+      q: '',
+      text: '',
+      metadata_value: '',
+      cabinet_id: 2,
+    });
+    expect(
+      advancedSubmitParams(
+        {
+          match_any: true,
+          q: '  invoice  ',
+          text: '',
+          document_type_id: 2,
+          metadata_value: '',
+          metadata_type_id: null,
+          filename: '',
+          file_content_type: '',
+          cabinet_id: null,
+          tag_id: 3,
+          duplicates: false,
+          duplicate_checksum: true,
+        },
+        { per_page: 24, sf: 'title', sd: false, document_index_value_id: 11 },
+      ),
+    ).toEqual({
+      page: 1,
+      per_page: 24,
+      sf: 'title',
+      sd: false,
+      match_any: true,
+      q: 'invoice',
+      document_type_id: 2,
+      tag_id: 3,
+      document_index_value_id: 11,
+      duplicate_checksum: true,
+    });
+    expect(advancedResetValues()).toMatchObject({ match_any: false, q: '', tag_id: null });
+  });
+
+  it('builds page, sort, and quick-filter transitions', () => {
+    expect(nextParamsForPage({ page: 1 }, 3, 24)).toMatchObject({ page: 3, per_page: 24 });
+    expect(nextParamsForSort({ sf: 'title', sd: true }, undefined)).toMatchObject({
+      sf: undefined,
+      sd: undefined,
+      page: 1,
+    });
+    expect(nextParamsForSort({}, 'title:desc')).toMatchObject({ sf: 'title', sd: true, page: 1 });
+    expect(nextParamsForQuickFilter({ tag_id: 1 }, 'tag_id', null)).toEqual({ page: 1 });
+    expect(nextParamsForQuickFilter({}, 'cabinet_id', 5)).toMatchObject({ cabinet_id: 5, page: 1 });
+  });
+
+  it('builds filter chips and chip-removal actions', () => {
+    const chips = buildActiveFilterChips({
+      listParams: { q: 'invoice', document_type_id: 2 },
+      appliedSearchText: '',
+      routeIds: {},
+      documentTypeName: 'Invoice',
+    });
+    expect(chips.map((chip) => chip.key)).toEqual(['q', 'document-type']);
+
+    const searchChips = buildActiveFilterChips({
+      listParams: { q: 'alpha', text: 'alpha', document_type_id: 2 },
+      appliedSearchText: 'alpha',
+      routeIds: {},
+      documentTypeName: 'Invoice',
+    });
+    expect(searchChips.map((chip) => chip.key)).toEqual(['basic-search', 'document-type']);
+
+    expect(chipRemoveResult('basic-search', { q: 'a' })).toEqual({ action: 'clear-search' });
+    expect(chipRemoveResult('q', { q: 'a', text: 'b' })).toEqual({
+      action: 'update',
+      params: { text: 'b', page: 1 },
+    });
+    expect(chipRemoveResult('route-tag-3', {})).toEqual({ action: 'navigate-documents' });
+  });
+
+  it('formats paginator counts and toggles selection', () => {
+    expect(paginatorReportText(1, 12, 100)).toBe('1 - 12 of 100 documents');
+    expect(paginatorReportText(1, 1, 1)).toBe(' 1 document ');
+    expect(paginatorReportText(1, 5, 5)).toBe(' 5 documents ');
+    expect([...toggleSelectedId(new Set([1]), 2, true)]).toEqual([1, 2]);
+    expect([...toggleSelectedId(new Set([1, 2]), 2, false)]).toEqual([1]);
+    expect([...toggleAllVisibleSelected(new Set([1]), [1, 2], true)]).toEqual([1, 2]);
+    expect(isAllVisibleSelected([1, 2], new Set([1, 2]))).toBe(true);
+    expect(isAllVisibleSelected([1, 2], new Set([1]))).toBe(false);
+    expect(isAllVisibleSelected([], new Set())).toBe(false);
   });
 });

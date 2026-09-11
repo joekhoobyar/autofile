@@ -1,17 +1,22 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ListDocuments } from './documents';
 
 const mockUseDocuments = vi.fn();
+const mockDocumentActions = vi.fn();
 
 vi.mock('../components/DocumentActions', () => ({
-  DocumentActions: () => null,
+  DocumentActions: (props: unknown) => {
+    mockDocumentActions(props);
+    return null;
+  },
 }));
 
 vi.mock('../queries/useDocuments', () => ({
   useDocuments: (params: unknown) => mockUseDocuments(params),
+  useDocumentThumbnail: () => ({ data: undefined }),
 }));
 
 vi.mock('../queries/useDocumentIndexes', () => ({
@@ -51,9 +56,26 @@ function renderList(path: string, routePath: string) {
   );
 }
 
+function documentRow(id: number, title: string) {
+  return {
+    id,
+    title,
+    document_type_id: 1,
+    metadata: {},
+    pages: 1,
+    created_at: '2024-01-01T00:00:00Z',
+    created_by: 1,
+    updated_at: '2024-01-01T00:00:00Z',
+    updated_by: 1,
+    cabinet_ids: [],
+    tag_ids: [],
+  };
+}
+
 describe('ListDocuments search scope', () => {
   beforeEach(() => {
     mockUseDocuments.mockReset();
+    mockDocumentActions.mockReset();
     mockUseDocuments.mockReturnValue({ isPending: false, isFetching: false, data: { items: [] } });
   });
 
@@ -114,5 +136,35 @@ describe('ListDocuments search scope', () => {
     expect(screen.getAllByText('Title: invoice').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Text: receipt').length).toBeGreaterThan(0);
     expect(screen.queryByText(/^Search:/)).not.toBeInTheDocument();
+  });
+
+  it('clearing basic search preserves narrowing filters', async () => {
+    renderList('/documents#search=invoice&document_type_id=2', '/documents');
+
+    fireEvent.click(screen.getByLabelText('Clear search'));
+
+    await waitFor(() => {
+      expect(mockUseDocuments).toHaveBeenLastCalledWith(
+        expect.objectContaining({ document_type_id: 2 }),
+      );
+    });
+    expect(mockUseDocuments).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ q: expect.anything(), text: expect.anything() }),
+    );
+  });
+
+  it('selects all visible documents', () => {
+    mockUseDocuments.mockReturnValue({
+      isPending: false,
+      isFetching: false,
+      data: { items: [documentRow(1, 'Alpha'), documentRow(2, 'Beta')], page: 1, per_page: 12, total: 2 },
+    });
+    renderList('/documents', '/documents');
+
+    const selectAll = screen.getAllByLabelText('Select all documents on this page');
+    const selectAllInput = selectAll.find((el) => el.tagName === 'INPUT') ?? selectAll[0];
+    fireEvent.click(selectAllInput);
+
+    expect(mockDocumentActions).toHaveBeenLastCalledWith(expect.objectContaining({ documentIds: [1, 2] }));
   });
 });

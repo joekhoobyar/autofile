@@ -41,7 +41,31 @@ import { DocumentTagBadge } from '../components/DocumentTagBadge';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
-import { parseBasicDocumentSearchHash, parseDocumentListHash, serializeBasicDocumentSearchHash, serializeDocumentListHash, serializeDocumentListUpdate } from '../util/documentListHash';
+import {
+  advancedFormDefaults,
+  advancedResetValues,
+  advancedSubmitParams,
+  buildAdvancedSearchParams,
+  buildActiveFilterChips,
+  buildEffectiveListParams,
+  chipRemoveResult,
+  clearSearchParams,
+  isAllVisibleSelected,
+  nextParamsForPage,
+  nextParamsForQuickFilter,
+  nextParamsForSort,
+  paginatorReportText,
+  parseBasicDocumentSearchHash,
+  parseDocumentListHash,
+  resolveSearchText,
+  resolveSortValue,
+  serializeBasicDocumentSearchHash,
+  serializeDocumentListHash,
+  serializeDocumentListUpdate,
+  toggleAllVisibleSelected,
+  toggleSelectedId,
+  type AdvancedDocumentSearchFormValues,
+} from '../util/documentListHash';
 
 type DocumentListItemProps = {
   doc: Readonly<Document>;
@@ -387,12 +411,11 @@ export function ListDocuments() {
   const cabinetId = params.cabinetId ? Number.parseInt(params.cabinetId) : undefined;
   const documentIndexValueId = params.documentIndexValueId ? Number.parseInt(params.documentIndexValueId) : undefined;
   const documentIndexId = params.documentIndexId ? Number.parseInt(params.documentIndexId) : undefined;
-  const effectiveListParams: DocumentListParams = {
-    ...listParams,
-    tag_id: tagId ?? listParams.tag_id,
-    cabinet_id: cabinetId ?? listParams.cabinet_id,
-    document_index_value_id: documentIndexValueId ?? listParams.document_index_value_id,
-  };
+  const effectiveListParams: DocumentListParams = buildEffectiveListParams(listParams, {
+    tagId,
+    cabinetId,
+    documentIndexValueId,
+  });
   const showIndexMenu = !!documentIndexId && !!documentIndexValueId;
   const { data: indexAncestors } = useDocumentIndexValueAncestors(documentIndexId ?? 0, documentIndexValueId ?? 0);
   const { data: documentIndex } = useDocumentIndex(documentIndexId ?? 0, { enabled: !!documentIndexId });
@@ -403,11 +426,11 @@ export function ListDocuments() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const appliedSearchText = parseBasicDocumentSearchHash(location.hash);
   const [searchDraft, setSearchDraft] = useState({ appliedSearchText, value: appliedSearchText });
-  const searchText = searchDraft.appliedSearchText === appliedSearchText ? searchDraft.value : appliedSearchText;
+  const searchText = resolveSearchText(searchDraft, appliedSearchText);
   const setSearchText = (value: string) => setSearchDraft({ appliedSearchText, value });
   const { isPending, data, isFetching } = useDocuments(effectiveListParams);
   const visibleDocumentIds = useMemo(() => data?.items.map((doc) => doc.id) ?? [], [data?.items]);
-  const allVisibleSelected = visibleDocumentIds.length > 0 && visibleDocumentIds.every((id) => selectedIds.has(id));
+  const allVisibleSelected = isAllVisibleSelected(visibleDocumentIds, selectedIds);
   const { data: cabinetOptions } = useCabinets({ page: 1, per_page: MAX_CABINETS });
   const { data: cabinetTreeOptions, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinetTree({ keyField: 'id' });
   const { data: tagOptions, isPending: isTagsPending, isFetching: isTagsFetching } = useTags({ page: 1, per_page: 200 });
@@ -430,61 +453,23 @@ export function ListDocuments() {
   }, [tagOptions?.items]);
 
   const activeFilterChips = useMemo(() => {
-    const chips: Array<{ key: string; label: string }> = [];
-    if (appliedSearchText) {
-      chips.push({ key: 'basic-search', label: `Search: ${appliedSearchText}` });
-    } else {
-      if (listParams.q) {
-        chips.push({ key: 'q', label: `Title: ${listParams.q}` });
-      }
-      if (listParams.text) {
-        chips.push({ key: 'text', label: `Text: ${listParams.text}` });
-      }
-      if (listParams.filename) {
-        chips.push({ key: 'filename', label: `Filename: ${listParams.filename}` });
-      }
-    }
-    if (listParams.document_type_id) {
-      chips.push({
-        key: 'document-type',
-        label: `Document type: ${documentTypeLookup?.[String(listParams.document_type_id)]?.name ?? listParams.document_type_id}`,
-      });
-    }
-    if (listParams.metadata_value) {
-      chips.push({ key: 'metadata-value', label: `Metadata: ${listParams.metadata_value}` });
-    }
-    if (listParams.metadata_type_id) {
-      chips.push({
-        key: 'metadata-type',
-        label: `Metadata type: ${metadataTypeLookup?.[String(listParams.metadata_type_id)]?.name ?? listParams.metadata_type_id}`,
-      });
-    }
-    if (listParams.file_content_type) {
-      chips.push({ key: 'file-content-type', label: `Content type: ${listParams.file_content_type}` });
-    }
     const effectiveTagId = tagId ?? listParams.tag_id;
     const effectiveCabinetId = cabinetId ?? listParams.cabinet_id;
-    if (effectiveTagId && tagLookup[effectiveTagId]) {
-      chips.push({
-        key: tagId ? `route-tag-${effectiveTagId}` : 'tag',
-        label: `🏷️ ${tagLookup[effectiveTagId].name}`,
-      });
-    }
-    if (effectiveCabinetId && cabinetLookup[effectiveCabinetId]) {
-      const cabinet = cabinetLookup[effectiveCabinetId];
-      chips.push({
-        key: cabinetId ? `route-cabinet-${effectiveCabinetId}` : 'cabinet',
-        label: `🗄️ ${cabinet.displayName ?? cabinet.name ?? cabinet.slug}`,
-      });
-    }
-    if (listParams.duplicates) {
-      chips.push({ key: 'duplicates', label: 'Duplicate title' });
-    }
-    if (listParams.duplicate_checksum) {
-      chips.push({ key: 'duplicate-checksum', label: 'Duplicate file checksum' });
-    }
-    return chips;
-  }, [appliedSearchText, tagId, cabinetId, tagLookup, cabinetLookup, listParams, documentTypeLookup, metadataTypeLookup]);
+    const cabinet = effectiveCabinetId ? cabinetLookup[effectiveCabinetId] : undefined;
+    return buildActiveFilterChips({
+      listParams,
+      appliedSearchText,
+      routeIds: { tagId, cabinetId, documentIndexValueId },
+      documentTypeName: listParams.document_type_id
+        ? (documentTypeLookup?.[String(listParams.document_type_id)]?.name ?? String(listParams.document_type_id))
+        : undefined,
+      metadataTypeName: listParams.metadata_type_id
+        ? (metadataTypeLookup?.[String(listParams.metadata_type_id)]?.name ?? String(listParams.metadata_type_id))
+        : undefined,
+      tagName: effectiveTagId ? tagLookup[effectiveTagId]?.name : undefined,
+      cabinetName: cabinet ? (cabinet.displayName ?? cabinet.name ?? cabinet.slug) : undefined,
+    });
+  }, [appliedSearchText, tagId, cabinetId, documentIndexValueId, tagLookup, cabinetLookup, listParams, documentTypeLookup, metadataTypeLookup]);
 
   const sortOptions = [
     { label: 'ID (Ascending)', value: 'id:asc' },
@@ -495,8 +480,7 @@ export function ListDocuments() {
     { label: 'Created (Newest)', value: 'created_at:desc' },
   ];
 
-  const sortDir = listParams.sd ? 'desc' : 'asc';
-  const sortValue = listParams.sf ? `${listParams.sf}:${sortDir}` : undefined;
+  const sortValue = resolveSortValue(listParams.sf, listParams.sd);
 
   const updateListParams = (nextParams: DocumentListParams) => {
     navigate({
@@ -507,34 +491,23 @@ export function ListDocuments() {
   };
 
   const onPage = (event: DataViewPageEvent) => {
-    updateListParams({ ...listParams, page: event.page + 1, per_page: event.rows });
+    updateListParams(nextParamsForPage(listParams, event.page + 1, event.rows));
   };
 
   const onSortChange = (value: string | undefined) => {
-    if (!value) {
-      updateListParams({ ...listParams, sf: undefined, sd: undefined, page: 1 });
-      return;
-    }
-
-    const [field, direction] = value.split(':');
-    updateListParams({
-      ...listParams,
-      sf: field,
-      sd: direction === 'desc',
-      page: 1,
-    });
+    updateListParams(nextParamsForSort(listParams, value));
   };
 
   const onTagQuickFilterChange = (value: number | null | undefined) => {
-    updateListParams({ ...listParams, tag_id: value ?? undefined, page: 1 });
+    updateListParams(nextParamsForQuickFilter(listParams, 'tag_id', value));
   };
 
   const onCabinetQuickFilterChange = (value: string | null | undefined) => {
-    updateListParams({ ...listParams, cabinet_id: value ? Number(value) : undefined, page: 1 });
+    updateListParams(nextParamsForQuickFilter(listParams, 'cabinet_id', value ? Number(value) : null));
   };
 
   const onDocumentTypeQuickFilterChange = (value: number | null | undefined) => {
-    updateListParams({ ...listParams, document_type_id: value ?? undefined, page: 1 });
+    updateListParams(nextParamsForQuickFilter(listParams, 'document_type_id', value));
   };
 
   const applySearch = () => {
@@ -547,23 +520,7 @@ export function ListDocuments() {
 
   const clearSearch = () => {
     setSearchText('');
-    updateListParams({
-      ...listParams,
-      match_any: undefined,
-      q: undefined,
-      text: undefined,
-      document_type_id: undefined,
-      metadata_value: undefined,
-      metadata_type_id: undefined,
-      filename: undefined,
-      file_content_type: undefined,
-      cabinet_id: undefined,
-      tag_id: undefined,
-      document_index_value_id: undefined,
-      duplicates: undefined,
-      duplicate_checksum: undefined,
-      page: 1,
-    });
+    updateListParams(clearSearchParams(listParams));
   }
 
   const openPreview = (src: string | undefined, title: string) => {
@@ -578,29 +535,11 @@ export function ListDocuments() {
   };
 
   const handleSelectionChange = (id: number, checked: boolean) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (checked) {
-        next.add(id);
-      } else {
-        next.delete(id);
-      }
-      return next;
-    });
+    setSelectedIds((prev) => toggleSelectedId(prev, id, checked));
   };
 
   const handleSelectAllChange = (checked: boolean) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      for (const id of visibleDocumentIds) {
-        if (checked) {
-          next.add(id);
-        } else {
-          next.delete(id);
-        }
-      }
-      return next;
-    });
+    setSelectedIds((prev) => toggleAllVisibleSelected(prev, visibleDocumentIds, checked));
   };
 
 
@@ -676,12 +615,11 @@ export function ListDocuments() {
 
   const header = () => {
     const showMainListQuickFilters = !tagId && !cabinetId && !documentIndexValueId;
-    const advancedSearchParams: DocumentListParams = {
-      ...listParams,
-      cabinet_id: cabinetId ?? listParams.cabinet_id,
-      tag_id: tagId ?? listParams.tag_id,
-      document_index_value_id: documentIndexValueId ?? listParams.document_index_value_id,
-    };
+    const advancedSearchParams: DocumentListParams = buildAdvancedSearchParams(listParams, {
+      cabinetId,
+      tagId,
+      documentIndexValueId,
+    });
 
     return (
       <div className="flex flex-column gap-1 md:flex-row md:justify-content-between md:align-items-center">
@@ -786,63 +724,22 @@ export function ListDocuments() {
     layout: 'CurrentPageReport RowsPerPageDropdown PrevPageLink PageLinks NextPageLink',
     CurrentPageReport: (options: { first: number; last: number; totalRecords: number }) => (
       <div className="flex align-items-center gap-3 aut-documents-paginator-report">
-        {(options.last != options.totalRecords) ?
-          (
-            <span className="aut-documents-paginator-count">
-              {options.first} - {options.last} of {options.totalRecords} documents
-            </span>
-          )
-        : options.totalRecords == 1 ? (
-            <span className="aut-documents-paginator-count"> 1 document </span>
-        ) : (
-            <span className="aut-documents-paginator-count"> {options.totalRecords} documents </span>
-        )
-        }
+        <span className="aut-documents-paginator-count">
+          {paginatorReportText(options.first, options.last, options.totalRecords)}
+        </span>
         {activeFilterChips.map((chip) => (
           <Chip
             key={chip.key}
             label={chip.label}
             removable
             onRemove={() => {
-              switch (chip.key) {
-                case 'basic-search':
-                  clearSearch();
-                  break;
-                case 'q':
-                  updateListParams({ ...listParams, q: undefined, page: 1 });
-                  break;
-                case 'text':
-                  updateListParams({ ...listParams, text: undefined, page: 1 });
-                  break;
-                case 'document-type':
-                  updateListParams({ ...listParams, document_type_id: undefined, page: 1 });
-                  break;
-                case 'metadata-value':
-                  updateListParams({ ...listParams, metadata_value: undefined, page: 1 });
-                  break;
-                case 'metadata-type':
-                  updateListParams({ ...listParams, metadata_type_id: undefined, page: 1 });
-                  break;
-                case 'filename':
-                  updateListParams({ ...listParams, filename: undefined, page: 1 });
-                  break;
-                case 'file-content-type':
-                  updateListParams({ ...listParams, file_content_type: undefined, page: 1 });
-                  break;
-                case 'tag':
-                  updateListParams({ ...listParams, tag_id: undefined, page: 1 });
-                  break;
-                case 'cabinet':
-                  updateListParams({ ...listParams, cabinet_id: undefined, page: 1 });
-                  break;
-                case 'duplicates':
-                  updateListParams({ ...listParams, duplicates: undefined, page: 1 });
-                  break;
-                case 'duplicate-checksum':
-                  updateListParams({ ...listParams, duplicate_checksum: undefined, page: 1 });
-                  break;
-                default:
-                  navigate('/documents');
+              const result = chipRemoveResult(chip.key, listParams);
+              if (result.action === 'clear-search') {
+                clearSearch();
+              } else if (result.action === 'update') {
+                updateListParams(result.params);
+              } else {
+                navigate('/documents');
               }
               return true;
             }}
@@ -922,21 +819,6 @@ export function ListDocuments() {
   );
 }
 
-type AdvancedDocumentSearchFormValues = {
-  match_any: boolean;
-  q: string;
-  text: string;
-  document_type_id: number | null;
-  metadata_value: string;
-  metadata_type_id: number | null;
-  filename: string;
-  file_content_type: string;
-  cabinet_id: number | null;
-  tag_id: number | null;
-  duplicates: boolean;
-  duplicate_checksum: boolean;
-};
-
 export function AdvancedDocumentSearch() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -945,43 +827,13 @@ export function AdvancedDocumentSearch() {
   const { data: metadataTypes, isPending: isMetadataTypesPending, isFetching: isMetadataTypesFetching } = useMetadataTypes({ page: 1, per_page: 200, sf: 'name' });
   const { data: cabinetOptions, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinetTree({ keyField: 'id' });
   const { data: tags, isPending: isTagsPending, isFetching: isTagsFetching } = useTags({ page: 1, per_page: 200, sf: 'name' });
+  const basicSearchText = parseBasicDocumentSearchHash(location.hash);
   const { control, handleSubmit, reset, formState: { isSubmitting } } = useForm<AdvancedDocumentSearchFormValues>({
-    defaultValues: {
-      match_any: !!existingParams.match_any,
-      q: parseBasicDocumentSearchHash(location.hash) ? '' : existingParams.q ?? '',
-      text: parseBasicDocumentSearchHash(location.hash) ? '' : existingParams.text ?? '',
-      document_type_id: existingParams.document_type_id ?? null,
-      metadata_value: parseBasicDocumentSearchHash(location.hash) ? '' : existingParams.metadata_value ?? '',
-      metadata_type_id: existingParams.metadata_type_id ?? null,
-      filename: existingParams.filename ?? '',
-      file_content_type: existingParams.file_content_type ?? '',
-      cabinet_id: existingParams.cabinet_id ?? null,
-      tag_id: existingParams.tag_id ?? null,
-      duplicates: !!existingParams.duplicates,
-      duplicate_checksum: !!existingParams.duplicate_checksum,
-    },
+    defaultValues: advancedFormDefaults(existingParams, basicSearchText),
   });
 
   const onSubmit = (values: AdvancedDocumentSearchFormValues) => {
-    const nextParams: DocumentListParams = {
-      page: 1,
-      per_page: existingParams.per_page,
-      sf: existingParams.sf,
-      sd: existingParams.sd,
-      match_any: values.match_any || undefined,
-      q: values.q.trim() || undefined,
-      text: values.text.trim() || undefined,
-      document_type_id: values.document_type_id ?? undefined,
-      metadata_value: values.metadata_value.trim() || undefined,
-      metadata_type_id: values.metadata_type_id ?? undefined,
-      filename: values.filename.trim() || undefined,
-      file_content_type: values.file_content_type.trim() || undefined,
-      cabinet_id: values.cabinet_id ?? undefined,
-      tag_id: values.tag_id ?? undefined,
-      document_index_value_id: existingParams.document_index_value_id,
-      duplicates: values.duplicates || undefined,
-      duplicate_checksum: values.duplicate_checksum || undefined,
-    };
+    const nextParams: DocumentListParams = advancedSubmitParams(values, existingParams);
 
     navigate({
       pathname: '/documents',
@@ -990,20 +842,7 @@ export function AdvancedDocumentSearch() {
   };
 
   const resetForm = () => {
-    reset({
-      match_any: false,
-      q: '',
-      text: '',
-      document_type_id: null,
-      metadata_value: '',
-      metadata_type_id: null,
-      filename: '',
-      file_content_type: '',
-      cabinet_id: null,
-      tag_id: null,
-      duplicates: false,
-      duplicate_checksum: false,
-    });
+    reset(advancedResetValues());
   };
 
   return (

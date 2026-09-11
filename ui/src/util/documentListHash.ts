@@ -129,6 +129,269 @@ export function serializeBasicDocumentSearchHash(value: string, params: Document
   return urlParams.toString();
 }
 
+export type DocumentListRouteIds = {
+  tagId?: number;
+  cabinetId?: number;
+  documentIndexValueId?: number;
+};
+
+export type AdvancedDocumentSearchFormValues = {
+  match_any: boolean;
+  q: string;
+  text: string;
+  document_type_id: number | null;
+  metadata_value: string;
+  metadata_type_id: number | null;
+  filename: string;
+  file_content_type: string;
+  cabinet_id: number | null;
+  tag_id: number | null;
+  duplicates: boolean;
+  duplicate_checksum: boolean;
+};
+
+export type ActiveFilterChip = {
+  key: string;
+  label: string;
+};
+
+export type ChipRemoveResult =
+  | { action: 'clear-search' }
+  | { action: 'update'; params: DocumentListParams }
+  | { action: 'navigate-documents' };
+
+export function buildEffectiveListParams(
+  listParams: DocumentListParams,
+  routeIds: DocumentListRouteIds,
+): DocumentListParams {
+  return {
+    ...listParams,
+    tag_id: routeIds.tagId ?? listParams.tag_id,
+    cabinet_id: routeIds.cabinetId ?? listParams.cabinet_id,
+    document_index_value_id: routeIds.documentIndexValueId ?? listParams.document_index_value_id,
+  };
+}
+
+export function buildAdvancedSearchParams(
+  listParams: DocumentListParams,
+  routeIds: DocumentListRouteIds,
+): DocumentListParams {
+  return buildEffectiveListParams(listParams, routeIds);
+}
+
+export function resolveSortValue(sf: string | undefined, sd: boolean | undefined): string | undefined {
+  if (!sf) return undefined;
+  return `${sf}:${sd ? 'desc' : 'asc'}`;
+}
+
+export function parseSortValue(value: string | undefined): { sf: string | undefined; sd: boolean | undefined } {
+  if (!value) return { sf: undefined, sd: undefined };
+  const [field, direction] = value.split(':');
+  if (!field) return { sf: undefined, sd: undefined };
+  return { sf: field, sd: direction === 'desc' };
+}
+
+export function resolveSearchText(draft: { appliedSearchText: string; value: string }, appliedSearchText: string): string {
+  return draft.appliedSearchText === appliedSearchText ? draft.value : appliedSearchText;
+}
+
+export function advancedFormDefaults(
+  existingParams: DocumentListParams,
+  basicSearchText: string,
+): AdvancedDocumentSearchFormValues {
+  const hasBasicSearch = basicSearchText.length > 0;
+  return {
+    match_any: !!existingParams.match_any,
+    q: hasBasicSearch ? '' : (existingParams.q ?? ''),
+    text: hasBasicSearch ? '' : (existingParams.text ?? ''),
+    document_type_id: existingParams.document_type_id ?? null,
+    metadata_value: hasBasicSearch ? '' : (existingParams.metadata_value ?? ''),
+    metadata_type_id: existingParams.metadata_type_id ?? null,
+    filename: existingParams.filename ?? '',
+    file_content_type: existingParams.file_content_type ?? '',
+    cabinet_id: existingParams.cabinet_id ?? null,
+    tag_id: existingParams.tag_id ?? null,
+    duplicates: !!existingParams.duplicates,
+    duplicate_checksum: !!existingParams.duplicate_checksum,
+  };
+}
+
+export function advancedResetValues(): AdvancedDocumentSearchFormValues {
+  return {
+    match_any: false,
+    q: '',
+    text: '',
+    document_type_id: null,
+    metadata_value: '',
+    metadata_type_id: null,
+    filename: '',
+    file_content_type: '',
+    cabinet_id: null,
+    tag_id: null,
+    duplicates: false,
+    duplicate_checksum: false,
+  };
+}
+
+export function advancedSubmitParams(
+  values: AdvancedDocumentSearchFormValues,
+  existingParams: DocumentListParams,
+): DocumentListParams {
+  return {
+    page: 1,
+    per_page: existingParams.per_page,
+    sf: existingParams.sf,
+    sd: existingParams.sd,
+    match_any: values.match_any || undefined,
+    q: values.q.trim() || undefined,
+    text: values.text.trim() || undefined,
+    document_type_id: values.document_type_id ?? undefined,
+    metadata_value: values.metadata_value.trim() || undefined,
+    metadata_type_id: values.metadata_type_id ?? undefined,
+    filename: values.filename.trim() || undefined,
+    file_content_type: values.file_content_type.trim() || undefined,
+    cabinet_id: values.cabinet_id ?? undefined,
+    tag_id: values.tag_id ?? undefined,
+    document_index_value_id: existingParams.document_index_value_id,
+    duplicates: values.duplicates || undefined,
+    duplicate_checksum: values.duplicate_checksum || undefined,
+  };
+}
+
+export function clearSearchParams(listParams: DocumentListParams): DocumentListParams {
+  return {
+    ...listParams,
+    match_any: undefined,
+    q: undefined,
+    text: undefined,
+    page: 1,
+  };
+}
+
+export function nextParamsForPage(
+  listParams: DocumentListParams,
+  page: number,
+  perPage: number,
+): DocumentListParams {
+  return { ...listParams, page, per_page: perPage };
+}
+
+export function nextParamsForSort(
+  listParams: DocumentListParams,
+  sortValue: string | undefined,
+): DocumentListParams {
+  const { sf, sd } = parseSortValue(sortValue);
+  return { ...listParams, sf, sd, page: 1 };
+}
+
+export function nextParamsForQuickFilter<T>(
+  listParams: DocumentListParams,
+  field: 'tag_id' | 'cabinet_id' | 'document_type_id',
+  value: T | null | undefined,
+): DocumentListParams {
+  return { ...listParams, [field]: value ?? undefined, page: 1 };
+}
+
+export function buildActiveFilterChips(args: {
+  listParams: DocumentListParams;
+  appliedSearchText: string;
+  routeIds: DocumentListRouteIds;
+  documentTypeName?: string;
+  metadataTypeName?: string;
+  tagName?: string;
+  cabinetName?: string;
+}): ActiveFilterChip[] {
+  const { listParams, appliedSearchText, routeIds, documentTypeName, metadataTypeName, tagName, cabinetName } = args;
+  const chips: ActiveFilterChip[] = [];
+  if (appliedSearchText) {
+    chips.push({ key: 'basic-search', label: `Search: ${appliedSearchText}` });
+  } else {
+    if (listParams.q) chips.push({ key: 'q', label: `Title: ${listParams.q}` });
+    if (listParams.text) chips.push({ key: 'text', label: `Text: ${listParams.text}` });
+    if (listParams.filename) chips.push({ key: 'filename', label: `Filename: ${listParams.filename}` });
+  }
+  if (listParams.document_type_id) {
+    chips.push({ key: 'document-type', label: `Document type: ${documentTypeName ?? listParams.document_type_id}` });
+  }
+  if (listParams.metadata_value) {
+    chips.push({ key: 'metadata-value', label: `Metadata: ${listParams.metadata_value}` });
+  }
+  if (listParams.metadata_type_id) {
+    chips.push({ key: 'metadata-type', label: `Metadata type: ${metadataTypeName ?? listParams.metadata_type_id}` });
+  }
+  if (listParams.file_content_type) {
+    chips.push({ key: 'file-content-type', label: `Content type: ${listParams.file_content_type}` });
+  }
+  const effectiveTagId = routeIds.tagId ?? listParams.tag_id;
+  const effectiveCabinetId = routeIds.cabinetId ?? listParams.cabinet_id;
+  if (effectiveTagId && tagName) {
+    chips.push({ key: routeIds.tagId ? `route-tag-${effectiveTagId}` : 'tag', label: `🏷️ ${tagName}` });
+  }
+  if (effectiveCabinetId && cabinetName) {
+    chips.push({ key: routeIds.cabinetId ? `route-cabinet-${effectiveCabinetId}` : 'cabinet', label: `🗄️ ${cabinetName}` });
+  }
+  if (listParams.duplicates) chips.push({ key: 'duplicates', label: 'Duplicate title' });
+  if (listParams.duplicate_checksum) chips.push({ key: 'duplicate-checksum', label: 'Duplicate file checksum' });
+  return chips;
+}
+
+export function chipRemoveResult(chipKey: string, listParams: DocumentListParams): ChipRemoveResult {
+  switch (chipKey) {
+    case 'basic-search':
+      return { action: 'clear-search' };
+    case 'q':
+      return { action: 'update', params: { ...listParams, q: undefined, page: 1 } };
+    case 'text':
+      return { action: 'update', params: { ...listParams, text: undefined, page: 1 } };
+    case 'document-type':
+      return { action: 'update', params: { ...listParams, document_type_id: undefined, page: 1 } };
+    case 'metadata-value':
+      return { action: 'update', params: { ...listParams, metadata_value: undefined, page: 1 } };
+    case 'metadata-type':
+      return { action: 'update', params: { ...listParams, metadata_type_id: undefined, page: 1 } };
+    case 'filename':
+      return { action: 'update', params: { ...listParams, filename: undefined, page: 1 } };
+    case 'file-content-type':
+      return { action: 'update', params: { ...listParams, file_content_type: undefined, page: 1 } };
+    case 'tag':
+      return { action: 'update', params: { ...listParams, tag_id: undefined, page: 1 } };
+    case 'cabinet':
+      return { action: 'update', params: { ...listParams, cabinet_id: undefined, page: 1 } };
+    case 'duplicates':
+      return { action: 'update', params: { ...listParams, duplicates: undefined, page: 1 } };
+    case 'duplicate-checksum':
+      return { action: 'update', params: { ...listParams, duplicate_checksum: undefined, page: 1 } };
+    default:
+      return { action: 'navigate-documents' };
+  }
+}
+
+export function paginatorReportText(first: number, last: number, totalRecords: number): string {
+  if (last != totalRecords) return `${first} - ${last} of ${totalRecords} documents`;
+  if (totalRecords == 1) return ' 1 document ';
+  return ` ${totalRecords} documents `;
+}
+
+export function toggleSelectedId(prev: Set<number>, id: number, checked: boolean): Set<number> {
+  const next = new Set(prev);
+  if (checked) next.add(id);
+  else next.delete(id);
+  return next;
+}
+
+export function toggleAllVisibleSelected(prev: Set<number>, visibleIds: number[], checked: boolean): Set<number> {
+  const next = new Set(prev);
+  for (const id of visibleIds) {
+    if (checked) next.add(id);
+    else next.delete(id);
+  }
+  return next;
+}
+
+export function isAllVisibleSelected(visibleIds: number[], selected: Set<number>): boolean {
+  return visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+}
+
 export function serializeDocumentListUpdate(nextParams: DocumentListParams, appliedSearchText: string): string {
   const preservesBasicSearch =
     !!appliedSearchText &&
