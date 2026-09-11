@@ -36,7 +36,7 @@ vi.mock('../queries/useDocuments', () => ({
 }));
 
 vi.mock('../queries/useMetadataTypes', () => ({
-  fetchMetadataTypeValues: vi.fn(),
+  fetchMetadataTypeValues: vi.fn(() => Promise.resolve([])),
   useDocumentTypeMetadataTypes: () => ({
     isLoading: false,
     data: [
