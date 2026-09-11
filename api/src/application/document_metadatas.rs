@@ -48,16 +48,47 @@ pub async fn document_metadatas_upsert(
 ) -> Result<(), ApiError> {
     // Validate the input metadata against the document type's rules,
     // including required fields, data types, and lookup choices.
+    // Required blank values fail validation here, so any blank value
+    // remaining afterwards is optional and means "delete the stored row".
     validate_document_metadata_input(db, document_id, &input).await?;
+
+    // Partition the input into blank optional values (to delete) and
+    // non-blank values (to upsert).
+    let mut delete_ids: Vec<i64> = Vec::new();
+    let mut upsert_input: Vec<&NewDocumentMetadata> = Vec::with_capacity(input.len());
+    for m in &input {
+        if m.value.trim().is_empty() {
+            if !delete_ids.contains(&m.metadata_type_id) {
+                delete_ids.push(m.metadata_type_id);
+            }
+        } else {
+            upsert_input.push(m);
+        }
+    }
+
+    if !delete_ids.is_empty() {
+        diesel::delete(
+            document_metadatas::table
+                .filter(document_metadatas::document_id.eq(document_id))
+                .filter(document_metadatas::metadata_type_id.eq_any(&delete_ids)),
+        )
+        .execute(&mut *db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete document_metadata"))?;
+    }
+
+    if upsert_input.is_empty() {
+        return Ok(());
+    }
 
     // Prepare the rows to upsert, setting created_by and updated_by to the current user.
     // It is worth allocating memory so that we can bulk upsert with Diesel, rather than doing individual queries in a loop.
-    let rows: Vec<InsertableDocumentMetadata> = input
+    let rows: Vec<InsertableDocumentMetadata> = upsert_input
         .into_iter()
         .map(|m| InsertableDocumentMetadata {
             document_id,
             metadata_type_id: m.metadata_type_id,
-            value: m.value,
+            value: m.value.clone(),
             created_by: user_id,
             updated_by: user_id,
         })

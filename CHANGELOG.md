@@ -9,7 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add autocomplete for metadata value editing
+- Add autocomplete for metadata value editing.
+
+### Fixed
+
+- Blank metadata values are now properly deleted from the document.
 
 ## [0.4.9] - 2026-09-10
 

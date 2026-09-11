@@ -58,7 +58,7 @@ Avoid leading or trailing whitespace. Validation ignores surrounding whitespace,
 
 ## Empty And Deleted Values
 
-Clearing an optional value in the UI stores an empty string. It does not remove the metadata record. This distinction matters when searching for documents that have a particular Metadata Type.
+Clearing an optional value in the UI deletes the stored metadata record. Selecting a Metadata Type without entering a value therefore only finds documents that still have a stored record for that field.
 
 The API provides a separate delete operation for a metadata value. Required values cannot be deleted while the field remains required for the current Document Type.
 
@@ -85,7 +85,7 @@ Use **Advanced Document Search** for more control:
 4. Select **Match Any** to match any criterion instead of requiring all criteria.
 5. Select **Search**.
 
-Selecting a Metadata Type without entering a value finds documents that have a stored record for that field. An optional field stored as an empty string still counts as present.
+Selecting a Metadata Type without entering a value finds documents that have a stored record for that field.
 
 ## Use Metadata In Indexes
 

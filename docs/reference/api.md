@@ -490,7 +490,7 @@ One document can have at most one value for each Metadata Type.
 | Method | Path | Behavior |
 | --- | --- | --- |
 | `GET` | `/api/v1/documents/{document_id}/metadata` | List stored metadata rows for a document. |
-| `POST` | `/api/v1/documents/{document_id}/metadata` | Validate and upsert supplied values. |
+| `POST` | `/api/v1/documents/{document_id}/metadata` | Validate supplied values, upsert non-blank values, and delete rows for blank optional values. |
 | `GET` | `/api/v1/documents/{document_id}/metadata/{metadata_type_id}` | Get one stored value. |
 | `DELETE` | `/api/v1/documents/{document_id}/metadata/{metadata_type_id}` | Delete one value if it is not required. |
 
@@ -511,7 +511,7 @@ Authorization: Bearer <access_token>
 The response is an array containing all stored metadata rows for the document, ordered by Metadata Type ID.
 
 !!! note "Incremental upsert"
-    POST updates or inserts only the supplied fields. It does not replace the document's complete metadata set, and omitted fields remain unchanged. Sending an empty array makes no metadata changes.
+    POST updates or inserts only the supplied fields. It does not replace the document's complete metadata set, and omitted fields remain unchanged. Sending an empty array makes no metadata changes. A blank optional value deletes that field's stored row instead of storing an empty string.
 
 Every submitted field must be associated with the document's current Document Type. Validation rules are:
 
@@ -521,7 +521,7 @@ Every submitted field must be associated with the document's current Document Ty
 | `date` | Non-empty values must be valid dates in `YYYY-MM-DD` format. |
 | `lookup` | Non-empty values must match a configured choice after surrounding whitespace is trimmed for validation. |
 
-A submitted required value cannot be empty. Optional empty strings are accepted and stored rather than deleting the row. Date and Lookup values are trimmed for validation, but the original submitted string is stored.
+A submitted required value cannot be empty. A blank (empty or whitespace-only) optional value deletes the stored row if one exists, and is otherwise a no-op. Date and Lookup values are trimmed for validation, but the original submitted string is stored.
 
 Required completeness is not checked across omitted fields. A document can therefore lack a required value if that field was never submitted. Deleting a currently required value returns `409 Conflict`.
 
