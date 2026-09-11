@@ -30,6 +30,7 @@ pub struct ListUsersInput {
     pub q: Option<String>,
     pub sf: Option<UserSortField>,
     pub sd: Option<bool>,
+    pub include_deleted: Option<bool>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -92,6 +93,7 @@ pub async fn get_user_by_username(
 ) -> Result<User, ApiError> {
     users::table
         .filter(users::username.eq(username))
+        .filter(users::deleted_at.is_null())
         .select(User::as_select())
         .first::<User>(db)
         .await
@@ -102,7 +104,13 @@ pub async fn get_profile(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
     user_id: i64,
 ) -> Result<User, ApiError> {
-    get_user_by_id(db, user_id).await
+    users::table
+        .filter(users::id.eq(user_id))
+        .filter(users::deleted_at.is_null())
+        .select(User::as_select())
+        .first::<User>(db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch user"))
 }
 
 pub async fn update_profile(
@@ -119,12 +127,16 @@ pub async fn update_profile(
         display_name: input.display_name,
     };
 
-    diesel::update(users::table.filter(users::id.eq(user_id)))
-        .set((&changes, users::updated_at.eq(diesel::dsl::now)))
-        .returning(User::as_returning())
-        .get_result(db)
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update profile"))
+    diesel::update(
+        users::table
+            .filter(users::id.eq(user_id))
+            .filter(users::deleted_at.is_null()),
+    )
+    .set((&changes, users::updated_at.eq(diesel::dsl::now)))
+    .returning(User::as_returning())
+    .get_result(db)
+    .await
+    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update profile"))
 }
 
 pub async fn change_password(
@@ -138,17 +150,21 @@ pub async fn change_password(
 
     let pw_hash = hash_password(&input.new_password).map_err(ApiError::bad_request)?;
 
-    diesel::update(users::table.filter(users::id.eq(user_id)))
-        .set((
-            users::password_hash.eq(pw_hash),
-            users::password_changed_at.eq(diesel::dsl::now),
-            users::force_password_change.eq(false),
-            users::updated_at.eq(diesel::dsl::now),
-        ))
-        .returning(User::as_returning())
-        .get_result(db)
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to change password"))
+    diesel::update(
+        users::table
+            .filter(users::id.eq(user_id))
+            .filter(users::deleted_at.is_null()),
+    )
+    .set((
+        users::password_hash.eq(pw_hash),
+        users::password_changed_at.eq(diesel::dsl::now),
+        users::force_password_change.eq(false),
+        users::updated_at.eq(diesel::dsl::now),
+    ))
+    .returning(User::as_returning())
+    .get_result(db)
+    .await
+    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to change password"))
 }
 
 pub async fn update_user(
@@ -177,12 +193,16 @@ pub async fn update_user(
         enabled: input.enabled,
     };
 
-    diesel::update(users::table.filter(users::id.eq(id)))
-        .set((&changes, users::updated_at.eq(diesel::dsl::now)))
-        .returning(User::as_returning())
-        .get_result(db)
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update user"))
+    diesel::update(
+        users::table
+            .filter(users::id.eq(id))
+            .filter(users::deleted_at.is_null()),
+    )
+    .set((&changes, users::updated_at.eq(diesel::dsl::now)))
+    .returning(User::as_returning())
+    .get_result(db)
+    .await
+    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update user"))
 }
 
 pub async fn delete_user(
@@ -198,16 +218,49 @@ pub async fn delete_user(
         return Err(ApiError::bad_request("Cannot delete your own user"));
     }
 
-    let affected = diesel::delete(users::table.filter(users::id.eq(id)))
-        .execute(db)
-        .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete user"))?;
+    let affected = diesel::update(
+        users::table
+            .filter(users::id.eq(id))
+            .filter(users::deleted_at.is_null()),
+    )
+    .set((
+        users::deleted_at.eq(diesel::dsl::now),
+        users::enabled.eq(false),
+        users::updated_at.eq(diesel::dsl::now),
+    ))
+    .execute(db)
+    .await
+    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete user"))?;
 
     if affected == 0 {
         return Err(ApiError::not_found("User not found"));
     }
 
     Ok(())
+}
+
+pub async fn restore_user(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    id: i64,
+) -> Result<User, ApiError> {
+    if id == SYSTEM_USER_ID {
+        return Err(ApiError::bad_request("Cannot restore system user"));
+    }
+
+    diesel::update(
+        users::table
+            .filter(users::id.eq(id))
+            .filter(users::deleted_at.is_not_null()),
+    )
+    .set((
+        users::deleted_at.eq::<Option<chrono::DateTime<chrono::Utc>>>(None),
+        users::enabled.eq(false),
+        users::updated_at.eq(diesel::dsl::now),
+    ))
+    .returning(User::as_returning())
+    .get_result(db)
+    .await
+    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to restore user"))
 }
 
 pub async fn list_users(
@@ -217,9 +270,14 @@ pub async fn list_users(
     let page = input.page.unwrap_or(1).max(1);
     let per_page = input.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
+    let include_deleted = input.include_deleted.unwrap_or(false);
 
     let base_filter = || -> users::BoxedQuery<'_, diesel::pg::Pg> {
         let mut query = users::table.into_boxed();
+
+        if !include_deleted {
+            query = query.filter(users::deleted_at.is_null());
+        }
 
         if let Some(q) = input.q.as_deref().filter(|s| !s.is_empty()) {
             let pattern = format!("%{}%", q);

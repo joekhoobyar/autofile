@@ -238,6 +238,7 @@ diesel::table! {
         role -> Varchar,
         force_password_change -> Bool,
         enabled -> Bool,
+        deleted_at -> Nullable<Timestamptz>,
     }
 }
 

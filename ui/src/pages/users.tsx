@@ -19,7 +19,7 @@ import type { ListParams } from "../api";
 import { useId } from "../util";
 import type { UserRole } from "../models/auth";
 import type { User, UserUpdateInput } from "../models/user";
-import { useDeleteUser, useSaveUser, useUser, useUsers } from "../queries/useUsers";
+import { useDeleteUser, useRestoreUser, useSaveUser, useUser, useUsers } from "../queries/useUsers";
 import { canManageUsers, type AuthState, useAuth } from "../auth";
 import { useHashListParams } from "../util/listParamsHash";
 import { AppToast } from "../components/AppToast";
@@ -35,6 +35,10 @@ const USER_ROLE_OPTIONS: { label: string; value: UserRole }[] = [
 
 function isSystemUser(id: number): boolean {
   return id === SYSTEM_USER_ID;
+}
+
+function isDeletedUser(user: User): boolean {
+  return !!user.deleted_at;
 }
 
 function formatRole(role: UserRole): string {
@@ -57,6 +61,7 @@ export function ListUsers() {
   const location = useLocation();
   const toast = useRef<Toast>(null);
   const deleteUser = useDeleteUser();
+  const restoreUser = useRestoreUser();
   const { listParams, updateListParams } = useHashListParams(USER_LIST_DEFAULT_PARAMS);
   const appliedSearchText = listParams.q ?? "";
   const [searchDraft, setSearchDraft] = useState({ appliedSearchText, value: appliedSearchText });
@@ -106,6 +111,10 @@ export function ListUsers() {
     updateListParams({ ...listParams, q: undefined, page: 1 });
   };
 
+  const setIncludeDeleted = (checked: boolean) => {
+    updateListParams({ ...listParams, include_deleted: checked || undefined, page: 1 });
+  };
+
   const confirmDeleteUser = (user: User) => {
     if (isSystemUser(user.id)) {
       return;
@@ -131,6 +140,16 @@ export function ListUsers() {
     }
   };
 
+  const restoreUserFromList = async (user: User) => {
+    try {
+      await restoreUser.mutateAsync(user.id);
+      toast.current?.show({ severity: "success", summary: "User restored", detail: `Restored ${user.username}.` });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Something went wrong";
+      toast.current?.show({ severity: "error", summary: "Restore failed", detail });
+    }
+  };
+
   const usernameTemplate = (user: User) => (
     <Link className="title" to={`${user.id}`}>
       {user.username}
@@ -147,64 +166,97 @@ export function ListUsers() {
         text
         raised
         aria-description="Edit"
-        disabled={isSystemUser(user.id)}
+        disabled={isSystemUser(user.id) || isDeletedUser(user)}
         onClick={() => navigate(`${user.id}/edit`)}
       />
-      <span title={userDeleteDisabledReason(user, auth) ?? "Delete"} style={{ display: "inline-flex" }}>
+      {isDeletedUser(user) ? (
         <Button
           type="button"
-          icon="pi pi-trash"
-          severity="danger"
+          icon="pi pi-undo"
+          severity="help"
           rounded
           text
           raised
-          aria-description="Delete"
-          disabled={!!userDeleteDisabledReason(user, auth)}
-          onClick={() => confirmDeleteUser(user)}
+          aria-description="Restore"
+          onClick={() => void restoreUserFromList(user)}
         />
-      </span>
+      ) : (
+        <span title={userDeleteDisabledReason(user, auth) ?? "Delete"} style={{ display: "inline-flex" }}>
+          <Button
+            type="button"
+            icon="pi pi-trash"
+            severity="danger"
+            rounded
+            text
+            raised
+            aria-description="Delete"
+            disabled={!!userDeleteDisabledReason(user, auth)}
+            onClick={() => confirmDeleteUser(user)}
+          />
+        </span>
+      )}
     </div>
+  );
+
+  const statusTemplate = (user: User) => (
+    <span className="aut-description-list-status">
+      {isDeletedUser(user) ? (
+        <Tag value="Deleted" severity="danger" />
+      ) : (
+        <Tag value={user.enabled ? "Enabled" : "Disabled"} severity={user.enabled ? "success" : "warning"} />
+      )}
+    </span>
   );
 
   return (
     <>
       <Card title="Users">
-        <div className="mb-3 w-full md:w-30rem">
-          <div className="p-inputgroup w-full">
-            <InputText
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search username, display name, or email"
-              aria-label="Search users"
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  applySearch();
-                }
-              }}
-            />
-            {search && (
+        <div className="mb-3 flex flex-column gap-3 md:flex-row md:align-items-center md:justify-content-between">
+          <div className="w-full md:w-30rem">
+            <div className="p-inputgroup w-full">
+              <InputText
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search username, display name, or email"
+                aria-label="Search users"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    applySearch();
+                  }
+                }}
+              />
+              {search && (
+                <span className="p-inputgroup-addon p-0">
+                  <Button
+                    type="button"
+                    icon="pi pi-times"
+                    aria-label="Clear search"
+                    onClick={clearSearch}
+                    className="p-button-secondary h-full"
+                    style={{ borderRadius: 0 }}
+                  />
+                </span>
+              )}
               <span className="p-inputgroup-addon p-0">
                 <Button
                   type="button"
-                  icon="pi pi-times"
-                  aria-label="Clear search"
-                  onClick={clearSearch}
-                  className="p-button-secondary h-full"
-                  style={{ borderRadius: 0 }}
+                  icon="pi pi-search"
+                  aria-label="Search"
+                  onClick={applySearch}
+                  className="p-button-info h-full"
+                  style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
                 />
               </span>
-            )}
-            <span className="p-inputgroup-addon p-0">
-              <Button
-                type="button"
-                icon="pi pi-search"
-                aria-label="Search"
-                onClick={applySearch}
-                className="p-button-info h-full"
-                style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
-              />
-            </span>
+            </div>
+          </div>
+          <div className="flex align-items-center gap-2">
+            <Checkbox
+              inputId="include_deleted"
+              checked={!!listParams.include_deleted}
+              onChange={(event) => setIncludeDeleted(event.checked ?? false)}
+            />
+            <label htmlFor="include_deleted">Show deleted users</label>
           </div>
         </div>
 
@@ -228,7 +280,7 @@ export function ListUsers() {
           <Column field="display_name" header="Display Name" sortable />
           <Column field="email" header="Email" sortable />
           <Column field="role" header="Role" body={(u: User) => formatRole(u.role)} />
-          <Column field="enabled" header="Enabled" body={(u: User) => u.enabled ? "Yes" : "No"} sortable />
+          <Column field="enabled" header="Status" body={statusTemplate} sortable />
           <Column field="password_changed_at" header="Password Changed" body={passwordChangedTemplate} sortable />
           <Column body={actionTemplate} headerClassName="w-9rem" />
         </DataTable>
@@ -245,6 +297,7 @@ export function ViewUser() {
   const navigate = useNavigate();
   const toast = useRef<Toast>(null);
   const deleteUser = useDeleteUser();
+  const restoreUser = useRestoreUser();
   const { isLoading, isError, data, error } = useUser(id);
 
   if (!canManageUsers(auth)) {
@@ -273,6 +326,16 @@ export function ViewUser() {
     }
   };
 
+  const restoreUserFromDetail = async (user: User) => {
+    try {
+      await restoreUser.mutateAsync(user.id);
+      toast.current?.show({ severity: "success", summary: "User restored", detail: `Restored ${user.username}.` });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Something went wrong";
+      toast.current?.show({ severity: "error", summary: "Restore failed", detail });
+    }
+  };
+
   const confirmDelete = () => {
     if (userDeleteDisabledReason(data, auth)) {
       return;
@@ -294,6 +357,9 @@ export function ViewUser() {
         {isSystemUser(data.id) && (
           <Message severity="warn" text="System user cannot be edited or deleted." className="mb-3" />
         )}
+        {isDeletedUser(data) && (
+          <Message severity="warn" text="This user is deleted. Restore the user before editing or enabling sign-in." className="mb-3" />
+        )}
 
         <DescriptionList
           items={[
@@ -306,12 +372,14 @@ export function ViewUser() {
               value: (
                 <span className="aut-description-list-status">
                   <Tag value={data.enabled ? "Enabled" : "Disabled"} severity={data.enabled ? "success" : "danger"} />
+                  {isDeletedUser(data) && <Tag value="Deleted" severity="danger" />}
                   {data.force_password_change && <Tag value="Password change required" severity="warning" />}
                 </span>
               ),
             },
             { label: "Created", value: <DateText value={data.created_at} /> },
             { label: "Updated", value: <DateText value={data.updated_at} /> },
+            ...(data.deleted_at ? [{ label: "Deleted", value: <DateText value={data.deleted_at} /> }] : []),
             ...(!isSystemUser(data.id)
               ? [{ label: "Password Changed", value: <DateText value={data.password_changed_at} /> }]
               : []),
@@ -324,9 +392,19 @@ export function ViewUser() {
             type="button"
             icon="pi pi-pencil"
             raised
-            disabled={isSystemUser(data.id)}
+            disabled={isSystemUser(data.id) || isDeletedUser(data)}
             onClick={() => navigate(`/users/${data.id}/edit`)}
           />
+          {isDeletedUser(data) ? (
+            <Button
+              label="Restore"
+              type="button"
+              icon="pi pi-undo"
+              severity="help"
+              raised
+              onClick={() => void restoreUserFromDetail(data)}
+            />
+          ) : (
           <span title={userDeleteDisabledReason(data, auth) ?? "Delete"} style={{ display: "inline-flex", marginLeft: "0.7em" }}>
             <Button
               label="Delete"
@@ -338,6 +416,7 @@ export function ViewUser() {
               onClick={confirmDelete}
             />
           </span>
+          )}
           <Button
             label="Back"
             type="button"
@@ -376,6 +455,24 @@ export function EditUser() {
     return (
       <Card title="Edit User">
         <Message severity="warn" text="System user cannot be edited." className="mb-3" />
+        <div className="text-end">
+          <Button
+            label="Back"
+            type="button"
+            severity="secondary"
+            icon="pi pi-arrow-left"
+            raised
+            onClick={() => navigate(`/users/${data.id}`)}
+          />
+        </div>
+      </Card>
+    );
+  }
+
+  if (isDeletedUser(data)) {
+    return (
+      <Card title="Edit User">
+        <Message severity="warn" text="Deleted users cannot be edited. Restore the user first." className="mb-3" />
         <div className="text-end">
           <Button
             label="Back"

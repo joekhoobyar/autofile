@@ -3,7 +3,7 @@ mod support;
 use autofile_api::application::users::{
     ChangePasswordInput, ListUsersInput, UpdateProfileInput, UpdateUserInput, UserSortField,
     change_password, delete_user, get_profile, get_user_by_id, get_user_by_username, list_users,
-    update_profile, update_user,
+    restore_user, update_profile, update_user,
 };
 use autofile_api::domain::users::{User, UserRole};
 use autofile_api::schema::users;
@@ -500,8 +500,88 @@ async fn delete_user_removes_row_and_future_reads_fail() {
 
     let err = get_user_by_id(&mut db, 104)
         .await
-        .expect_err("deleted user should not exist");
-    assert_eq!(err.status, StatusCode::NOT_FOUND);
+        .expect("deleted user should still load by id for administrators");
+    assert!(err.deleted_at.is_some());
+    assert!(!err.enabled);
+}
+
+#[tokio::test]
+async fn list_users_hides_deleted_users_by_default_and_can_include_them() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(
+        &mut db,
+        111,
+        "users-test-deleted-list",
+        "users-test-deleted-list@example.com",
+    )
+    .await;
+
+    delete_user(&mut db, 1, 111)
+        .await
+        .expect("delete should succeed");
+
+    let default_list = list_users(
+        &mut db,
+        ListUsersInput {
+            page: None,
+            per_page: None,
+            q: Some("users-test-deleted-list".to_string()),
+            sf: None,
+            sd: None,
+            include_deleted: None,
+        },
+    )
+    .await
+    .expect("list should succeed");
+    assert_eq!(default_list.total, 0);
+
+    let inclusive_list = list_users(
+        &mut db,
+        ListUsersInput {
+            page: None,
+            per_page: None,
+            q: Some("users-test-deleted-list".to_string()),
+            sf: None,
+            sd: None,
+            include_deleted: Some(true),
+        },
+    )
+    .await
+    .expect("list should succeed");
+    assert_eq!(inclusive_list.total, 1);
+    assert!(inclusive_list.items[0].deleted_at.is_some());
+}
+
+#[tokio::test]
+async fn restore_user_undeletes_user_and_keeps_them_disabled() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    insert_user(
+        &mut db,
+        112,
+        "users-test-restore",
+        "users-test-restore@example.com",
+    )
+    .await;
+
+    delete_user(&mut db, 1, 112)
+        .await
+        .expect("delete should succeed");
+    let restored = restore_user(&mut db, 112)
+        .await
+        .expect("restore should succeed");
+
+    assert!(restored.deleted_at.is_none());
+    assert!(!restored.enabled);
 }
 
 #[tokio::test]
@@ -625,6 +705,7 @@ async fn list_users_applies_pagination_search_and_sort() {
             q: Some("users-test".to_string()),
             sf: Some(UserSortField::Username),
             sd: Some(false),
+            include_deleted: None,
         },
     )
     .await
@@ -645,6 +726,7 @@ async fn list_users_applies_pagination_search_and_sort() {
             q: Some("users-test-char".to_string()),
             sf: None,
             sd: None,
+            include_deleted: None,
         },
     )
     .await
@@ -675,6 +757,7 @@ async fn list_users_applies_pagination_search_and_sort() {
             q: Some("captain".to_string()),
             sf: None,
             sd: None,
+            include_deleted: None,
         },
     )
     .await
@@ -690,6 +773,7 @@ async fn list_users_applies_pagination_search_and_sort() {
             q: Some("users-test-alpha@example".to_string()),
             sf: None,
             sd: None,
+            include_deleted: None,
         },
     )
     .await

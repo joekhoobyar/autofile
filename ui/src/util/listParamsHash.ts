@@ -32,6 +32,7 @@ export function parseListParamsHash<T extends ListParams>(hash: string, defaults
     ...(searchText ? { q: searchText } : {}),
     ...(params.has('sf') ? { sf: params.get('sf') || undefined } : {}),
     ...(params.has('sd') ? { sd: parseBooleanParam(params.get('sd')) } : {}),
+    ...(params.has('include_deleted') ? { include_deleted: parseBooleanParam(params.get('include_deleted')) } : {}),
   };
 }
 
@@ -53,6 +54,9 @@ export function serializeListParamsHash<T extends ListParams>(params: T, default
   }
   if (params.sd !== defaults.sd) {
     urlParams.set('sd', params.sd ? 'desc' : 'asc');
+  }
+  if (params.include_deleted !== defaults.include_deleted) {
+    urlParams.set('include_deleted', params.include_deleted ? 'true' : 'false');
   }
 
   return urlParams.toString();

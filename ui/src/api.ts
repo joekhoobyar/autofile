@@ -83,6 +83,7 @@ export interface ListParams {
 
   // sd = sort descending
   sd?: boolean;
+  include_deleted?: boolean;
 }
 
 export interface ResourceList<T> {

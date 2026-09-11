@@ -71,3 +71,19 @@ export function useDeleteUser(): UseMutationResult<void, HttpError, number> {
     },
   });
 }
+
+export function useRestoreUser(): UseMutationResult<User, HttpError, number> {
+  const qc = useQueryClient();
+
+  return useMutation<User, HttpError, number>({
+    mutationFn: (id) => {
+      return apiMutate<User, void>(`api/v1/users/${id}/restore`, {
+        method: "POST",
+      });
+    },
+
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["user"] });
+    },
+  });
+}

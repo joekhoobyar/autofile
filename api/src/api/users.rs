@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::application::users::{
     ListUsersInput, UpdateUserInput, delete_user, get_user_by_id, get_user_by_username, list_users,
-    update_user,
+    restore_user, update_user,
 };
 use crate::domain::users::User;
 use crate::shared::app_state::AppState;
@@ -13,7 +13,7 @@ use crate::shared::util::{ApiError, ResourceList};
 use axum::{
     Json, Router,
     extract::{Path, Query},
-    routing::get,
+    routing::{get, post},
 };
 
 pub async fn get_by_id(
@@ -50,6 +50,14 @@ async fn delete(
     Ok(Json(()))
 }
 
+async fn restore(
+    _admin: AdminUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+) -> Result<Json<User>, ApiError> {
+    Ok(Json(restore_user(&mut db, id).await?))
+}
+
 pub async fn list(
     _admin: AdminUser,
     DbConn(mut db): DbConn,
@@ -62,5 +70,6 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(list))
         .route("/{id}", get(get_by_id).patch(update).delete(delete))
+        .route("/{id}/restore", post(restore))
         .route("/by-username/{username}", get(get_by_username))
 }

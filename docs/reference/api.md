@@ -31,7 +31,7 @@ password: admin123!
 Change the default password before using Autofile in any shared or persistent environment.
 The default admin is required to change this password before using other authenticated APIs.
 
-New users can also be created through `POST /api/v1/auth/register` when user registration is enabled. Registered users receive the `user` role and are disabled until an admin enables them. Registration passwords must contain at least 12 characters. When registration is disabled, the endpoint returns `403 Forbidden`.
+New users can also be created through `POST /api/v1/auth/register` when user registration is enabled. Registered users receive the `user` role and are disabled until an admin enables them. Registration passwords must contain at least 12 characters. When registration is disabled, the endpoint returns `403 Forbidden`. If the submitted email matches a deleted user, registration restores that user as disabled and updates the username when the requested username is available. If the requested username belongs to a different user, registration returns `409 Conflict`.
 
 Log in and save the refresh-token cookie with:
 
@@ -218,7 +218,8 @@ User management endpoints require an admin access token.
   "force_password_change": false,
   "created_at": "2026-08-25T12:00:00Z",
   "updated_at": "2026-08-25T12:00:00Z",
-  "password_changed_at": "2026-08-25T12:00:00Z"
+  "password_changed_at": "2026-08-25T12:00:00Z",
+  "deleted_at": null
 }
 ```
 
@@ -226,11 +227,12 @@ User management endpoints require an admin access token.
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| `GET` | `/api/v1/users` | List users. |
+| `GET` | `/api/v1/users` | List users. Deleted users are hidden unless `include_deleted=true` is supplied. |
 | `GET` | `/api/v1/users/{id}` | Get a user by ID. |
 | `GET` | `/api/v1/users/by-username/{username}` | Get a user by exact username. |
 | `PATCH` | `/api/v1/users/{id}` | Update email, display name, role, enabled status, or force-password-change status. |
-| `DELETE` | `/api/v1/users/{id}` | Delete a user. |
+| `DELETE` | `/api/v1/users/{id}` | Soft-delete and disable a user. |
+| `POST` | `/api/v1/users/{id}/restore` | Restore a deleted user as disabled. |
 
 `PATCH /api/v1/users/{id}` accepts any subset of:
 
@@ -244,7 +246,7 @@ User management endpoints require an admin access token.
 }
 ```
 
-`role` must be either `admin` or `user`. Setting `enabled` to `false` prevents the user from logging in or refreshing credentials. Setting `force_password_change` to `true` blocks the user from calling authenticated APIs other than `POST /api/v1/profile/password` until they change their password. The system user cannot be updated or deleted. An admin cannot change their own role from `admin` to `user` or disable their own account.
+`role` must be either `admin` or `user`. Setting `enabled` to `false` prevents the user from logging in or refreshing credentials. Setting `force_password_change` to `true` blocks the user from calling authenticated APIs other than `POST /api/v1/profile/password` until they change their password. Soft-deleted users cannot log in or refresh credentials and are hidden from normal user lookup/list responses. The system user cannot be updated, deleted, or restored. An admin cannot change their own role from `admin` to `user`, disable their own account, or delete their own account.
 
 ## Classifier Rule Validation
 

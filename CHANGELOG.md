@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Adjust the layout of the quick filter controls on the documents list page.
 - Adjust the paginator on the documents list page
+- Soft-delete users, hide deleted users by default, and support restoring deleted users from administration.
+- Re-registering with a deleted user's email now restores that user when the requested username is available.
 
 ## [0.4.10] - 2026-09-11
 
