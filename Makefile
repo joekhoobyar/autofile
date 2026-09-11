@@ -43,6 +43,10 @@ changelog-release:
 		echo "CHANGELOG.md must contain a '## [Unreleased]' heading" >&2; \
 		exit 1; \
 	fi; \
+	if ! awk 'BEGIN { in_section = 0; found = 0; has_entry = 0 } /^##[[:space:]]+\[Unreleased\][[:space:]]*$$/ { in_section = 1; found = 1; next } /^##[[:space:]]+/ { if (in_section) exit } in_section && $$0 !~ /^[[:space:]]*$$/ && $$0 !~ /^###[[:space:]]+/ { has_entry = 1; exit } END { if (!found) exit 2; if (!has_entry) exit 1 }' CHANGELOG.md; then \
+		echo "CHANGELOG.md Unreleased section has no release note entries" >&2; \
+		exit 1; \
+	fi; \
 	if grep -qxF "## [$$current_version]" CHANGELOG.md || grep -qF "## [$$current_version] - " CHANGELOG.md; then \
 		echo "CHANGELOG.md already contains a section for $$current_version" >&2; \
 		exit 1; \
