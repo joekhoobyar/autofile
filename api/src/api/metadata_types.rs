@@ -16,6 +16,7 @@ use axum::{
 };
 use diesel::dsl::exists;
 use diesel::prelude::*;
+use diesel::sql_types::Bool;
 use diesel_async::RunQueryDsl;
 use serde_json::Value;
 
@@ -66,6 +67,14 @@ pub struct ListMetadataTypesQuery {
     pub sd: Option<bool>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ListMetadataTypeValuesQuery {
+    // optional case-insensitive substring search
+    pub q: Option<String>,
+    // maximum number of suggestions to return
+    pub limit: Option<i64>,
+}
+
 pub async fn get_by_id(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -94,6 +103,47 @@ pub async fn get_by_slug(
         .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch metadata_type"))?;
 
     Ok(Json(row))
+}
+
+pub async fn list_values(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Path(id): Path<i64>,
+    Query(params): Query<ListMetadataTypeValuesQuery>,
+) -> Result<Json<Vec<String>>, ApiError> {
+    let data_type = metadata_types::table
+        .filter(metadata_types::id.eq(id))
+        .select(metadata_types::data_type)
+        .first::<DataType>(&mut db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch metadata_type"))?;
+
+    if data_type != DataType::String {
+        return Err(ApiError::unprocessable_entity(
+            "Metadata value suggestions are only available for string metadata types",
+        ));
+    }
+
+    let limit = params.limit.unwrap_or(20).clamp(1, 50);
+    let mut query = document_metadatas::table
+        .filter(document_metadatas::metadata_type_id.eq(id))
+        .filter(diesel::dsl::sql::<Bool>("btrim(value) <> ''"))
+        .into_boxed();
+
+    if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
+        query = query.filter(document_metadatas::value.ilike(format!("%{}%", q)));
+    }
+
+    let values = query
+        .select(document_metadatas::value)
+        .distinct()
+        .order(document_metadatas::value.asc())
+        .limit(limit)
+        .load::<String>(&mut db)
+        .await
+        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list metadata_type values"))?;
+
+    Ok(Json(values))
 }
 
 async fn create(
@@ -283,6 +333,7 @@ pub async fn list(
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(list).post(create))
+        .route("/{id}/values", get(list_values))
         .route("/{id}", get(get_by_id).patch(update).delete(delete))
         .route("/by-slug/{slug}", get(get_by_slug))
 }

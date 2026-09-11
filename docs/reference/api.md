@@ -348,11 +348,25 @@ Base path: `/api/v1/metadata-types`
 | `GET` | `/api/v1/metadata-types` | List Metadata Types. |
 | `POST` | `/api/v1/metadata-types` | Create a Metadata Type. Admin only. |
 | `GET` | `/api/v1/metadata-types/{id}` | Get a Metadata Type by ID. |
+| `GET` | `/api/v1/metadata-types/{id}/values` | List distinct stored document metadata values for this Metadata Type. |
 | `PATCH` | `/api/v1/metadata-types/{id}` | Update its mutable fields. Admin only. |
 | `DELETE` | `/api/v1/metadata-types/{id}` | Delete an unused Metadata Type. Admin only. |
 | `GET` | `/api/v1/metadata-types/by-slug/{slug}` | Get a Metadata Type by exact slug. |
 
 List query parameters match Document Types. The supported `sf` values are `id`, `slug`, `name`, `data_type`, `description`, `created_at`, and `updated_at`. Search checks slug, name, data type, and description.
+
+Value suggestion query parameters for `GET /api/v1/metadata-types/{id}/values`:
+
+| Parameter | Behavior |
+| --- | --- |
+| `q` | Optional case-insensitive substring filter. |
+| `limit` | Optional maximum number of values, default `20`, maximum `50`. |
+
+The values endpoint requires authentication and is available for String Metadata Types. It returns a JSON array of distinct, non-empty values from all documents using the selected Metadata Type. Lookup metadata should use configured choices instead, and Date metadata should use date input controls.
+
+```json
+["Acme Corporation", "Acme Ltd"]
+```
 
 Create a String field:
 

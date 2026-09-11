@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useDocument, useSaveDocumentMetadata } from '../queries/useDocuments';
@@ -6,13 +6,13 @@ import { Message } from 'primereact/message';
 import { Card } from 'primereact/card';
 import { DataTable } from 'primereact/datatable';
 import { Column, type ColumnEditorOptions, type ColumnEvent } from 'primereact/column';
-import { InputText } from 'primereact/inputtext';
 import { Button } from 'primereact/button';
 import { Calendar } from 'primereact/calendar';
 import { Dropdown } from 'primereact/dropdown';
+import { AutoComplete, type AutoCompleteCompleteEvent } from 'primereact/autocomplete';
 
 import { useId } from '../util';
-import { useDocumentTypeMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
+import { fetchMetadataTypeValues, useDocumentTypeMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 
 type MetadataRow = {
@@ -25,6 +25,69 @@ type MetadataRow = {
   required: boolean;
 };
 
+type MetadataValueAutoCompleteProps = {
+  metadataTypeId: number | undefined;
+  value: string;
+  onChange: (value: string) => void;
+  onBlur: (event: React.FocusEvent<HTMLElement>) => void;
+};
+
+function MetadataValueAutoComplete({ metadataTypeId, value, onChange, onBlur }: MetadataValueAutoCompleteProps) {
+  const [inputValue, setInputValue] = useState(value);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const requestRef = useRef(0);
+
+  const completeMethod = useCallback((event: AutoCompleteCompleteEvent) => {
+    const query = event.query ?? '';
+    if (query.trim().length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    if (!metadataTypeId) {
+      setSuggestions([]);
+      return;
+    }
+
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+
+    fetchMetadataTypeValues(metadataTypeId, query)
+      .then((values) => {
+        if (requestRef.current === requestId) {
+          setSuggestions(values);
+        }
+      })
+      .catch(() => {
+        if (requestRef.current === requestId) {
+          setSuggestions([]);
+        }
+      });
+  }, [metadataTypeId]);
+
+  return (
+    <AutoComplete
+      value={inputValue}
+      suggestions={suggestions}
+      completeMethod={completeMethod}
+      onChange={(event) => {
+        const nextValue = String(event.value ?? '');
+        setInputValue(nextValue);
+        onChange(nextValue);
+      }}
+      onSelect={(event) => {
+        const nextValue = String(event.value ?? '');
+        setInputValue(nextValue);
+        onChange(nextValue);
+      }}
+      onBlur={onBlur}
+      inputClassName="w-full"
+      className="w-full"
+      dropdown={false}
+    />
+  );
+}
+
 function isMetadataValueSet(value: string | null | undefined) {
   return String(value ?? '').trim().length > 0;
 }
@@ -34,13 +97,14 @@ export function EditDocumentMetadata() {
   const id = useId('id');
   const saveDocumentMetadata = useSaveDocumentMetadata(id);
   const { isLoading, isError, data: doc, error } = useDocument(id);
-  const { data: dtmdts } = useDocumentTypeMetadataTypes(doc?.document_type_id);
-  const { data: mdt } = useMetadataTypesMap('id');
+  const { isLoading: isDocumentTypeMetadataLoading, data: dtmdts } = useDocumentTypeMetadataTypes(doc?.document_type_id);
+  const { isLoading: isMetadataTypesLoading, data: mdt } = useMetadataTypesMap('id');
 
-  const initialRows = useMemo<MetadataRow[]>(() => {
-    if (!mdt || !dtmdts) return [];
-    return dtmdts.map(dtmdt => {
+  const loadedRows = useMemo<MetadataRow[] | undefined>(() => {
+    if (!doc || !mdt || !dtmdts) return undefined;
+    return dtmdts.flatMap(dtmdt => {
       const mdType = mdt?.[dtmdt.metadata_type_id];
+      if (!mdType) return [];
       return {
         metadataTypeId: dtmdt.metadata_type_id,
         slug: mdType.slug,
@@ -51,15 +115,16 @@ export function EditDocumentMetadata() {
         required: dtmdt.required,
       };
     }).sort((a, b) => a.name.localeCompare(b.name));
-  }, [doc?.metadata, dtmdts, mdt]);
-  const [rows, setRows] = useState<MetadataRow[]>([]);
-  const [prevInitialRows, setPrevInitialRows] = useState(initialRows);
-
-  // Reset editable rows whenever the loaded metadata changes.
-  if (prevInitialRows !== initialRows) {
-    setPrevInitialRows(initialRows);
-    setRows(initialRows);
-  }
+  }, [doc, dtmdts, mdt]);
+  const loadedRowsKey = useMemo(() => {
+    if (!loadedRows) return '';
+    return JSON.stringify(loadedRows.map((row) => [row.metadataTypeId, row.value, row.required]));
+  }, [loadedRows]);
+  const [editedRows, setEditedRows] = useState<{ sourceKey: string; rows: MetadataRow[] } | null>(null);
+  const rows = useMemo(
+    () => editedRows?.sourceKey === loadedRowsKey ? editedRows.rows : loadedRows ?? [],
+    [editedRows, loadedRows, loadedRowsKey]
+  );
 
   const missingRequiredRows = useMemo(
     () => rows.filter((row) => row.required && !isMetadataValueSet(row.value)),
@@ -87,6 +152,7 @@ export function EditDocumentMetadata() {
     if (relatedTarget) {
       if (cell.contains(relatedTarget)) return;
       if (relatedTarget.closest('.p-datepicker, .p-datepicker-panel, .p-datepicker-calendar, .p-datepicker-group')) return;
+      if (relatedTarget.closest('.p-autocomplete-panel')) return;
     }
 
     setTimeout(() => {
@@ -94,6 +160,7 @@ export function EditDocumentMetadata() {
       if (!activeElement) return;
       if (cell.contains(activeElement)) return;
       if (activeElement.closest('.p-datepicker, .p-datepicker-panel, .p-datepicker-calendar, .p-datepicker-group')) return;
+      if (activeElement.closest('.p-autocomplete-panel')) return;
 
       const enterEvent = new KeyboardEvent('keydown', {
         bubbles: true,
@@ -102,17 +169,17 @@ export function EditDocumentMetadata() {
         code: 'Enter',
       });
       cell.dispatchEvent(enterEvent);
-    }, 50);
+    }, 200);
   }, []);
 
   const textEditor = useCallback((options: ColumnEditorOptions) => {
-    return <InputText
-        type="text" value={options.value} className="w-full"
-        onChange={(e) => options.editorCallback?.(e.target.value)}
-        onBlur={(event) => {
-          options.editorCallback?.(event.target.value);
-          closeCellEditor(event);
-        }}
+    const rowMetadataTypeId = options.rowData?.metadataTypeId as number | undefined;
+
+    return <MetadataValueAutoComplete
+        metadataTypeId={rowMetadataTypeId}
+        value={String(options.value ?? '')}
+        onChange={(value) => options.editorCallback?.(value)}
+        onBlur={closeCellEditor}
     />;
   }, [closeCellEditor]);
 
@@ -168,12 +235,15 @@ export function EditDocumentMetadata() {
   const onCellEditComplete = useCallback((e: ColumnEvent) => {
     const { rowData, newValue, field  } = e;
     rowData[field] = newValue;
-    setRows((currentRows) => currentRows.map((row) => (
-      row.metadataTypeId === rowData.metadataTypeId
-        ? { ...row, [field]: newValue }
-        : row
-    )));
-  }, []);
+    setEditedRows({
+      sourceKey: loadedRowsKey,
+      rows: rows.map((row) => (
+        row.metadataTypeId === rowData.metadataTypeId
+          ? { ...row, [field]: newValue }
+          : row
+      )),
+    });
+  }, [loadedRowsKey, rows]);
 
   const cellEditor = useCallback((options: ColumnEditorOptions) => {
     if (options.field !== 'value')
@@ -217,7 +287,7 @@ export function EditDocumentMetadata() {
     return <Message severity="error" text="Missing or invalid ID" />;
   if (isError)
     return <Message severity="error" text={error.message} />
-  if (isLoading)
+  if (isLoading || isDocumentTypeMetadataLoading || isMetadataTypesLoading || !loadedRows)
     return <div>Loading</div>;
 
   return (

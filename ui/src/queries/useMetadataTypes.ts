@@ -76,6 +76,13 @@ export function useMetadataType(id: string | number, options = {}): UseQueryResu
   });
 }
 
+export function fetchMetadataTypeValues(metadata_type_id: string | number, q: string, limit = 20): Promise<string[]> {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  params.set('limit', String(limit));
+  return apiFetch<string[]>(`api/v1/metadata-types/${metadata_type_id}/values?${params.toString()}`);
+}
+
 export function useMetadataTypesMap(by: 'slug' | 'id', options = {}): UseQueryResult<MetadataTypesMap, HttpError> {
   return useQuery({
     queryKey: ['metadataType', 'map', by],

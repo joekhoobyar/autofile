@@ -1,0 +1,1 @@
+DROP INDEX document_metadatas_metadata_type_id_value;

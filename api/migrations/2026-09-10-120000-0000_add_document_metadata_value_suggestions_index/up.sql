@@ -1,0 +1,1 @@
+CREATE INDEX document_metadatas_metadata_type_id_value ON document_metadatas(metadata_type_id, value);
