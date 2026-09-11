@@ -111,6 +111,44 @@ Malformed JSON and invalid path or query input can instead return an Axum framew
 - `/api/v1/tags`
 - `/api/v1/users`
 
+## Documents
+
+Base path: `/api/v1/documents`
+
+### Endpoints
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| `GET` | `/api/v1/documents` | List documents. |
+| `POST` | `/api/v1/documents` | Create a document with an optional uploaded file. |
+| `GET` | `/api/v1/documents/{id}` | Get a document by ID. |
+| `PATCH` | `/api/v1/documents/{id}` | Update document properties. |
+| `DELETE` | `/api/v1/documents/{id}` | Delete a document. |
+
+List query parameters:
+
+| Parameter | Description |
+| --- | --- |
+| `page` | 1-based page number. Defaults to `1`. |
+| `per_page` | Items per page. Defaults to `50` and is limited to `1` through `200`. |
+| `q` | Case-insensitive title substring search. |
+| `text` | Full-text search over extracted document text and OCR text. |
+| `filename` | Case-insensitive filename substring search. |
+| `match_any` | When `true`, documents may match any supplied `q`, `text`, or `filename` condition. When omitted or `false`, all supplied text-search conditions must match. |
+| `document_type_id` | Narrow results to one Document Type. |
+| `metadata_type_id` | Narrow results to documents with a value for one Metadata Type. When combined with `metadata_value`, only values for that Metadata Type are searched. |
+| `metadata_value` | Narrow results to documents with a case-insensitive metadata value substring match. |
+| `file_content_type` | Narrow results to documents with a file content type substring match. |
+| `cabinet_id` | Narrow results to documents in one cabinet. |
+| `tag_id` | Narrow results to documents with one tag. |
+| `document_index_value_id` | Narrow results to documents assigned to one document index value. |
+| `duplicates` | When `true`, narrow results to documents sharing a title with another document. |
+| `duplicate_checksum` | When `true`, narrow results to documents with a file checksum also present on another document. |
+| `sf` | Sort field: `id`, `title`, `created_at`, or `updated_at`. |
+| `sd` | Set to `true` for descending order. |
+
+Narrowing filters always combine with the text search. For example, `cabinet_id=2&match_any=true&q=invoice&text=invoice` returns documents in cabinet `2` that match either the title or document text search; it does not return every document in cabinet `2`.
+
 ## Settings
 
 Base path: `/api/v1/settings`

@@ -41,6 +41,7 @@ import { DocumentTagBadge } from '../components/DocumentTagBadge';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { Message } from 'primereact/message';
 import { useId } from '../util';
+import { parseBasicDocumentSearchHash, parseDocumentListHash, serializeBasicDocumentSearchHash, serializeDocumentListHash, serializeDocumentListUpdate } from '../util/documentListHash';
 
 type DocumentListItemProps = {
   doc: Readonly<Document>;
@@ -60,149 +61,6 @@ type DocumentThumbnailProps = {
   placeholderClassName: string;
   buttonStyle?: React.CSSProperties;
 };
-
-const DOCUMENT_LIST_PAGE_SIZES = new Set([6, 12, 24, 48, 96]);
-
-const DEFAULT_DOCUMENT_LIST_PARAMS: DocumentListParams = {
-  per_page: 12,
-  page: 1,
-  sf: 'created_at',
-  sd: true,
-};
-
-function parsePositiveIntParam(value: string | null): number | undefined {
-  if (!value) return undefined;
-
-  const parsed = Number.parseInt(value, 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-function parseBooleanParam(value: string | null): boolean | undefined {
-  if (!value) return undefined;
-  if (value === 'true' || value === 'desc') return true;
-  if (value === 'false' || value === 'asc') return false;
-  return undefined;
-}
-
-function parseDocumentListHash(hash: string): DocumentListParams { // NOSONAR
-  const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
-  const page = parsePositiveIntParam(params.get('page'));
-  const perPage = parsePositiveIntParam(params.get('per_page'));
-  const basicSearch = params.get('search')?.trim() || undefined;
-  const matchAny = parseBooleanParam(params.get('match_any'));
-  const titleSearch = params.get('q')?.trim() || undefined;
-  const textSearch = params.get('text')?.trim() || undefined;
-  const metadataValue = params.get('metadata_value')?.trim() || undefined;
-  const filename = params.get('filename')?.trim() || undefined;
-  const fileContentType = params.get('file_content_type')?.trim() || undefined;
-  const documentTypeId = parsePositiveIntParam(params.get('document_type_id'));
-  const metadataTypeId = parsePositiveIntParam(params.get('metadata_type_id'));
-  const cabinetId = parsePositiveIntParam(params.get('cabinet_id'));
-  const tagId = parsePositiveIntParam(params.get('tag_id'));
-
-  return {
-    ...DEFAULT_DOCUMENT_LIST_PARAMS,
-    ...(page ? { page } : {}),
-    ...(perPage && DOCUMENT_LIST_PAGE_SIZES.has(perPage) ? { per_page: perPage } : {}),
-    ...(params.has('sf') ? { sf: params.get('sf') || undefined } : {}),
-    ...(params.has('sd') ? { sd: parseBooleanParam(params.get('sd')) } : {}),
-    ...(basicSearch ? {
-      match_any: true,
-      q: basicSearch,
-      text: basicSearch,
-      metadata_value: basicSearch,
-    } : {
-      ...(matchAny ? { match_any: true } : {}),
-      ...(titleSearch ? { q: titleSearch } : {}),
-      ...(textSearch ? { text: textSearch } : {}),
-      ...(documentTypeId ? { document_type_id: documentTypeId } : {}),
-      ...(metadataValue ? { metadata_value: metadataValue } : {}),
-      ...(metadataTypeId ? { metadata_type_id: metadataTypeId } : {}),
-      ...(filename ? { filename } : {}),
-      ...(fileContentType ? { file_content_type: fileContentType } : {}),
-      ...(cabinetId ? { cabinet_id: cabinetId } : {}),
-      ...(tagId ? { tag_id: tagId } : {}),
-    }),
-    ...(parseBooleanParam(params.get('duplicates')) ? { duplicates: true } : {}),
-    ...(parseBooleanParam(params.get('duplicate_checksum')) ? { duplicate_checksum: true } : {}),
-  };
-}
-
-function parseBasicDocumentSearchHash(hash: string): string {
-  const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
-  return params.get('search')?.trim() ?? '';
-}
-
-function serializeDocumentListCommonParams(params: DocumentListParams, urlParams: URLSearchParams) {
-  if (params.page && params.page !== DEFAULT_DOCUMENT_LIST_PARAMS.page) {
-    urlParams.set('page', String(params.page));
-  }
-  if (params.per_page && params.per_page !== DEFAULT_DOCUMENT_LIST_PARAMS.per_page) {
-    urlParams.set('per_page', String(params.per_page));
-  }
-  if (params.sf !== DEFAULT_DOCUMENT_LIST_PARAMS.sf) {
-    urlParams.set('sf', params.sf ?? '');
-  }
-  if (params.sd !== DEFAULT_DOCUMENT_LIST_PARAMS.sd) {
-    urlParams.set('sd', params.sd ? 'desc' : 'asc');
-  }
-}
-
-function serializeBasicDocumentSearchHash(value: string, params: DocumentListParams): string {
-  const urlParams = new URLSearchParams();
-  const searchText = value.trim();
-
-  serializeDocumentListCommonParams({ ...params, page: 1 }, urlParams);
-  if (searchText) {
-    urlParams.set('search', searchText);
-  }
-
-  return urlParams.toString();
-}
-
-function serializeDocumentListHash(params: DocumentListParams): string {
-  const urlParams = new URLSearchParams();
-
-  serializeDocumentListCommonParams(params, urlParams);
-  if (params.match_any) {
-    urlParams.set('match_any', 'true');
-  }
-  if (params.q?.trim()) {
-    urlParams.set('q', params.q.trim());
-  }
-  if (params.text?.trim()) {
-    urlParams.set('text', params.text.trim());
-  }
-  if (params.document_type_id) {
-    urlParams.set('document_type_id', String(params.document_type_id));
-  }
-  if (params.metadata_value?.trim()) {
-    urlParams.set('metadata_value', params.metadata_value.trim());
-  }
-  if (params.metadata_type_id) {
-    urlParams.set('metadata_type_id', String(params.metadata_type_id));
-  }
-  if (params.filename?.trim()) {
-    urlParams.set('filename', params.filename.trim());
-  }
-  if (params.file_content_type?.trim()) {
-    urlParams.set('file_content_type', params.file_content_type.trim());
-  }
-  if (params.cabinet_id) {
-    urlParams.set('cabinet_id', String(params.cabinet_id));
-  }
-  if (params.tag_id) {
-    urlParams.set('tag_id', String(params.tag_id));
-  }
-  if (params.duplicates) {
-    urlParams.set('duplicates', 'true');
-  }
-  if (params.duplicate_checksum) {
-    urlParams.set('duplicate_checksum', 'true');
-  }
-
-  return urlParams.toString();
-}
 
 function tagSearchOptionTemplate(tag: TagModel) {
   return (
@@ -582,27 +440,27 @@ export function ListDocuments() {
       if (listParams.text) {
         chips.push({ key: 'text', label: `Text: ${listParams.text}` });
       }
-      if (listParams.document_type_id) {
-        chips.push({
-          key: 'document-type',
-          label: `Document type: ${documentTypeLookup?.[String(listParams.document_type_id)]?.name ?? listParams.document_type_id}`,
-        });
-      }
-      if (listParams.metadata_value) {
-        chips.push({ key: 'metadata-value', label: `Metadata: ${listParams.metadata_value}` });
-      }
-      if (listParams.metadata_type_id) {
-        chips.push({
-          key: 'metadata-type',
-          label: `Metadata type: ${metadataTypeLookup?.[String(listParams.metadata_type_id)]?.name ?? listParams.metadata_type_id}`,
-        });
-      }
       if (listParams.filename) {
         chips.push({ key: 'filename', label: `Filename: ${listParams.filename}` });
       }
-      if (listParams.file_content_type) {
-        chips.push({ key: 'file-content-type', label: `Content type: ${listParams.file_content_type}` });
-      }
+    }
+    if (listParams.document_type_id) {
+      chips.push({
+        key: 'document-type',
+        label: `Document type: ${documentTypeLookup?.[String(listParams.document_type_id)]?.name ?? listParams.document_type_id}`,
+      });
+    }
+    if (listParams.metadata_value) {
+      chips.push({ key: 'metadata-value', label: `Metadata: ${listParams.metadata_value}` });
+    }
+    if (listParams.metadata_type_id) {
+      chips.push({
+        key: 'metadata-type',
+        label: `Metadata type: ${metadataTypeLookup?.[String(listParams.metadata_type_id)]?.name ?? listParams.metadata_type_id}`,
+      });
+    }
+    if (listParams.file_content_type) {
+      chips.push({ key: 'file-content-type', label: `Content type: ${listParams.file_content_type}` });
     }
     const effectiveTagId = tagId ?? listParams.tag_id;
     const effectiveCabinetId = cabinetId ?? listParams.cabinet_id;
@@ -644,7 +502,7 @@ export function ListDocuments() {
     navigate({
       pathname: location.pathname,
       search: location.search,
-      hash: serializeDocumentListHash(nextParams),
+      hash: serializeDocumentListUpdate(nextParams, appliedSearchText),
     });
   };
 
@@ -701,6 +559,7 @@ export function ListDocuments() {
       file_content_type: undefined,
       cabinet_id: undefined,
       tag_id: undefined,
+      document_index_value_id: undefined,
       duplicates: undefined,
       duplicate_checksum: undefined,
       page: 1,
@@ -821,6 +680,7 @@ export function ListDocuments() {
       ...listParams,
       cabinet_id: cabinetId ?? listParams.cabinet_id,
       tag_id: tagId ?? listParams.tag_id,
+      document_index_value_id: documentIndexValueId ?? listParams.document_index_value_id,
     };
 
     return (
@@ -1118,6 +978,7 @@ export function AdvancedDocumentSearch() {
       file_content_type: values.file_content_type.trim() || undefined,
       cabinet_id: values.cabinet_id ?? undefined,
       tag_id: values.tag_id ?? undefined,
+      document_index_value_id: existingParams.document_index_value_id,
       duplicates: values.duplicates || undefined,
       duplicate_checksum: values.duplicate_checksum || undefined,
     };
@@ -1149,6 +1010,13 @@ export function AdvancedDocumentSearch() {
     <Card title="Advanced Document Search">
       <form onSubmit={handleSubmit(onSubmit)}>
         <div className="grid p-fluid">
+          <div className="col-12">
+            <h3 className="mt-0 mb-2">Search Text</h3>
+            <p className="mt-0 mb-3 text-color-secondary">
+              Search by title, document text/OCR, or filename. Use Match any to return documents matching at least one of these text fields.
+            </p>
+          </div>
+
           <div className="col-12 md:col-6 xl:col-4">
             <label htmlFor="advanced-search-title" className="font-medium mb-2 block">Title</label>
             <Controller
@@ -1195,6 +1063,30 @@ export function AdvancedDocumentSearch() {
                 />
               )}
             />
+          </div>
+
+          <div className="col-12">
+            <Controller
+              name="match_any"
+              control={control}
+              render={({ field }) => (
+                <div className="flex align-items-center gap-2">
+                  <Checkbox
+                    inputId="advanced-search-match-any"
+                    checked={field.value}
+                    onChange={(event) => field.onChange(!!event.checked)}
+                  />
+                  <label htmlFor="advanced-search-match-any">Match any text search field instead of requiring all entered text fields</label>
+                </div>
+              )}
+            />
+          </div>
+
+          <div className="col-12">
+            <h3 className="mb-2">Narrow Results</h3>
+            <p className="mt-0 mb-3 text-color-secondary">
+              These filters always narrow the result set and are combined with the text search above.
+            </p>
           </div>
 
           <div className="col-12 md:col-6 xl:col-4">
@@ -1315,23 +1207,6 @@ export function AdvancedDocumentSearch() {
                   panelClassName="aut-search-dropdown-panel"
                   showClear
                 />
-              )}
-            />
-          </div>
-
-          <div className="col-12 md:col-6 xl:col-4">
-            <Controller
-              name="match_any"
-              control={control}
-              render={({ field }) => (
-                <div className="flex align-items-center gap-2">
-                  <Checkbox
-                    inputId="advanced-search-match-any"
-                    checked={field.value}
-                    onChange={(event) => field.onChange(!!event.checked)}
-                  />
-                  <label htmlFor="advanced-search-match-any">Match any search criterion instead of all criteria</label>
-                </div>
               )}
             />
           </div>

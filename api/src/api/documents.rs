@@ -385,56 +385,6 @@ pub async fn list(
             }
         }
 
-        // Filter by document type
-        if let Some(id) = params.document_type_id {
-            let criteria = documents::document_type_id.eq(id);
-            if match_any {
-                query = query.or_filter(criteria);
-            } else {
-                query = query.filter(criteria);
-            }
-        }
-
-        // Filter by metadata type and value
-        if let Some(value) = params.metadata_value.as_deref().filter(|s| !s.is_empty()) {
-            let pattern = format!("%{}%", value);
-
-            // When metadata_type_id is provided, filter by both value and type
-            if let Some(metadata_type_id) = params.metadata_type_id {
-                let subquery = document_metadatas::table
-                    .filter(document_metadatas::document_id.eq(documents::id))
-                    .filter(document_metadatas::value.ilike(pattern))
-                    .filter(document_metadatas::metadata_type_id.eq(metadata_type_id));
-
-                if match_any {
-                    query = query.or_filter(exists(subquery));
-                } else {
-                    query = query.filter(exists(subquery));
-                }
-            } else {
-                // When only value is provided (no metadata_type_id), filter by value only
-                let subquery = document_metadatas::table
-                    .filter(document_metadatas::document_id.eq(documents::id))
-                    .filter(document_metadatas::value.ilike(pattern));
-
-                if match_any {
-                    query = query.or_filter(exists(subquery));
-                } else {
-                    query = query.filter(exists(subquery));
-                }
-            }
-        } else if let Some(metadata_type_id) = params.metadata_type_id {
-            let subquery = document_metadatas::table
-                .filter(document_metadatas::document_id.eq(documents::id))
-                .filter(document_metadatas::metadata_type_id.eq(metadata_type_id));
-
-            if match_any {
-                query = query.or_filter(exists(subquery));
-            } else {
-                query = query.filter(exists(subquery));
-            }
-        }
-
         // Filter by document text
         if let Some(text) = params.text.as_deref().filter(|s| !s.is_empty()) {
             let text_subquery = document_file_pages::table
@@ -484,6 +434,40 @@ pub async fn list(
             }
         }
 
+        // Filter by document type
+        if let Some(id) = params.document_type_id {
+            let criteria = documents::document_type_id.eq(id);
+            query = query.filter(criteria);
+        }
+
+        // Filter by metadata type and value
+        if let Some(value) = params.metadata_value.as_deref().filter(|s| !s.is_empty()) {
+            let pattern = format!("%{}%", value);
+
+            // When metadata_type_id is provided, filter by both value and type
+            if let Some(metadata_type_id) = params.metadata_type_id {
+                let subquery = document_metadatas::table
+                    .filter(document_metadatas::document_id.eq(documents::id))
+                    .filter(document_metadatas::value.ilike(pattern))
+                    .filter(document_metadatas::metadata_type_id.eq(metadata_type_id));
+
+                query = query.filter(exists(subquery));
+            } else {
+                // When only value is provided (no metadata_type_id), filter by value only
+                let subquery = document_metadatas::table
+                    .filter(document_metadatas::document_id.eq(documents::id))
+                    .filter(document_metadatas::value.ilike(pattern));
+
+                query = query.filter(exists(subquery));
+            }
+        } else if let Some(metadata_type_id) = params.metadata_type_id {
+            let subquery = document_metadatas::table
+                .filter(document_metadatas::document_id.eq(documents::id))
+                .filter(document_metadatas::metadata_type_id.eq(metadata_type_id));
+
+            query = query.filter(exists(subquery));
+        }
+
         // Filter by document file content type
         if let Some(content_type) = params
             .file_content_type
@@ -495,11 +479,7 @@ pub async fn list(
                 .filter(document_files::document_id.eq(documents::id))
                 .filter(document_files::content_type.ilike(pattern));
 
-            if match_any {
-                query = query.or_filter(exists(subquery));
-            } else {
-                query = query.filter(exists(subquery));
-            }
+            query = query.filter(exists(subquery));
         }
 
         // Filter by cabinet ID
@@ -508,11 +488,7 @@ pub async fn list(
                 .filter(cabinet_documents::cabinet_id.eq(id))
                 .filter(cabinet_documents::document_id.eq(documents::id));
 
-            if match_any {
-                query = query.or_filter(exists(subquery));
-            } else {
-                query = query.filter(exists(subquery));
-            }
+            query = query.filter(exists(subquery));
         }
 
         // Filter by tag ID
@@ -521,11 +497,7 @@ pub async fn list(
                 .filter(tag_documents::tag_id.eq(id))
                 .filter(tag_documents::document_id.eq(documents::id));
 
-            if match_any {
-                query = query.or_filter(exists(subquery));
-            } else {
-                query = query.filter(exists(subquery));
-            }
+            query = query.filter(exists(subquery));
         }
 
         // Filter by document index value ID
@@ -534,11 +506,7 @@ pub async fn list(
                 .filter(document_index_documents::document_index_value_id.eq(id))
                 .filter(document_index_documents::document_id.eq(documents::id));
 
-            if match_any {
-                query = query.or_filter(exists(subquery));
-            } else {
-                query = query.filter(exists(subquery));
-            }
+            query = query.filter(exists(subquery));
         }
 
         // Filter to documents that share their title with at least one other document.
@@ -552,11 +520,7 @@ pub async fn list(
                 )
                 .filter(duplicate_documents.field(documents::id).ne(documents::id));
 
-            if match_any {
-                query = query.or_filter(exists(subquery));
-            } else {
-                query = query.filter(exists(subquery));
-            }
+            query = query.filter(exists(subquery));
         }
 
         // Filter to documents with a file checksum shared by a file on another document.
@@ -578,11 +542,7 @@ pub async fn list(
                 "#,
             );
 
-            if match_any {
-                query = query.or_filter(criteria);
-            } else {
-                query = query.filter(criteria);
-            }
+            query = query.filter(criteria);
         }
 
         query

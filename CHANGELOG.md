@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep cabinet, tag, and document index scopes applied when searching documents, and clarify advanced document search grouping.
+
 ## [0.4.11] - 2026-09-11
 
 ### Changed
