@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add autocomplete for metadata value editing
+
 ## [0.4.9] - 2026-09-10
 
 ### Changed
