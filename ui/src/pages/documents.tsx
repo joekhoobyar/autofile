@@ -796,6 +796,14 @@ export function ListDocuments() {
         />
         <label htmlFor="documents-select-all" className="text-base font-normal">Select all</label>
       </div>
+      <Dropdown
+        value={sortValue}
+        options={sortOptions}
+        placeholder="Sort by"
+        onChange={(event) => onSortChange(event.value as string | undefined)}
+        className="w-auto"
+        aria-label="Sort documents"
+      />
       <DataViewLayoutOptions layout={layout} onChange={(e) => setLayout(e.value as 'list' | 'grid')} />
     </div>
   );
@@ -915,17 +923,21 @@ export function ListDocuments() {
   };
 
   const paginatorTemplate = {
-    layout: 'RowsPerPageDropdown PrevPageLink PageLinks NextPageLink CurrentPageReport',
+    layout: 'CurrentPageReport RowsPerPageDropdown PrevPageLink PageLinks NextPageLink',
     CurrentPageReport: (options: { first: number; last: number; totalRecords: number }) => (
       <div className="flex align-items-center gap-3 aut-documents-paginator-report">
-        <Dropdown
-          value={sortValue}
-          options={sortOptions}
-          placeholder="Sort by"
-          onChange={(event) => onSortChange(event.value as string | undefined)}
-          className="w-auto"
-          aria-label="Sort documents"
-        />
+        {(options.last != options.totalRecords) ?
+          (
+            <span className="aut-documents-paginator-count">
+              {options.first} - {options.last} of {options.totalRecords} documents
+            </span>
+          )
+        : options.totalRecords == 1 ? (
+            <span className="aut-documents-paginator-count"> 1 document </span>
+        ) : (
+            <span className="aut-documents-paginator-count"> {options.totalRecords} documents </span>
+        )
+        }
         {activeFilterChips.map((chip) => (
           <Chip
             key={chip.key}
@@ -976,9 +988,6 @@ export function ListDocuments() {
             }}
           />
         ))}
-        <span className="aut-documents-paginator-count">
-          {options.first} - {options.last} of {options.totalRecords} documents
-        </span>
       </div>
     ),
   };
