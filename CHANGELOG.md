@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Adjust the layout of the quick filter controls on the documents list page.
+- Adjust the paginator on the documents list page
+
 ## [0.4.10] - 2026-09-11
 
 ### Added
