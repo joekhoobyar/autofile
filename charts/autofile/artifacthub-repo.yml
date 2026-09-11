@@ -1,0 +1,9 @@
+# Artifact Hub repository metadata file.
+# For OCI Helm charts this file is not read from the chart archive.
+# The release workflow pushes it to the OCI registry under the special
+# `artifacthub.io` tag (see .github/workflows/release.yml).
+# After registering oci://ghcr.io/joekhoobyar/charts/autofile on Artifact Hub,
+# fill in the generated repositoryID below to enable Verified Publisher.
+owners:
+  - name: joekhoobyar
+    email: fourheads@gmail.com

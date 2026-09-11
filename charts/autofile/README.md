@@ -55,6 +55,16 @@ helm upgrade --install autofile oci://ghcr.io/joekhoobyar/charts/autofile \
   --version "${HELM_CHART_VERSION}"
 ```
 
+## Artifact Hub
+
+Published chart versions are indexed on Artifact Hub, including per-version changes, values, and images. Search for `autofile` on [Artifact Hub](https://artifacthub.io/) after the first indexed release.
+
+Each release also publishes a SLSA build provenance attestation for the chart OCI artifact. Verify it by digest with:
+
+```bash
+gh attestation verify oci://ghcr.io/joekhoobyar/charts/autofile@<digest> --owner joekhoobyar
+```
+
 ## Local Development
 
 Update dependencies before installing from a checkout:

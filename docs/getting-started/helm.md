@@ -50,6 +50,12 @@ helm upgrade --install autofile oci://ghcr.io/joekhoobyar/charts/autofile \
   --version "${HELM_CHART_VERSION}"
 ```
 
+Published chart versions are also indexed on [Artifact Hub](https://artifacthub.io/), including per-version changes. Each release publishes a SLSA build provenance attestation for the chart OCI artifact, verifiable with:
+
+```bash
+gh attestation verify oci://ghcr.io/joekhoobyar/charts/autofile@<digest> --owner joekhoobyar
+```
+
 ## Database Modes
 
 By default, the chart creates a CloudNativePG `Cluster` and reads the generated database URI from Secret `<database.cnpg.name>-app`, key `uri`.

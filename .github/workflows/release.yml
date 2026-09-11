@@ -163,6 +163,9 @@ jobs:
     name: Publish Helm Chart
     runs-on: ubuntu-24.04
     needs: manifests
+    outputs:
+      chart-version: ${{ steps.chart-digest.outputs.chart-version }}
+      chart-digest: ${{ steps.chart-digest.outputs.chart-digest }}
 
     steps:
       - name: Checkout
@@ -171,6 +174,21 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v5
 
+      - name: Check chart version matches tag
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          chart_version="$(grep -E '^version:' charts/autofile/Chart.yaml | head -1 | awk '{print $2}')"
+          app_version="$(grep -E '^appVersion:' charts/autofile/Chart.yaml | head -1 | awk '{print $2}')"
+          if [ "${chart_version}" != "${version}" ]; then
+            echo "Chart.yaml version ${chart_version} does not match tag ${version}" >&2
+            exit 1
+          fi
+          if [ "${app_version}" != "v${version}" ]; then
+            echo "Chart.yaml appVersion ${app_version} does not match tag v${version}" >&2
+            exit 1
+          fi
+
       - name: Log in to GHCR
         shell: bash
         run: |
@@ -178,12 +196,41 @@ jobs:
             --username "${{ github.actor }}" \
             --password-stdin
 
-      - name: Package chart
+      - name: Build chart dependencies
         shell: bash
         run: |
           helm repo add valkey https://valkey.io/valkey-helm/
           helm repo add rustfs https://charts.rustfs.com
           helm dependency build charts/autofile
+
+      - name: Lint and render chart
+        shell: bash
+        run: |
+          helm lint charts/autofile --set database.mode=external --set database.url=postgres://user:pass@db:5432/autofile
+          helm template autofile charts/autofile --api-versions postgresql.cnpg.io/v1/Cluster > /dev/null
+
+      - name: Inject release notes into chart changes
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          .github/scripts/extract-changelog-section.sh "${version}" CHANGELOG.md --output /tmp/release-notes.md
+          python3 .github/scripts/generate-chart-changes.py /tmp/release-notes.md > /tmp/chart-changes.yaml
+          python3 - <<'EOF'
+          from pathlib import Path
+          chart_path = Path("charts/autofile/Chart.yaml")
+          chart = chart_path.read_text()
+          changes = Path("/tmp/chart-changes.yaml").read_text().strip()
+          if changes:
+              indented = "\n".join("    " + line if line.strip() else line for line in changes.splitlines())
+              block = f"  artifacthub.io/changes: |\n{indented}\n"
+              chart = chart.replace("annotations:\n", "annotations:\n" + block, 1)
+              chart_path.write_text(chart)
+          EOF
+          grep -q 'artifacthub.io/changes' charts/autofile/Chart.yaml
+
+      - name: Package chart
+        shell: bash
+        run: |
           helm package charts/autofile --destination /tmp/charts
 
       - name: Push chart
@@ -192,10 +239,50 @@ jobs:
           chart_packages=(/tmp/charts/autofile-*.tgz)
           helm push "${chart_packages[0]}" oci://ghcr.io/${{ github.repository_owner }}/charts
 
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Push Artifact Hub repository metadata
+        shell: bash
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io \
+            --username "${{ github.actor }}" \
+            --password-stdin
+          oras push \
+            ghcr.io/${{ github.repository_owner }}/charts/autofile:artifacthub.io \
+            --config /dev/null:application/vnd.cncf.artifacthub.config.v1+yaml \
+            charts/autofile/artifacthub-repo.yml:application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml
+
+      - name: Resolve chart digest
+        id: chart-digest
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          digest="$(oras resolve ghcr.io/${{ github.repository_owner }}/charts/autofile:${version})"
+          echo "chart-version=${version}" >> "$GITHUB_OUTPUT"
+          echo "chart-digest=${digest}" >> "$GITHUB_OUTPUT"
+
+  chart-attestation:
+    name: Attest Helm Chart
+    runs-on: ubuntu-24.04
+    needs: helm-chart
+    permissions:
+      packages: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Attest chart build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/charts/autofile
+          subject-digest: ${{ needs.helm-chart.outputs.chart-digest }}
+          push-to-registry: true
+
   publish-release:
     name: Publish GitHub Release
     runs-on: ubuntu-24.04
-    needs: helm-chart
+    needs: chart-attestation
     permissions:
       contents: write
 

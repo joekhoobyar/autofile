@@ -1,16 +1,32 @@
 apiVersion: v2
 name: autofile
-description: Autofile API and UI deployment
+description: Self-hosted document management application
 type: application
 version: 0.4.13
 appVersion: v0.4.13
+home: https://autofile.dev/
+sources:
+  - https://github.com/joekhoobyar/autofile
+icon: https://autofile.dev/assets/favicon.png
 keywords:
   - edms
   - dms
   - autofile
+  - document-management
+  - self-hosted
 maintainers:
   - name: joekhoobyar
     email: fourheads@gmail.com
+annotations:
+  artifacthub.io/license: AGPL-3.0-only
+  artifacthub.io/category: storage
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://autofile.dev/
+    - name: Source
+      url: https://github.com/joekhoobyar/autofile
+    - name: Changelog
+      url: https://autofile.dev/changelog/
 dependencies:
   - name: valkey
     version: 0.11.0
