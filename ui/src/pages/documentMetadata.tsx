@@ -14,22 +14,13 @@ import { AutoComplete, type AutoCompleteCompleteEvent } from 'primereact/autocom
 import { useId } from '../util';
 import { fetchMetadataTypeValues, useDocumentTypeMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
-
-type MetadataRow = {
-  metadataTypeId: number;
-  slug: string;
-  name: string;
-  value: string;
-  dataType: string;
-  options: { choices?: string[] } | null | undefined;
-  required: boolean;
-};
+import { buildMetadataRows, buildMetadataUpdates, getMissingRequiredRows, type MetadataRow } from '../util/documentMetadataRows';
 
 type MetadataValueAutoCompleteProps = {
   metadataTypeId: number | undefined;
   value: string;
   onChange: (value: string) => void;
-  onBlur: (event: React.FocusEvent<HTMLElement>) => void;
+  onBlur: (event: React.FocusEvent<HTMLElement>, value: string) => void;
 };
 
 function MetadataValueAutoComplete({ metadataTypeId, value, onChange, onBlur }: MetadataValueAutoCompleteProps) {
@@ -80,16 +71,12 @@ function MetadataValueAutoComplete({ metadataTypeId, value, onChange, onBlur }: 
         setInputValue(nextValue);
         onChange(nextValue);
       }}
-      onBlur={onBlur}
+      onBlur={(event) => onBlur(event, inputValue)}
       inputClassName="w-full"
       className="w-full"
       dropdown={false}
     />
   );
-}
-
-function isMetadataValueSet(value: string | null | undefined) {
-  return String(value ?? '').trim().length > 0;
 }
 
 export function EditDocumentMetadata() {
@@ -102,19 +89,7 @@ export function EditDocumentMetadata() {
 
   const loadedRows = useMemo<MetadataRow[] | undefined>(() => {
     if (!doc || !mdt || !dtmdts) return undefined;
-    return dtmdts.flatMap(dtmdt => {
-      const mdType = mdt?.[dtmdt.metadata_type_id];
-      if (!mdType) return [];
-      return {
-        metadataTypeId: dtmdt.metadata_type_id,
-        slug: mdType.slug,
-        name: mdType?.name ?? mdType.slug,
-        value: doc?.metadata?.[mdType.slug] ?? '',
-        dataType: mdType?.data_type ?? 'string',
-        options: mdType?.options,
-        required: dtmdt.required,
-      };
-    }).sort((a, b) => a.name.localeCompare(b.name));
+    return buildMetadataRows(doc, mdt, dtmdts);
   }, [doc, dtmdts, mdt]);
   const loadedRowsKey = useMemo(() => {
     if (!loadedRows) return '';
@@ -127,7 +102,7 @@ export function EditDocumentMetadata() {
   );
 
   const missingRequiredRows = useMemo(
-    () => rows.filter((row) => row.required && !isMetadataValueSet(row.value)),
+    () => getMissingRequiredRows(rows),
     [rows]
   );
   const hasMissingRequired = missingRequiredRows.length > 0;
@@ -145,7 +120,21 @@ export function EditDocumentMetadata() {
         <i className="pi pi-times" style={{color: 'var(--red-600)'}} />;
   }, []);
 
+  const updateRowValue = useCallback((metadataTypeId: number | undefined, value: string) => {
+    if (!metadataTypeId) return;
+
+    setEditedRows({
+      sourceKey: loadedRowsKey,
+      rows: rows.map((row) => (
+        row.metadataTypeId === metadataTypeId
+          ? { ...row, value }
+          : row
+      )),
+    });
+  }, [loadedRowsKey, rows]);
+
   const closeCellEditor = useCallback((event: React.FocusEvent<HTMLElement>) => {
+    const editor = event.currentTarget;
     const cell = event.currentTarget?.closest('td');
     if (!cell) return;
     const relatedTarget = event.relatedTarget as HTMLElement | null;
@@ -167,8 +156,18 @@ export function EditDocumentMetadata() {
         cancelable: true,
         key: 'Enter',
         code: 'Enter',
+        keyCode: 13,
+        which: 13,
       });
-      cell.dispatchEvent(enterEvent);
+      editor.dispatchEvent(enterEvent);
+      cell.dispatchEvent(new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+      }));
     }, 200);
   }, []);
 
@@ -179,9 +178,12 @@ export function EditDocumentMetadata() {
         metadataTypeId={rowMetadataTypeId}
         value={String(options.value ?? '')}
         onChange={(value) => options.editorCallback?.(value)}
-        onBlur={closeCellEditor}
+        onBlur={(event, value) => {
+          updateRowValue(rowMetadataTypeId, value);
+          closeCellEditor(event);
+        }}
     />;
-  }, [closeCellEditor]);
+  }, [closeCellEditor, updateRowValue]);
 
   const dateEditor = useCallback((options: ColumnEditorOptions) => {
     const dateValue = typeof options.value === 'string' && options.value
@@ -200,6 +202,7 @@ export function EditDocumentMetadata() {
             ? `${event.value.getFullYear()}-${String(event.value.getMonth() + 1).padStart(2, '0')}-${String(event.value.getDate()).padStart(2, '0')}`
             : (typeof event.value === 'string' ? event.value : '');
           options.editorCallback?.(nextValue);
+          updateRowValue(options.rowData?.metadataTypeId as number | undefined, nextValue);
         }}
         onBlur={(event) => {
           closeCellEditor(event);
@@ -210,7 +213,7 @@ export function EditDocumentMetadata() {
         className="w-full"
       />
     );
-  }, [closeCellEditor]);
+  }, [closeCellEditor, updateRowValue]);
 
   const lookupEditor = useCallback((options: ColumnEditorOptions) => {
     const choices = options.rowData?.options?.choices ?? [];
@@ -220,7 +223,9 @@ export function EditDocumentMetadata() {
       <Dropdown
         value={options.value ?? ''}
         onChange={(event) => {
-          options.editorCallback?.(event.value ?? '');
+          const nextValue = event.value ?? '';
+          options.editorCallback?.(nextValue);
+          updateRowValue(options.rowData?.metadataTypeId as number | undefined, nextValue);
         }}
         onBlur={(event) => {
           closeCellEditor(event);
@@ -230,7 +235,7 @@ export function EditDocumentMetadata() {
         className="w-full"
       />
     );
-  }, [closeCellEditor]);
+  }, [closeCellEditor, updateRowValue]);
 
   const onCellEditComplete = useCallback((e: ColumnEvent) => {
     const { rowData, newValue, field  } = e;
@@ -271,9 +276,7 @@ export function EditDocumentMetadata() {
     }
 
     const original = doc?.metadata ?? {};
-    const updates = rows
-      .filter((row) => (original[row.slug] ?? '') !== row.value)
-      .map((row) => ({ metadata_type_id: row.metadataTypeId, value: row.value }));
+    const updates = buildMetadataUpdates(original, rows);
 
     try {
       await saveDocumentMetadata.mutateAsync(updates);
