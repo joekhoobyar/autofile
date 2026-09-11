@@ -23,6 +23,7 @@ pub mod api {
     pub mod metadata_types;
     pub mod ping;
     pub mod profile;
+    pub mod public_settings;
     pub mod tag_documents;
     pub mod tags;
     pub mod users;

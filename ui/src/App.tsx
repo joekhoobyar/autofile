@@ -13,7 +13,7 @@ import { EditTag, ListTags, NewTag } from './pages/tags.tsx';
 import { BreadCrumb } from 'primereact/breadcrumb';
 import { NAV, useBreadcrumbs } from './nav.ts';
 import { Button } from 'primereact/button';
-import Login, { Logout, RequireAdmin, RequireAuth } from './pages/auth.tsx';
+import Login, { Logout, RequireAdmin, RequireAuth, Signup } from './pages/auth.tsx';
 import { AuthProvider } from './AuthProvider.tsx';
 import { canAdminister, useAuth } from './auth.ts';
 import { EditDocumentMetadata } from './pages/documentMetadata.tsx';
@@ -138,6 +138,9 @@ function Layout() {
 const router = createBrowserRouter([
   {
     path: '/login', element: <Login />
+  },
+  {
+    path: '/signup', element: <Signup />
   },
   {
     path: '/logout', element: <Logout />

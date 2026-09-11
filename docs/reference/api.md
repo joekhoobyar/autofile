@@ -18,6 +18,7 @@ The public endpoints are:
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`, using the refresh-token cookie
 - `POST /api/v1/auth/logout`
+- `GET /api/v1/public/settings`
 
 On a fresh installation, Autofile creates a default admin user when no non-system users exist:
 
@@ -105,6 +106,7 @@ Malformed JSON and invalid path or query input can instead return an Axum framew
 - `/api/v1/metadata-types`
 - `/api/v1/ping`
 - `/api/v1/profile`
+- `/api/v1/public`
 - `/api/v1/settings`
 - `/api/v1/tags`
 - `/api/v1/users`
@@ -142,6 +144,24 @@ Settings endpoints require an admin access token.
 ```
 
 When `allow_user_registration` is `false`, `POST /api/v1/auth/register` returns `403 Forbidden` and no user is created.
+
+## Public Settings
+
+Base path: `/api/v1/public`
+
+Public settings endpoints require no authentication. They expose an explicit allowlist of settings that are safe for anonymous clients, currently only the user-registration flag:
+
+```json
+{
+  "allow_user_registration": true
+}
+```
+
+### Endpoints
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| `GET` | `/api/v1/public/settings` | Get publicly visible settings. |
 
 ## Profile
 

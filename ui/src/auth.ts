@@ -1,6 +1,7 @@
 import React from "react";
 import { apiMutate, setAccessToken } from "./api";
-import type { AccessTokenResponse, AuthSession, LoginRequest, LoginResult } from "./models/auth";
+import type { AccessTokenResponse, AuthSession, LoginRequest, LoginResult, RegisterRequest } from "./models/auth";
+import type { User } from "./models/user";
 
 export type { UserRole } from "./models/auth";
 
@@ -54,6 +55,14 @@ export async function login(user: LoginRequest): Promise<LoginResult> {
     throw new Error("Missing or invalid session in access token");
   }
   return session;
+}
+
+export async function register(user: RegisterRequest): Promise<User> {
+  return apiMutate<User>("api/v1/auth/register", {
+    method: 'POST',
+    body: user,
+    retryOn401: false,
+  });
 }
 
 export async function logout() {

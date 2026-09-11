@@ -8,3 +8,7 @@ export interface AppSettings {
 export interface AppSettingsUpdateInput {
   allow_user_registration: boolean;
 }
+
+export interface PublicSettings {
+  allow_user_registration: boolean;
+}

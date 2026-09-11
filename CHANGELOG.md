@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add autocomplete for metadata value editing.
+- Add a public sign-up page linked from the login page, with a success message directing new users to wait for an administrator to enable their account.
+- Add an unauthenticated `GET /api/v1/public/settings` endpoint exposing the user-registration flag so the UI can show or hide sign-up accordingly.
 
 ### Fixed
 

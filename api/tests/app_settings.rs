@@ -1,6 +1,7 @@
 mod support;
 
 use autofile_api::api::auth::{RegisterRequest, register};
+use autofile_api::api::public_settings::get_public_settings;
 use autofile_api::application::app_settings::{
     UpdateAppSettingsInput, get_app_settings, update_app_settings,
 };
@@ -27,6 +28,50 @@ async fn settings_default_to_allowing_user_registration() {
         .expect("settings should load");
 
     assert!(settings.allow_user_registration);
+}
+
+#[tokio::test]
+async fn public_settings_expose_registration_flag() {
+    let test_db = TestDatabase::new().await;
+    let conn = test_db
+        .pool
+        .get_owned()
+        .await
+        .expect("db connection should succeed");
+
+    let public = get_public_settings(DbConn(conn))
+        .await
+        .expect("public settings should load")
+        .0;
+
+    assert!(public.allow_user_registration);
+
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    update_app_settings(
+        &mut db,
+        UpdateAppSettingsInput {
+            allow_user_registration: false,
+        },
+    )
+    .await
+    .expect("settings should update");
+    drop(db);
+
+    let conn = test_db
+        .pool
+        .get_owned()
+        .await
+        .expect("db connection should succeed");
+    let public = get_public_settings(DbConn(conn))
+        .await
+        .expect("public settings should load")
+        .0;
+
+    assert!(!public.allow_user_registration);
 }
 
 #[tokio::test]

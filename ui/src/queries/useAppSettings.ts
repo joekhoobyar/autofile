@@ -7,7 +7,14 @@ import {
 } from "@tanstack/react-query";
 
 import { HttpError, apiFetch, apiMutate } from "../api";
-import type { AppSettings, AppSettingsUpdateInput } from "../models/appSettings";
+import type { AppSettings, AppSettingsUpdateInput, PublicSettings } from "../models/appSettings";
+
+export function usePublicSettings(): UseQueryResult<PublicSettings, HttpError> {
+  return useQuery({
+    queryKey: ["public-settings"],
+    queryFn: () => apiFetch<PublicSettings>("api/v1/public/settings", { retryOn401: false }),
+  });
+}
 
 export function useAppSettings(): UseQueryResult<AppSettings, HttpError> {
   return useQuery({

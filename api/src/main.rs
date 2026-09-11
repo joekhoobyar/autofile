@@ -242,6 +242,7 @@ async fn main() {
         .nest("/metadata-types", api::metadata_types::routes())
         .nest("/ping", api::ping::routes())
         .nest("/profile", api::profile::routes())
+        .nest("/public", api::public_settings::routes())
         .nest("/users", api::users::routes())
         .nest("/tags", api::tags::routes())
         .nest("/tags", api::tag_documents::routes());
