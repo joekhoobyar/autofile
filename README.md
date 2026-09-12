@@ -1,5 +1,7 @@
 # Autofile
 
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/joekhoobyar/autofile/ci.yml)](https://github.com/joekhoobyar/autofile/actions) [![Documentation Status](https://img.shields.io/github/deployments/joekhoobyar/autofile/github-pages?label=docs)](https://autofile.dev) [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/autofile)](https://artifacthub.io/packages/search?repo=autofile)
+
 Autofile is a self-hosted document management application. It stores document files in S3-compatible object storage, keeps structured document metadata in PostgreSQL, and provides a React web UI backed by a Rust API.
 
 For installation guides, concepts, configuration, and API reference, see the full documentation at [autofile.dev](https://autofile.dev/).
