@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Implemented OpenAPI for all routes
+
+### Security
+
+- Fix uncontrolled allocation size (#33)
+
 ## [0.4.14] - 2026-09-12
 
 ### Changed
