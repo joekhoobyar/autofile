@@ -98,6 +98,33 @@ jobs:
           targets: ${{ steps.build-vars.outputs.bake_group }}
           push: true
 
+  openapi-asset:
+    name: Attach OpenAPI Spec
+    runs-on: ubuntu-24.04
+    needs: images
+    permissions:
+      contents: write
+      packages: read
+
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Dump OpenAPI spec from release image
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          image="ghcr.io/joekhoobyar/autofile-api:${GITHUB_REF_NAME}-amd64"
+          docker pull "$image"
+          docker run --rm "$image" --dump-openapi > openapi.json
+          python3 -c "import json; spec = json.load(open('openapi.json')); print(f\"paths: {len(spec.get('paths', {}))}\")"
+          gh release upload "${GITHUB_REF_NAME}" openapi.json --clobber
+
   manifests:
     name: Push Multi-Arch Manifests
     runs-on: ubuntu-24.04
@@ -290,7 +317,7 @@ jobs:
   publish-release:
     name: Publish GitHub Release
     runs-on: ubuntu-24.04
-    needs: chart-attestation
+    needs: [chart-attestation, openapi-asset]
     permissions:
       contents: write
 

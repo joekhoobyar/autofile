@@ -33,6 +33,18 @@ use autofile_api::shared::util::ApiError;
 
 #[tokio::main]
 async fn main() {
+    // Dump the OpenAPI specification without requiring any runtime
+    // configuration (JWT, Redis, database, S3). Release workflows reuse the
+    // built image for this: `docker run --rm <image> --dump-openapi`.
+    if std::env::args().any(|arg| arg == "--dump-openapi") {
+        let (_, openapi) = build_openapi_router();
+        let json = openapi
+            .to_pretty_json()
+            .expect("OpenAPI spec should serialize to JSON");
+        println!("{json}");
+        return;
+    }
+
     // Initialize tracing
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
