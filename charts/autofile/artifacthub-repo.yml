@@ -4,6 +4,7 @@
 # `artifacthub.io` tag (see .github/workflows/release.yml).
 # After registering oci://ghcr.io/joekhoobyar/charts/autofile on Artifact Hub,
 # fill in the generated repositoryID below to enable Verified Publisher.
+repositoryID: 6e85dbcc-f82d-4902-b590-c00ba6f186dd
 owners:
   - name: joekhoobyar
     email: fourheads@gmail.com
