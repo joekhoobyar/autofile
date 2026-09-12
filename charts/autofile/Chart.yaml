@@ -29,10 +29,10 @@ annotations:
       url: https://autofile.dev/changelog/
 dependencies:
   - name: valkey
-    version: 0.11.0
+    version: 0.12.0
     repository: https://valkey.io/valkey-helm/
     condition: valkey.enabled
   - name: rustfs
-    version: 1.0.0-rc.3
+    version: 1.0.0-rc.6
     repository: https://charts.rustfs.com
     condition: rustfs.enabled
