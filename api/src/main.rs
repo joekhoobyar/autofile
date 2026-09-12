@@ -27,9 +27,9 @@ use autofile_api::application::jobs::{FastJob, MediumJob, handle_fast_job, handl
 use autofile_api::application::jobs::{SlowJob, handle_slow_job};
 use autofile_api::run_migrations;
 use autofile_api::shared::app_state::AppState;
+use autofile_api::shared::errors::ApiError;
 use autofile_api::shared::extractors::DbConn;
 use autofile_api::shared::openapi::build_openapi_router;
-use autofile_api::shared::util::ApiError;
 
 #[tokio::main]
 async fn main() {

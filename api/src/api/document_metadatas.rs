@@ -6,8 +6,8 @@ use crate::domain::document_metadatas::DocumentMetadata;
 use crate::schema::{document_metadatas, document_types_metadata_types, documents};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
+use crate::shared::errors::{ApiError, ApiErrorContext};
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ApiErrorContext};
 
 use axum::extract::State;
 

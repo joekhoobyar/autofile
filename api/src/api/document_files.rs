@@ -11,9 +11,9 @@ use crate::infrastructure::s3::delete_prefix_from_s3;
 use crate::schema::{document_file_ocr_pages, document_file_pages, document_files, documents};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::{AuthUser, sign_download, verify_download};
+use crate::shared::errors::{ApiError, ApiErrorContext};
 use crate::shared::extractors::DbConn;
 use crate::shared::s3::serve_s3_file;
-use crate::shared::util::{ApiError, ApiErrorContext};
 
 use axum::{
     Json,

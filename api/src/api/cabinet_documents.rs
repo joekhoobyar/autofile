@@ -5,8 +5,9 @@ use crate::domain::cabinet_documents::CabinetDocument;
 use crate::schema::cabinet_documents;
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
+use crate::shared::errors::{ApiError, ApiErrorContext};
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ApiErrorContext, ResourceList};
+use crate::shared::responses::ResourceList;
 
 use axum::extract::State;
 use serde::Deserialize;

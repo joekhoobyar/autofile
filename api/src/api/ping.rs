@@ -6,7 +6,7 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
-use crate::shared::util::ApiError;
+use crate::shared::errors::ApiError;
 
 #[utoipa::path(
     get,

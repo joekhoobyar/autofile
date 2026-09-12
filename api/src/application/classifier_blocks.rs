@@ -30,7 +30,7 @@ use crate::schema::{
     document_files, metadata_types, tag_documents, tags,
 };
 use crate::shared::app_state::AppState;
-use crate::shared::util::{ApiError, ApiErrorContext, JobResult};
+use crate::shared::errors::{ApiError, ApiErrorContext, JobResult};
 
 #[derive(Debug)]
 pub struct UpdateClassifierBlockInput {

@@ -4,10 +4,11 @@ use crate::domain::cabinets::{Cabinet, CabinetView};
 use crate::schema::{cabinet_documents, cabinets};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
+use crate::shared::errors::{ApiError, ApiErrorContext};
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{
-    ApiError, ApiErrorContext, ResourceList, de_present_option, validate_slug,
-};
+use crate::shared::responses::ResourceList;
+use crate::shared::serde::de_present_option;
+use crate::shared::slugs::validate_slug;
 
 use serde::Deserialize;
 

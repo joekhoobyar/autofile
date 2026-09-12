@@ -1,7 +1,8 @@
 use crate::domain::users::{User, UserRole};
 use crate::schema::users;
 use crate::shared::auth::hash_password;
-use crate::shared::util::{ApiError, ApiErrorContext, ResourceList};
+use crate::shared::errors::{ApiError, ApiErrorContext};
+use crate::shared::responses::ResourceList;
 
 use bb8::PooledConnection;
 use diesel::prelude::*;

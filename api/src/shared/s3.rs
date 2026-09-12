@@ -11,7 +11,7 @@ use tokio::time::{Duration, sleep};
 use tokio_util::io::ReaderStream;
 
 use crate::shared::app_state::AppState;
-use crate::shared::util::ApiError;
+use crate::shared::errors::ApiError;
 
 const S3_GET_MAX_ATTEMPTS: u8 = 3;
 type GetObjectSdkError = SdkError<GetObjectError>;

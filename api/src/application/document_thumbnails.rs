@@ -15,7 +15,7 @@ use crate::domain::document_files::DocumentFile;
 use crate::schema::document_files;
 use crate::schema::documents;
 use crate::shared::app_state::AppState;
-use crate::shared::util::JobResult;
+use crate::shared::errors::JobResult;
 
 /**
  * This job generates a thumbnail for a given document file and page number,

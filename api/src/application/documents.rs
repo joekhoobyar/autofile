@@ -17,7 +17,7 @@ use crate::schema::{
     document_metadatas, document_types_metadata_types, documents, metadata_types, tag_documents,
 };
 use crate::shared::app_state::AppState;
-use crate::shared::util::{ApiError, ApiErrorContext, AppErrorContext, AppResult};
+use crate::shared::errors::{ApiError, ApiErrorContext, AppErrorContext, AppResult};
 
 use apalis::prelude::*;
 use axum::http::StatusCode;

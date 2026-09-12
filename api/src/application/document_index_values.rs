@@ -7,7 +7,7 @@ use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
 use crate::domain::document_indexes::DocumentIndexValue;
-use crate::shared::util::ApiError;
+use crate::shared::errors::ApiError;
 
 #[derive(Debug, QueryableByName)]
 struct DocumentIndexValueRow {

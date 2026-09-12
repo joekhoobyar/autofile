@@ -4,9 +4,9 @@ use crate::domain::document_files::{DocumentFileOcrPage, DocumentFilePage};
 use crate::schema::{document_file_ocr_pages, document_file_pages, document_files};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
+use crate::shared::errors::{ApiError, ApiErrorContext};
 use crate::shared::extractors::DbConn;
 use crate::shared::s3::serve_s3_file;
-use crate::shared::util::{ApiError, ApiErrorContext};
 
 use axum::{
     Json,

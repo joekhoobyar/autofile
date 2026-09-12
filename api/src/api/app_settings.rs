@@ -9,8 +9,8 @@ use crate::application::app_settings::{
 use crate::domain::app_settings::AppSettings;
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AdminUser;
+use crate::shared::errors::ApiError;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::ApiError;
 
 #[utoipa::path(
     get,

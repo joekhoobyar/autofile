@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::domain::metadata_types::DataType;
 use crate::schema::{document_metadatas, document_types_metadata_types, documents, metadata_types};
-use crate::shared::util::{ApiError, ApiErrorContext};
+use crate::shared::errors::{ApiError, ApiErrorContext};
 
 use chrono::NaiveDate;
 use serde::Deserialize;

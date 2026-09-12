@@ -8,8 +8,10 @@ use crate::schema::{
 };
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
+use crate::shared::errors::{ApiError, ApiErrorContext};
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ApiErrorContext, ResourceList, validate_slug};
+use crate::shared::responses::ResourceList;
+use crate::shared::slugs::validate_slug;
 
 use serde::Deserialize;
 

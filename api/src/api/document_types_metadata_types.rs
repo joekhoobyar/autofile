@@ -4,8 +4,8 @@ use crate::domain::document_types_metadata_types::DocumentTypeMetadataType;
 use crate::schema::{document_types_metadata_types, metadata_types};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::{AdminUser, AuthUser};
+use crate::shared::errors::ApiError;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::ApiError;
 
 use serde::Deserialize;
 

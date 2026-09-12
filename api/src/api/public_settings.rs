@@ -5,8 +5,8 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::application::app_settings::get_app_settings;
 use crate::shared::app_state::AppState;
+use crate::shared::errors::ApiError;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::ApiError;
 
 /// Settings that are safe to expose without authentication.
 ///

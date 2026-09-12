@@ -15,7 +15,7 @@ use crate::schema::{
     document_indexes, document_types, documents, tags,
 };
 use crate::shared::app_state::AppState;
-use crate::shared::util::{AppError, AppErrorContext, AppErrorKind, AppResult, JobResult};
+use crate::shared::errors::{AppError, AppErrorContext, AppErrorKind, AppResult, JobResult};
 
 #[derive(Clone)]
 struct PendingIndexValue {

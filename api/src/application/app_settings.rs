@@ -5,7 +5,7 @@ use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
 use crate::domain::app_settings::AppSettings;
 use crate::schema::app_settings;
-use crate::shared::util::{ApiError, ApiErrorContext};
+use crate::shared::errors::{ApiError, ApiErrorContext};
 
 const APP_SETTINGS_ID: i64 = 1;
 

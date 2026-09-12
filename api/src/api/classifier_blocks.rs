@@ -11,8 +11,9 @@ use crate::domain::classifier_blocks::{ClassifierBlock, ClassifierRules};
 use crate::schema::classifier_blocks;
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
+use crate::shared::errors::{ApiError, ApiErrorContext};
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ApiErrorContext, ResourceList};
+use crate::shared::responses::ResourceList;
 
 use serde::Deserialize;
 
