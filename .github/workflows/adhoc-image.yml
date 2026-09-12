@@ -185,7 +185,7 @@ jobs:
 
           images="$({
             docker buildx bake --print "${BAKE_GROUP}" \
-              | jq -c '[.target[]?.tags[]? | select(endswith("-amd64")) | sub("-amd64$"; "") | { image: ., category: (sub("^ghcr.io/"; "") | gsub("[/:.]"; "-")) }]'
+              | jq -c '[.target[]?.tags[]? | select(endswith("-amd64")) | sub("-amd64$"; "") | { image: ., category: (sub(":([^/:]+)$"; "") | sub("^ghcr.io/"; "") | gsub("[/:.]"; "-")) }]'
           })"
 
           echo "images=${images}" >> "$GITHUB_OUTPUT"
