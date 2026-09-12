@@ -3,14 +3,16 @@
 FROM debian:trixie-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+  && apt-get upgrade -y \
+  && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     build-essential \
     pkg-config \
     libssl-dev \
     libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/*
 
 ARG cachebust=20260419
 ENV RUSTUP_HOME=/usr/local/rustup \

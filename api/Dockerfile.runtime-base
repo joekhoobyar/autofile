@@ -3,7 +3,9 @@
 FROM debian:trixie-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+  && apt-get upgrade -y \
+  && apt-get install -y --no-install-recommends \
     ca-certificates \
     tzdata \
     libpq5 \
@@ -20,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     lmodern \
     texlive-fonts-recommended \
     tini \
-    && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/*
 
 RUN command -v magick \
  && command -v soffice \
