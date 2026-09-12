@@ -272,6 +272,13 @@ jobs:
       attestations: write
 
     steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Attest chart build provenance
         uses: actions/attest-build-provenance@v2
         with:
