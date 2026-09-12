@@ -13,18 +13,11 @@ use diesel_async::{
     AsyncPgConnection,
     pooled_connection::{AsyncDieselConnectionManager, bb8},
 };
-use redis::AsyncCommands;
 use tokio::signal;
 use tokio::sync::watch;
-use tokio::time::{Duration, sleep, timeout};
+use tokio::time::{Duration, sleep};
 
-use apalis::layers::WorkerBuilderExt;
-use apalis::layers::retry::RetryPolicy;
-use apalis::prelude::*;
-use apalis_redis::RedisStorage;
-
-use autofile_api::application::jobs::{FastJob, MediumJob, handle_fast_job, handle_medium_job};
-use autofile_api::application::jobs::{SlowJob, handle_slow_job};
+use autofile_api::infrastructure::queue::{build_monitor, create_storages};
 use autofile_api::run_migrations;
 use autofile_api::shared::app_state::AppState;
 use autofile_api::shared::errors::ApiError;
@@ -62,10 +55,7 @@ async fn main() {
     // Redis storage (queue) for background jobs.
     let redis_url = std::env::var("REDIS_URL")
         .unwrap_or_else(|_| "redis://127.0.0.1:6379/?connect_timeout=2&timeout=2".to_string());
-    let redis_conn = create_redis_connection_with_retry(&redis_url).await;
-    let fast_storage: RedisStorage<FastJob> = RedisStorage::new(redis_conn.clone());
-    let medium_storage: RedisStorage<MediumJob> = RedisStorage::new(redis_conn.clone());
-    let slow_storage: RedisStorage<SlowJob> = RedisStorage::new(redis_conn);
+    let storages = create_storages(&redis_url).await;
 
     // Get database URL from environment
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -113,87 +103,23 @@ async fn main() {
         s3_client: Arc::new(s3_client),
         s3_bucket: Arc::new(s3_bucket),
         jwt_secret: Arc::new(jwt_secret),
-        fast_jobs: Arc::new(fast_storage),
-        medium_jobs: Arc::new(medium_storage),
-        slow_jobs: Arc::new(slow_storage),
+        fast_jobs: Arc::new(storages.fast),
+        medium_jobs: Arc::new(storages.medium),
+        slow_jobs: Arc::new(storages.slow),
     });
 
-    // Spawn apalis workers (in-process).
-    // Worker names must be unique per boot: apalis-redis rejects registering a
-    // worker name that is still marked active in Redis (keep-alive threshold),
-    // so reusing fixed names makes workers exit immediately on quick restarts
-    // and also prevents running workers on multiple API replicas.
-    let worker_id = format!("{:08x}", rand::random::<u32>());
-    let fast_worker_name = format!("fast-job-worker-{worker_id}");
-    let medium_worker_name = format!("medium-job-worker-{worker_id}");
-    let slow_worker_name = format!("slow-job-worker-{worker_id}");
-    let monitor = Monitor::new()
-        .register({
-            let app_state = app_state.clone();
-            let fast_worker_name = fast_worker_name.clone();
-            move |_| {
-                // One or more workers pulling from Redis
-                WorkerBuilder::new(fast_worker_name.clone())
-                    .backend(app_state.fast_jobs.as_ref().clone())
-                    .catch_panic()
-                    .retry(RetryPolicy::retries(7))
-                    .enable_tracing()
-                    .concurrency(6) // Adjust concurrency as needed
-                    .data(app_state.clone())
-                    .build(handle_fast_job)
-            }
-        })
-        .register({
-            let app_state = app_state.clone();
-            let medium_worker_name = medium_worker_name.clone();
-            move |_| {
-                WorkerBuilder::new(medium_worker_name.clone())
-                    .backend(app_state.medium_jobs.as_ref().clone())
-                    .catch_panic()
-                    .retry(RetryPolicy::retries(7))
-                    .enable_tracing()
-                    .concurrency(4)
-                    .data(app_state.clone())
-                    .build(handle_medium_job)
-            }
-        })
-        .register({
-            let app_state = app_state.clone();
-            let slow_worker_name = slow_worker_name.clone();
-            move |_| {
-                WorkerBuilder::new(slow_worker_name.clone())
-                    .backend(app_state.slow_jobs.as_ref().clone())
-                    .catch_panic()
-                    .retry(RetryPolicy::retries(7))
-                    .enable_tracing()
-                    .concurrency(2)
-                    .data(app_state.clone())
-                    .build(handle_slow_job)
-            }
-        })
-        .on_event(|_, e| {
-            if matches!(e, Event::HeartBeat) {
-                tracing::debug!("{e}");
-            } else {
-                tracing::info!("{e}");
-            }
-        })
-        // Wait 5 seconds after shutdown is triggered to allow any incomplete jobs to complete
-        // .shutdown_timeout(Duration::from_secs(5))
-        ;
-
+    // Configure background worker monitor and shutdown signal.
+    let worker_monitor = build_monitor(app_state.clone());
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
-
     tokio::spawn(async move {
         shutdown_signal().await;
         let _ = shutdown_tx.send(true);
     });
-
     let worker_shutdown_rx = shutdown_rx.clone();
     let worker_handle = tokio::spawn(async move {
         let mut shutdown_rx = worker_shutdown_rx;
 
-        monitor
+        worker_monitor
             .run_with_signal(async move {
                 let _ = shutdown_rx.changed().await;
                 Ok(())
@@ -267,51 +193,6 @@ async fn main() {
     tracing::info!("Server has been shut down");
 
     worker_handle.await.expect("Worker task panicked");
-}
-
-async fn check_redis(redis_url: &str) -> anyhow::Result<()> {
-    let client = redis::Client::open(redis_url)?;
-    let mut conn = timeout(
-        Duration::from_secs(3),
-        client.get_multiplexed_async_connection(),
-    )
-    .await??;
-
-    timeout(Duration::from_secs(3), conn.ping::<String>()).await??;
-
-    Ok(())
-}
-
-async fn create_redis_connection_with_retry(redis_url: &str) -> apalis_redis::ConnectionManager {
-    let mut attempt = 1;
-
-    loop {
-        match check_redis(redis_url).await {
-            Ok(()) => match apalis_redis::connect(redis_url.to_string()).await {
-                Ok(conn) => {
-                    tracing::info!(attempts = attempt, "Redis connection created");
-                    return conn;
-                }
-                Err(err) => {
-                    tracing::warn!(
-                        attempt,
-                        error = %err,
-                        "Redis connection unavailable; retrying in 5 seconds"
-                    );
-                }
-            },
-            Err(err) => {
-                tracing::warn!(
-                    attempt,
-                    error = %err,
-                    "Redis not reachable; retrying in 5 seconds"
-                );
-            }
-        }
-
-        sleep(Duration::from_secs(5)).await;
-        attempt += 1;
-    }
 }
 
 async fn create_db_pool_with_retry(database_url: &str) -> bb8::Pool<AsyncPgConnection> {

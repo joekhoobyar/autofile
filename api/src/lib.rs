@@ -58,6 +58,7 @@ pub mod domain {
     pub mod users;
 }
 pub mod infrastructure {
+    pub mod queue;
     pub mod s3;
 }
 pub mod shared {
