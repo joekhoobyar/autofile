@@ -1,6 +1,6 @@
 # Autofile
 
-[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/joekhoobyar/autofile/ci.yml)](https://github.com/joekhoobyar/autofile/actions) [![Documentation Status](https://img.shields.io/github/deployments/joekhoobyar/autofile/github-pages?label=docs)](https://autofile.dev) [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/autofile)](https://artifacthub.io/packages/search?repo=autofile)
+[![GitHub Release](https://img.shields.io/github/v/release/joekhoobyar/autofile)](https://github.com/joekhoobyar/autofile/releases/latest) [![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/joekhoobyar/autofile/ci.yml)](https://github.com/joekhoobyar/autofile/actions) [![Documentation Status](https://img.shields.io/github/deployments/joekhoobyar/autofile/github-pages?label=docs)](https://autofile.dev) [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/autofile)](https://artifacthub.io/packages/search?repo=autofile)
 
 Autofile is an open-source self-hosted document management application that turns your documents into indexed and searchable archives. It has a blazing fast backend written in Rust, stores document files in S3-compatible object storage, and keeps structured metadata and search indexes in PostgreSQL.
 
