@@ -299,6 +299,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+      artifact-metadata: write
 
     steps:
       - name: Log in to GHCR
@@ -311,7 +312,6 @@ jobs:
       - name: Attest chart build provenance
         uses: actions/attest@v4
         with:
-          predicate-type: https://slsa.dev/provenance/v1
           subject-name: ghcr.io/${{ github.repository_owner }}/charts/autofile
           subject-digest: ${{ needs.helm-chart.outputs.chart-digest }}
           push-to-registry: true
