@@ -173,10 +173,17 @@ jobs:
         id: trivy-images
         shell: bash
         env:
+          EVENT_NAME: ${{ github.event_name }}
+          TARGET: ${{ inputs.target }}
           GIT_SHA: ${{ steps.manifest-vars.outputs.git_sha }}
           RELEASE_TAG: ${{ steps.manifest-vars.outputs.release_tag }}
           BAKE_GROUP: ${{ steps.manifest-vars.outputs.bake_group }}
         run: |
+          if [ "${EVENT_NAME}" != "workflow_dispatch" ] || [ "${TARGET}" != "adhoc" ]; then
+            echo 'images=[]' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           export GIT_SHA RELEASE_TAG
           BUILD_CREATED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           export BUILD_CREATED
@@ -185,13 +192,14 @@ jobs:
 
           images="$({
             docker buildx bake --print "${BAKE_GROUP}" \
-              | jq -c '[.target[]?.tags[]? | select(endswith("-amd64")) | sub("-amd64$"; "") | { image: ., category: (sub(":([^/:]+)$"; "") | sub("^ghcr.io/"; "") | gsub("[/:.]"; "-")) }]'
+              | jq -c '[.target[]?.tags[]? | select(endswith("-amd64")) | sub("-amd64$"; "") | { image: ., category: (sub(":([^/:]+)$"; "") | sub("^ghcr.io/"; "") | gsub("[/:.]"; "-")) }] | unique_by(.category)'
           })"
 
           echo "images=${images}" >> "$GITHUB_OUTPUT"
 
   trivy:
     name: Scan ${{ matrix.image }}
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'adhoc'
     runs-on: ubuntu-24.04
     needs: manifests
     permissions:
@@ -221,8 +229,45 @@ jobs:
           ignore-unfixed: false
           exit-code: '0'
 
+      - name: Filter SARIF to high and critical results
+        shell: bash
+        run: |
+          jq '
+            def security_severity($rules_by_id; $result):
+              ($result.ruleId // "") as $rule_id
+              | ($rules_by_id[$rule_id] // {}) as $rule
+              | ($result.properties."security-severity" // $rule.properties."security-severity" // "0" | tonumber? // 0);
+
+            def severity_label($rules_by_id; $result):
+              ($result.ruleId // "") as $rule_id
+              | ($rules_by_id[$rule_id] // {}) as $rule
+              | [
+                  $result.properties.severity?,
+                  $result.properties.Severity?,
+                  $rule.properties.severity?,
+                  $rule.properties.Severity?,
+                  ($rule.properties.tags[]? | strings | ascii_downcase | select(. == "critical" or . == "high" or . == "medium" or . == "low" or . == "note" or . == "warning" or . == "error")),
+                  ($rule.properties.tags[]? | strings | ascii_downcase | try capture("severity[:=](?<severity>critical|high|medium|low|note|warning|error)").severity catch empty)
+                ]
+              | map(strings | ascii_downcase)
+              | .[0] // "";
+
+            def keep_result($rules_by_id; $result):
+              (security_severity($rules_by_id; $result) >= 7)
+              or ((severity_label($rules_by_id; $result) == "critical") or (severity_label($rules_by_id; $result) == "high"));
+
+            .runs |= map(
+              (.tool.driver.rules // []) as $rules
+              | ($rules | map({ key: .id, value: . }) | from_entries) as $rules_by_id
+              | ((.results // []) | map(select(keep_result($rules_by_id; .)))) as $results
+              | ($results | map(.ruleId // empty) | unique) as $rule_ids
+              | .results = $results
+              | .tool.driver.rules = ($rules | map(select((.id // "") as $id | $rule_ids | index($id))))
+            )
+          ' "trivy-${{ matrix.category }}.sarif" > "trivy-${{ matrix.category }}-filtered.sarif"
+
       - name: Upload Trivy results
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: trivy-${{ matrix.category }}.sarif
+          sarif_file: trivy-${{ matrix.category }}-filtered.sarif
           category: trivy-${{ matrix.category }}
