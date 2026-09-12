@@ -71,6 +71,7 @@ nav:
   - Development: development/index.md
   - Reference:
       - API: reference/api.md
+      - OpenAPI Spec: reference/openapi.md
       - Classifier Rules YAML: reference/classifier-rules-yaml.md
   - Changelog: changelog.md
 

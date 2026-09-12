@@ -14,7 +14,7 @@ use diesel::upsert::excluded;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
-#[derive(Debug, Deserialize, Insertable)]
+#[derive(Debug, Deserialize, Insertable, utoipa::ToSchema)]
 #[diesel(table_name = document_metadatas)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct NewDocumentMetadata {

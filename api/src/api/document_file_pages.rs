@@ -9,15 +9,31 @@ use crate::shared::s3::serve_s3_file;
 use crate::shared::util::{ApiError, diesel_to_http};
 
 use axum::{
-    Json, Router,
+    Json,
     extract::{Path, State},
     http::HeaderMap,
     response::Response,
-    routing::get,
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use utoipa_axum::{router::OpenApiRouter, routes};
 
+#[utoipa::path(
+    get,
+    path = "/{document_id}/files/{document_file_id}/pages",
+    tag = "document-files",
+    security(("bearer" = [])),
+    params(
+        ("document_id" = i64, Path, description = "Document ID"),
+        ("document_file_id" = i64, Path, description = "File ID"),
+    ),
+    responses(
+        (status = 200, description = "Extracted text pages in page order", body = Vec<DocumentFilePage>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "File not found", body = ApiError),
+    )
+)]
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -38,6 +54,22 @@ pub async fn list(
     Ok(Json(rows))
 }
 
+#[utoipa::path(
+    get,
+    path = "/{document_id}/files/{document_file_id}/ocr-pages",
+    tag = "document-files",
+    security(("bearer" = [])),
+    params(
+        ("document_id" = i64, Path, description = "Document ID"),
+        ("document_file_id" = i64, Path, description = "File ID"),
+    ),
+    responses(
+        (status = 200, description = "OCR text pages in page order", body = Vec<DocumentFileOcrPage>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "File not found", body = ApiError),
+    )
+)]
 pub async fn list_ocr(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -62,6 +94,23 @@ pub async fn list_ocr(
 /**
  * Streams a rendered page image directly from S3.
  */
+#[utoipa::path(
+    get,
+    path = "/{document_id}/files/{document_file_id}/pages/{page_number}/image",
+    tag = "document-files",
+    security(("bearer" = [])),
+    params(
+        ("document_id" = i64, Path, description = "Document ID"),
+        ("document_file_id" = i64, Path, description = "File ID"),
+        ("page_number" = i32, Path, description = "1-based page number"),
+    ),
+    responses(
+        (status = 200, description = "Rendered page image bytes", content_type = "image/png", body = Vec<u8>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Page not available", body = ApiError),
+    )
+)]
 pub async fn page_image_get(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -95,15 +144,9 @@ pub async fn page_image_get(
     .await
 }
 
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/{document_id}/files/{document_file_id}/pages", get(list))
-        .route(
-            "/{document_id}/files/{document_file_id}/ocr-pages",
-            get(list_ocr),
-        )
-        .route(
-            "/{document_id}/files/{document_file_id}/pages/{page_number}/image",
-            get(page_image_get),
-        )
+pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(list_ocr))
+        .routes(routes!(page_image_get))
 }

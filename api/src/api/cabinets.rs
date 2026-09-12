@@ -12,15 +12,15 @@ use crate::shared::util::{
 use serde::Deserialize;
 
 use axum::{
-    Json, Router,
+    Json,
     extract::{Path, Query},
     http::StatusCode,
-    routing::get,
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use utoipa_axum::{router::OpenApiRouter, routes};
 
-#[derive(Debug, Deserialize, Insertable)]
+#[derive(Debug, Deserialize, Insertable, utoipa::ToSchema)]
 #[diesel(table_name = cabinets)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct NewCabinet {
@@ -30,18 +30,20 @@ struct NewCabinet {
     parent_id: Option<i64>,
 }
 
-#[derive(Debug, Deserialize, AsChangeset)]
+#[derive(Debug, Deserialize, AsChangeset, utoipa::ToSchema)]
 #[diesel(table_name = cabinets)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct CabinetChangeset {
     name: Option<String>,
     description: Option<String>,
 
+    /// Set a new parent, or null to detach. Omitted when unchanged.
     #[serde(default, deserialize_with = "de_present_option")]
+    #[schema(value_type = Option<i64>)]
     parent_id: Option<Option<i64>>,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CabinetSortField {
     Id,
@@ -53,22 +55,36 @@ pub enum CabinetSortField {
     UpdatedAt,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListCabinetsQuery {
-    // 1-based page number
+    /// 1-based page number.
     pub page: Option<i64>,
-    // items per page (cap it)
+    /// Items per page (1 through 200).
     pub per_page: Option<i64>,
-    // optional substring search
+    /// Case-insensitive search of slug, name, and description.
     pub q: Option<String>,
-    // Filter by parent_id: "null" for null, or numeric value
+    /// Filter by parent: "null" for top-level cabinets, or a numeric ID.
     pub parent_id: Option<String>,
-    // optional sort field
+    /// Sort field.
     pub sf: Option<CabinetSortField>,
-    // optional sort descending
+    /// Set to true for descending order.
     pub sd: Option<bool>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/{id}",
+    tag = "cabinets",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Cabinet ID")),
+    responses(
+        (status = 200, description = "Cabinet", body = Cabinet),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Cabinet not found", body = ApiError),
+    )
+)]
 pub async fn get_by_id(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -84,6 +100,19 @@ pub async fn get_by_id(
     Ok(Json(row))
 }
 
+#[utoipa::path(
+    get,
+    path = "/by-slug/{slug}",
+    tag = "cabinets",
+    security(("bearer" = [])),
+    params(("slug" = String, Path, description = "Exact cabinet slug")),
+    responses(
+        (status = 200, description = "Cabinet", body = Cabinet),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Cabinet not found", body = ApiError),
+    )
+)]
 pub async fn get_by_slug(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -99,6 +128,20 @@ pub async fn get_by_slug(
     Ok(Json(row))
 }
 
+#[utoipa::path(
+    post,
+    path = "/",
+    tag = "cabinets",
+    security(("bearer" = [])),
+    request_body = NewCabinet,
+    responses(
+        (status = 200, description = "Created cabinet", body = Cabinet),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 409, description = "Slug is already taken", body = ApiError),
+        (status = 422, description = "Invalid slug or parent cabinet", body = ApiError),
+    )
+)]
 async fn create(
     user: AuthUser,
     DbConn(mut db): DbConn,
@@ -129,6 +172,21 @@ async fn create(
     Ok(Json(inserted))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/{id}",
+    tag = "cabinets",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Cabinet ID")),
+    request_body = CabinetChangeset,
+    responses(
+        (status = 200, description = "Updated cabinet", body = Cabinet),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Cabinet not found", body = ApiError),
+        (status = 422, description = "Invalid parent cabinet", body = ApiError),
+    )
+)]
 async fn update(
     user: AuthUser,
     DbConn(mut db): DbConn,
@@ -181,6 +239,19 @@ async fn update(
     Ok(Json(updated))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/{id}",
+    tag = "cabinets",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Cabinet ID")),
+    responses(
+        (status = 200, description = "Cabinet deleted"),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Cabinet not found", body = ApiError),
+    )
+)]
 async fn delete(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -198,6 +269,18 @@ async fn delete(
     Ok(Json(()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/",
+    tag = "cabinets",
+    security(("bearer" = [])),
+    params(ListCabinetsQuery),
+    responses(
+        (status = 200, description = "Paginated cabinet list with document counts", body = ResourceList<CabinetView>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+    )
+)]
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -336,9 +419,12 @@ pub async fn list(
     }))
 }
 
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/", get(list).post(create))
-        .route("/{id}", get(get_by_id).patch(update).delete(delete))
-        .route("/by-slug/{slug}", get(get_by_slug))
+pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(create))
+        .routes(routes!(get_by_id))
+        .routes(routes!(update))
+        .routes(routes!(delete))
+        .routes(routes!(get_by_slug))
 }

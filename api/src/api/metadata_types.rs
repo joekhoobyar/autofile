@@ -10,17 +10,17 @@ use crate::shared::util::{ApiError, ResourceList, diesel_to_http, validate_slug}
 use serde::Deserialize;
 
 use axum::{
-    Json, Router,
+    Json,
     extract::{Path, Query},
-    routing::get,
 };
 use diesel::dsl::exists;
 use diesel::prelude::*;
 use diesel::sql_types::Bool;
 use diesel_async::RunQueryDsl;
 use serde_json::Value;
+use utoipa_axum::{router::OpenApiRouter, routes};
 
-#[derive(Debug, Deserialize, Insertable)]
+#[derive(Debug, Deserialize, Insertable, utoipa::ToSchema)]
 #[diesel(table_name = metadata_types)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct NewMetadataType {
@@ -31,7 +31,7 @@ struct NewMetadataType {
     options: Option<Value>,
 }
 
-#[derive(Debug, Deserialize, AsChangeset)]
+#[derive(Debug, Deserialize, AsChangeset, utoipa::ToSchema)]
 #[diesel(table_name = metadata_types)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct MetadataTypeChangeset {
@@ -41,7 +41,7 @@ struct MetadataTypeChangeset {
     options: Option<Value>,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum MetadataTypeSortField {
     Id,
@@ -53,28 +53,43 @@ pub enum MetadataTypeSortField {
     UpdatedAt,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListMetadataTypesQuery {
-    // 1-based page number
+    /// 1-based page number.
     pub page: Option<i64>,
-    // items per page (cap it)
+    /// Items per page (1 through 200).
     pub per_page: Option<i64>,
-    // optional substring search
+    /// Case-insensitive search of slug, name, data type, and description.
     pub q: Option<String>,
-    // optional sort field
+    /// Sort field.
     pub sf: Option<MetadataTypeSortField>,
-    // optional sort descending
+    /// Set to true for descending order.
     pub sd: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListMetadataTypeValuesQuery {
-    // optional case-insensitive substring search
+    /// Optional case-insensitive substring filter.
     pub q: Option<String>,
-    // maximum number of suggestions to return
+    /// Maximum number of values (default 20, max 50).
     pub limit: Option<i64>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/{id}",
+    tag = "metadata-types",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Metadata Type ID")),
+    responses(
+        (status = 200, description = "Metadata Type", body = MetadataType),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Metadata Type not found", body = ApiError),
+    )
+)]
 pub async fn get_by_id(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -90,6 +105,19 @@ pub async fn get_by_id(
     Ok(Json(row))
 }
 
+#[utoipa::path(
+    get,
+    path = "/by-slug/{slug}",
+    tag = "metadata-types",
+    security(("bearer" = [])),
+    params(("slug" = String, Path, description = "Exact metadata type slug")),
+    responses(
+        (status = 200, description = "Metadata Type", body = MetadataType),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Metadata Type not found", body = ApiError),
+    )
+)]
 pub async fn get_by_slug(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -105,6 +133,23 @@ pub async fn get_by_slug(
     Ok(Json(row))
 }
 
+#[utoipa::path(
+    get,
+    path = "/{id}/values",
+    tag = "metadata-types",
+    security(("bearer" = [])),
+    params(
+        ("id" = i64, Path, description = "Metadata Type ID"),
+        ListMetadataTypeValuesQuery,
+    ),
+    responses(
+        (status = 200, description = "Distinct stored values for string metadata types", body = Vec<String>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Metadata Type not found", body = ApiError),
+        (status = 422, description = "Not a string metadata type", body = ApiError),
+    )
+)]
 pub async fn list_values(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -146,6 +191,20 @@ pub async fn list_values(
     Ok(Json(values))
 }
 
+#[utoipa::path(
+    post,
+    path = "/",
+    tag = "metadata-types",
+    security(("bearer" = [])),
+    request_body = NewMetadataType,
+    responses(
+        (status = 200, description = "Created Metadata Type", body = MetadataType),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Admin role required", body = ApiError),
+        (status = 409, description = "Slug is already taken", body = ApiError),
+        (status = 422, description = "Invalid slug", body = ApiError),
+    )
+)]
 async fn create(
     user: AdminUser,
     DbConn(mut db): DbConn,
@@ -167,6 +226,20 @@ async fn create(
     Ok(Json(inserted))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/{id}",
+    tag = "metadata-types",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Metadata Type ID")),
+    request_body = MetadataTypeChangeset,
+    responses(
+        (status = 200, description = "Updated Metadata Type", body = MetadataType),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Admin role required", body = ApiError),
+        (status = 404, description = "Metadata Type not found", body = ApiError),
+    )
+)]
 async fn update(
     user: AdminUser,
     DbConn(mut db): DbConn,
@@ -189,6 +262,20 @@ async fn update(
     Ok(Json(updated))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/{id}",
+    tag = "metadata-types",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Metadata Type ID")),
+    responses(
+        (status = 200, description = "Metadata Type deleted"),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Admin role required", body = ApiError),
+        (status = 404, description = "Metadata Type not found", body = ApiError),
+        (status = 409, description = "Metadata Type is still in use", body = ApiError),
+    )
+)]
 async fn delete(
     _user: AdminUser,
     DbConn(mut db): DbConn,
@@ -238,6 +325,18 @@ async fn delete(
     Ok(Json(()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/",
+    tag = "metadata-types",
+    security(("bearer" = [])),
+    params(ListMetadataTypesQuery),
+    responses(
+        (status = 200, description = "Paginated Metadata Type list", body = ResourceList<MetadataType>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+    )
+)]
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -330,10 +429,13 @@ pub async fn list(
     }))
 }
 
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/", get(list).post(create))
-        .route("/{id}/values", get(list_values))
-        .route("/{id}", get(get_by_id).patch(update).delete(delete))
-        .route("/by-slug/{slug}", get(get_by_slug))
+pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(create))
+        .routes(routes!(list_values))
+        .routes(routes!(get_by_id))
+        .routes(routes!(update))
+        .routes(routes!(delete))
+        .routes(routes!(get_by_slug))
 }

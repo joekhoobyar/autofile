@@ -10,14 +10,14 @@ use crate::shared::util::{ApiError, diesel_to_http};
 use serde::Deserialize;
 
 use axum::{
-    Json, Router,
+    Json,
     extract::{Path, Query},
-    routing::{get, post},
 };
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
+use utoipa_axum::{router::OpenApiRouter, routes};
 
-#[derive(Debug, Deserialize, Insertable)]
+#[derive(Debug, Deserialize, Insertable, utoipa::ToSchema)]
 #[diesel(table_name = document_types_metadata_types)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct NewDocumentTypeMetadataType {
@@ -26,7 +26,7 @@ struct NewDocumentTypeMetadataType {
     required: bool,
 }
 
-#[derive(Debug, Deserialize, Insertable)]
+#[derive(Debug, Deserialize, Insertable, utoipa::ToSchema)]
 #[diesel(table_name = document_types_metadata_types)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct DocumentTypeNewMetadataTypeInput {
@@ -34,25 +34,44 @@ struct DocumentTypeNewMetadataTypeInput {
     required: bool,
 }
 
-#[derive(Debug, Deserialize, AsChangeset)]
+#[derive(Debug, Deserialize, AsChangeset, utoipa::ToSchema)]
 #[diesel(table_name = document_types_metadata_types)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct DocumentTypeMetadataTypeChangeset {
     required: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListDocumentTypesMetadataTypesQuery {
-    // 1-based page number
+    /// 1-based page number.
     pub page: Option<i64>,
-    // items per page (cap it)
+    /// Items per page (1 through 200). No total is returned.
     pub per_page: Option<i64>,
-    // optional substring search
+    /// Case-insensitive search of the associated metadata type's slug, name, data type, and description.
     pub q: Option<String>,
+    /// Narrow to one document type.
     pub document_type_id: Option<i64>,
+    /// Narrow to one metadata type.
     pub metadata_type_id: Option<i64>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/{document_type_id}/{metadata_type_id}",
+    tag = "document-types-metadata-types",
+    security(("bearer" = [])),
+    params(
+        ("document_type_id" = i64, Path, description = "Document Type ID"),
+        ("metadata_type_id" = i64, Path, description = "Metadata Type ID"),
+    ),
+    responses(
+        (status = 200, description = "Association", body = DocumentTypeMetadataType),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Association not found", body = ApiError),
+    )
+)]
 pub async fn get_by_ids(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -73,6 +92,21 @@ pub async fn get_by_ids(
     Ok(Json(row))
 }
 
+#[utoipa::path(
+    post,
+    path = "/",
+    tag = "document-types-metadata-types",
+    security(("bearer" = [])),
+    request_body = NewDocumentTypeMetadataType,
+    responses(
+        (status = 200, description = "Created association", body = DocumentTypeMetadataType),
+        (status = 400, description = "Invalid request", body = ApiError),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Admin role required", body = ApiError),
+        (status = 409, description = "Association already exists", body = ApiError),
+        (status = 422, description = "Unknown document or metadata type", body = ApiError),
+    )
+)]
 async fn create(
     _user: AdminUser,
     DbConn(mut db): DbConn,
@@ -94,6 +128,23 @@ async fn create(
     Ok(Json(inserted))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/{document_type_id}/{metadata_type_id}",
+    tag = "document-types-metadata-types",
+    security(("bearer" = [])),
+    params(
+        ("document_type_id" = i64, Path, description = "Document Type ID"),
+        ("metadata_type_id" = i64, Path, description = "Metadata Type ID"),
+    ),
+    request_body = DocumentTypeMetadataTypeChangeset,
+    responses(
+        (status = 200, description = "Updated association", body = DocumentTypeMetadataType),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Admin role required", body = ApiError),
+        (status = 404, description = "Association not found", body = ApiError),
+    )
+)]
 async fn update(
     _user: AdminUser,
     DbConn(mut db): DbConn,
@@ -125,6 +176,21 @@ async fn update(
     Ok(Json(updated))
 }
 
+#[utoipa::path(
+    post,
+    path = "/{document_type_id}",
+    tag = "document-types-metadata-types",
+    security(("bearer" = [])),
+    params(("document_type_id" = i64, Path, description = "Document Type ID")),
+    request_body = Vec<DocumentTypeNewMetadataTypeInput>,
+    responses(
+        (status = 200, description = "Replacement association set; an empty array removes all associations", body = Vec<DocumentTypeMetadataType>),
+        (status = 400, description = "Invalid request", body = ApiError),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Admin role required", body = ApiError),
+        (status = 422, description = "Unknown metadata type", body = ApiError),
+    )
+)]
 async fn document_type_save(
     _user: AdminUser,
     DbConn(mut db): DbConn,
@@ -174,6 +240,22 @@ async fn document_type_save(
     Ok(Json(rows))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/{document_type_id}/{metadata_type_id}",
+    tag = "document-types-metadata-types",
+    security(("bearer" = [])),
+    params(
+        ("document_type_id" = i64, Path, description = "Document Type ID"),
+        ("metadata_type_id" = i64, Path, description = "Metadata Type ID"),
+    ),
+    responses(
+        (status = 200, description = "Association removed"),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Admin role required", body = ApiError),
+        (status = 404, description = "Association not found", body = ApiError),
+    )
+)]
 async fn delete_junction(
     _user: AdminUser,
     DbConn(mut db): DbConn,
@@ -200,6 +282,18 @@ async fn delete_junction(
     Ok(Json(()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/",
+    tag = "document-types-metadata-types",
+    security(("bearer" = [])),
+    params(ListDocumentTypesMetadataTypesQuery),
+    responses(
+        (status = 200, description = "Association list as a bare array (no total)", body = Vec<DocumentTypeMetadataType>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+    )
+)]
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -254,12 +348,12 @@ pub async fn list(
     Ok(Json(rows))
 }
 
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/", get(list).post(create))
-        .route("/{document_type_id}", post(document_type_save))
-        .route(
-            "/{document_type_id}/{metadata_type_id}",
-            get(get_by_ids).patch(update).delete(delete_junction),
-        )
+pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(create))
+        .routes(routes!(document_type_save))
+        .routes(routes!(get_by_ids))
+        .routes(routes!(update))
+        .routes(routes!(delete_junction))
 }

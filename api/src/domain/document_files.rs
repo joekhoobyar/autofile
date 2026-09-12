@@ -22,7 +22,7 @@ pub struct DocumentFile {
     pub updated_by: i64,
 }
 
-#[derive(Debug, Serialize, PartialEq, Queryable, Selectable)]
+#[derive(Debug, Serialize, PartialEq, Queryable, Selectable, utoipa::ToSchema)]
 #[diesel(table_name = document_files)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct DocumentFileView {
@@ -38,7 +38,7 @@ pub struct DocumentFileView {
     pub updated_by: i64,
 }
 
-#[derive(Debug, Serialize, PartialEq, Queryable, Selectable)]
+#[derive(Debug, Serialize, PartialEq, Queryable, Selectable, utoipa::ToSchema)]
 #[diesel(table_name = document_file_pages)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct DocumentFilePage {
@@ -47,7 +47,7 @@ pub struct DocumentFilePage {
     pub text_content: Option<String>,
 }
 
-#[derive(Debug, Serialize, PartialEq, Queryable, Selectable)]
+#[derive(Debug, Serialize, PartialEq, Queryable, Selectable, utoipa::ToSchema)]
 #[diesel(table_name = document_file_ocr_pages)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct DocumentFileOcrPage {

@@ -11,10 +11,27 @@ use crate::shared::util::{ApiError, diesel_to_http};
 
 use axum::extract::State;
 
-use axum::{Json, Router, extract::Path, routing::get};
+use axum::{Json, extract::Path};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use utoipa_axum::{router::OpenApiRouter, routes};
 
+#[utoipa::path(
+    get,
+    path = "/{document_id}/metadata/{metadata_type_id}",
+    tag = "document-metadata",
+    security(("bearer" = [])),
+    params(
+        ("document_id" = i64, Path, description = "Document ID"),
+        ("metadata_type_id" = i64, Path, description = "Metadata Type ID"),
+    ),
+    responses(
+        (status = 200, description = "Stored metadata value", body = DocumentMetadata),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "No stored value", body = ApiError),
+    )
+)]
 pub async fn get_by_ids(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -30,6 +47,22 @@ pub async fn get_by_ids(
     Ok(Json(row))
 }
 
+#[utoipa::path(
+    post,
+    path = "/{document_id}/metadata",
+    tag = "document-metadata",
+    security(("bearer" = [])),
+    params(("document_id" = i64, Path, description = "Document ID")),
+    request_body = Vec<NewDocumentMetadata>,
+    responses(
+        (status = 200, description = "All stored metadata rows for the document after the upsert", body = Vec<DocumentMetadata>),
+        (status = 400, description = "Invalid request, e.g. unknown field or bad date/lookup value", body = ApiError),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document not found", body = ApiError),
+        (status = 422, description = "Validation failed", body = ApiError),
+    )
+)]
 async fn upsert(
     user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -63,6 +96,19 @@ pub async fn do_list(
         .await;
 }
 
+#[utoipa::path(
+    get,
+    path = "/{document_id}/metadata",
+    tag = "document-metadata",
+    security(("bearer" = [])),
+    params(("document_id" = i64, Path, description = "Document ID")),
+    responses(
+        (status = 200, description = "Stored metadata rows ordered by Metadata Type ID", body = Vec<DocumentMetadata>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document not found", body = ApiError),
+    )
+)]
 pub async fn list(
     _user: AuthUser,
     DbConn(db): DbConn,
@@ -75,6 +121,23 @@ pub async fn list(
     Ok(Json(rows))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/{document_id}/metadata/{metadata_type_id}",
+    tag = "document-metadata",
+    security(("bearer" = [])),
+    params(
+        ("document_id" = i64, Path, description = "Document ID"),
+        ("metadata_type_id" = i64, Path, description = "Metadata Type ID"),
+    ),
+    responses(
+        (status = 200, description = "Stored value deleted"),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "No stored value", body = ApiError),
+        (status = 409, description = "Value is required for the document type", body = ApiError),
+    )
+)]
 async fn delete_junction(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -127,11 +190,10 @@ async fn delete_junction(
     Ok(Json(()))
 }
 
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/{document_id}/metadata", get(list).post(upsert))
-        .route(
-            "/{document_id}/metadata/{metadata_type_id}",
-            get(get_by_ids).delete(delete_junction),
-        )
+pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(upsert))
+        .routes(routes!(get_by_ids))
+        .routes(routes!(delete_junction))
 }

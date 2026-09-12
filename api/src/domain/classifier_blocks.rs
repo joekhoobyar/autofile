@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::schema::classifier_blocks;
 
-#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
+#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable, utoipa::ToSchema)]
 #[diesel(table_name = classifier_blocks)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct ClassifierBlock {
@@ -15,6 +15,7 @@ pub struct ClassifierBlock {
     pub description: Option<String>,
     pub enabled: bool,
     pub order: i32,
+    #[schema(value_type = ClassifierRules)]
     pub rules: diesel_json::Json<ClassifierRules>,
     pub created_by: i64,
     pub created_at: DateTime<Utc>,
@@ -22,7 +23,7 @@ pub struct ClassifierBlock {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, utoipa::ToSchema)]
 pub struct ClassifierRules {
     #[serde(default)]
     pub continue_after_match: bool,
@@ -31,7 +32,7 @@ pub struct ClassifierRules {
     pub child_rules: Vec<ClassifierChildRule>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, utoipa::ToSchema)]
 pub struct ClassifierPattern {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
@@ -39,7 +40,7 @@ pub struct ClassifierPattern {
     pub metadata: Option<HashMap<String, String>>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, utoipa::ToSchema)]
 pub struct ClassifierChildRule {
     pub pattern: ClassifierPattern,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -47,7 +48,7 @@ pub struct ClassifierChildRule {
     pub actions: HashMap<String, String>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, utoipa::ToSchema)]
 #[serde(tag = "type")]
 pub enum ClassifierModifier {
     #[serde(rename = "metadata")]

@@ -13,14 +13,14 @@ use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
 use serde::Deserialize;
 
 use axum::{
-    Json, Router,
+    Json,
     extract::{Path, Query},
-    routing::get,
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use utoipa_axum::{router::OpenApiRouter, routes};
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DocumentIndexValueSortField {
     Id,
@@ -29,24 +29,40 @@ pub enum DocumentIndexValueSortField {
     ParentId,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListDocumentIndexValuesQuery {
-    // 1-based page number
+    /// 1-based page number.
     pub page: Option<i64>,
-    // items per page (cap it)
+    /// Items per page (1 through 200).
     pub per_page: Option<i64>,
-    // optional substring search
+    /// Case-insensitive value substring search.
     pub q: Option<String>,
-    // Filter by parent_id: "null" for null, or numeric value
+    /// Filter by parent: "null" for top-level values, or a numeric ID.
     pub parent_id: Option<String>,
-    // Filter by document_index_template_id
+    /// Narrow to one template.
     pub document_index_template_id: Option<i64>,
-    // optional sort field
+    /// Sort field.
     pub sf: Option<DocumentIndexValueSortField>,
-    // optional sort descending
+    /// Set to true for descending order.
     pub sd: Option<bool>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/{document_index_id}/values",
+    tag = "document-indexes",
+    security(("bearer" = [])),
+    params(
+        ("document_index_id" = i64, Path, description = "Document Index ID"),
+        ListDocumentIndexValuesQuery,
+    ),
+    responses(
+        (status = 200, description = "Paginated index value list with document counts", body = ResourceList<DocumentIndexValueView>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+    )
+)]
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -156,6 +172,22 @@ pub async fn list(
     }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/{document_index_id}/values/{id}/ancestors",
+    tag = "document-indexes",
+    security(("bearer" = [])),
+    params(
+        ("document_index_id" = i64, Path, description = "Document Index ID"),
+        ("id" = i64, Path, description = "Index Value ID"),
+    ),
+    responses(
+        (status = 200, description = "Ancestor values from the root down to the parent", body = Vec<DocumentIndexValue>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Index value not found", body = ApiError),
+    )
+)]
 pub async fn ancestors(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -165,8 +197,8 @@ pub async fn ancestors(
     Ok(Json(items))
 }
 
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/{document_index_id}/values", get(list))
-        .route("/{document_index_id}/values/{id}/ancestors", get(ancestors))
+pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(ancestors))
 }

@@ -10,7 +10,7 @@ use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
 const SYSTEM_USER_ID: i64 = 1;
 
-#[derive(Debug, Clone, Copy, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, serde::Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum UserSortField {
     Id,
@@ -23,17 +23,24 @@ pub enum UserSortField {
     Enabled,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListUsersInput {
+    /// 1-based page number.
     pub page: Option<i64>,
+    /// Items per page (1 through 200).
     pub per_page: Option<i64>,
+    /// Case-insensitive search of username, display name, and email.
     pub q: Option<String>,
+    /// Sort field.
     pub sf: Option<UserSortField>,
+    /// Set to true for descending order.
     pub sd: Option<bool>,
+    /// Include soft-deleted users.
     pub include_deleted: Option<bool>,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateUserInput {
     pub email: Option<String>,
@@ -43,14 +50,14 @@ pub struct UpdateUserInput {
     pub enabled: Option<bool>,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateProfileInput {
     pub email: Option<String>,
     pub display_name: Option<String>,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ChangePasswordInput {
     pub new_password: String,
