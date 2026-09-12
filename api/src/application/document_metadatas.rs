@@ -46,6 +46,15 @@ pub async fn document_metadatas_upsert(
     document_id: i64,
     input: Vec<NewDocumentMetadata>,
 ) -> Result<(), ApiError> {
+    const MAX_METADATA_UPSERT_ITEMS: usize = 1000;
+
+    if input.len() > MAX_METADATA_UPSERT_ITEMS {
+        return Err(ApiError::new(
+            400,
+            "Too many metadata items in request",
+        ));
+    }
+
     // Validate the input metadata against the document type's rules,
     // including required fields, data types, and lookup choices.
     // Required blank values fail validation here, so any blank value
