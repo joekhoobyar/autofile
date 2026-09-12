@@ -13,7 +13,7 @@ use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::users::UserRole;
-use crate::{shared::app_state::AppState, shared::util::ApiError};
+use crate::{shared::app_state::AppState, shared::errors::ApiError};
 
 const PASSWORD_CHANGE_REQUIRED_CODE: &str = "password_change_required";
 

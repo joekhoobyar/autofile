@@ -4,8 +4,10 @@ use crate::domain::tags::{Tag, TagView};
 use crate::schema::{tag_documents, tags};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
+use crate::shared::errors::{ApiError, ApiErrorContext};
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ResourceList, diesel_to_http, validate_slug};
+use crate::shared::responses::ResourceList;
+use crate::shared::slugs::validate_slug;
 
 use serde::Deserialize;
 
@@ -84,7 +86,7 @@ pub async fn get_by_id(
         .select(Tag::as_select())
         .first::<Tag>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch tag"))?;
+        .api_context("Failed to fetch tag")?;
 
     Ok(Json(row))
 }
@@ -112,7 +114,7 @@ pub async fn get_by_slug(
         .select(Tag::as_select())
         .first::<Tag>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch tag"))?;
+        .api_context("Failed to fetch tag")?;
 
     Ok(Json(row))
 }
@@ -147,7 +149,7 @@ async fn create(
         .returning(Tag::as_returning())
         .get_result(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to create tag"))?;
+        .api_context("Failed to create tag")?;
 
     Ok(Json(inserted))
 }
@@ -188,7 +190,7 @@ async fn update(
         .returning(Tag::as_returning())
         .get_result(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update tag"))?;
+        .api_context("Failed to update tag")?;
 
     Ok(Json(updated))
 }
@@ -214,7 +216,7 @@ async fn delete(
     let affected = diesel::delete(tags::table.filter(tags::id.eq(id)))
         .execute(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete tag"))?;
+        .api_context("Failed to delete tag")?;
 
     if affected == 0 {
         return Err(ApiError::not_found("Tag not found"));
@@ -265,7 +267,7 @@ pub async fn list(
         .count()
         .get_result::<i64>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count tags"))?;
+        .api_context("Failed to count tags")?;
 
     let mut query: tags::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
@@ -291,7 +293,7 @@ pub async fn list(
         .select(Tag::as_select())
         .load::<Tag>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list tags"))?;
+        .api_context("Failed to list tags")?;
     let tag_ids: Vec<i64> = tags.iter().map(|tag| tag.id).collect();
 
     let mut document_counts_by_tag: HashMap<i64, i64> = HashMap::new();
@@ -305,7 +307,7 @@ pub async fn list(
             ))
             .load::<(i64, i64)>(&mut db)
             .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count tag documents"))?;
+            .api_context("Failed to count tag documents")?;
 
         for (tag_id, document_count) in document_count_rows {
             document_counts_by_tag.insert(tag_id, document_count);

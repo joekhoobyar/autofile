@@ -18,7 +18,8 @@ use crate::infrastructure::s3::delete_from_s3;
 use crate::infrastructure::s3::upload_file_to_s3;
 use crate::schema::{document_file_ocr_pages, document_file_pages, document_files, documents};
 use crate::shared::app_state::AppState;
-use crate::shared::util::{ApiError, JobResult, write_field_to_temp_file};
+use crate::shared::errors::{ApiError, JobResult};
+use crate::shared::uploads::write_field_to_temp_file;
 
 #[derive(Debug, Insertable)]
 #[diesel(table_name = document_files)]

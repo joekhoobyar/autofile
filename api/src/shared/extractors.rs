@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{extract::FromRequestParts, http::request::Parts};
 use diesel_async::{AsyncPgConnection, pooled_connection::bb8::PooledConnection};
 
-use crate::{shared::app_state::AppState, shared::util::ApiError};
+use crate::{shared::app_state::AppState, shared::errors::ApiError};
 
 // Database connection extractor
 pub struct DbConn(pub PooledConnection<'static, AsyncPgConnection>);

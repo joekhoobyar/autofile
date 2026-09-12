@@ -7,8 +7,9 @@ use crate::application::users::{
 use crate::domain::users::User;
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AdminUser;
+use crate::shared::errors::ApiError;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ResourceList};
+use crate::shared::responses::ResourceList;
 
 use axum::{
     Json,

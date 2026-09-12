@@ -4,8 +4,10 @@ use crate::domain::metadata_types::{DataType, MetadataType};
 use crate::schema::{document_metadatas, document_types_metadata_types, metadata_types};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::{AdminUser, AuthUser};
+use crate::shared::errors::{ApiError, ApiErrorContext};
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ResourceList, diesel_to_http, validate_slug};
+use crate::shared::responses::ResourceList;
+use crate::shared::slugs::validate_slug;
 
 use serde::Deserialize;
 
@@ -100,7 +102,7 @@ pub async fn get_by_id(
         .select(MetadataType::as_select())
         .first::<MetadataType>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch metadata_type"))?;
+        .api_context("Failed to fetch metadata_type")?;
 
     Ok(Json(row))
 }
@@ -128,7 +130,7 @@ pub async fn get_by_slug(
         .select(MetadataType::as_select())
         .first::<MetadataType>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch metadata_type"))?;
+        .api_context("Failed to fetch metadata_type")?;
 
     Ok(Json(row))
 }
@@ -161,7 +163,7 @@ pub async fn list_values(
         .select(metadata_types::data_type)
         .first::<DataType>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch metadata_type"))?;
+        .api_context("Failed to fetch metadata_type")?;
 
     if data_type != DataType::String {
         return Err(ApiError::unprocessable_entity(
@@ -186,7 +188,7 @@ pub async fn list_values(
         .limit(limit)
         .load::<String>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list metadata_type values"))?;
+        .api_context("Failed to list metadata_type values")?;
 
     Ok(Json(values))
 }
@@ -221,7 +223,7 @@ async fn create(
         .returning(MetadataType::as_returning())
         .get_result(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to create metadata_type"))?;
+        .api_context("Failed to create metadata_type")?;
 
     Ok(Json(inserted))
 }
@@ -257,7 +259,7 @@ async fn update(
             .returning(MetadataType::as_returning())
             .get_result(&mut db)
             .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update metadata_type"))?;
+            .api_context("Failed to update metadata_type")?;
 
     Ok(Json(updated))
 }
@@ -287,7 +289,7 @@ async fn delete(
     ))
     .get_result(&mut db)
     .await
-    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to check metadata_type usage"))?;
+    .api_context("Failed to check metadata_type usage")?;
 
     if in_use {
         return Err(ApiError::conflict(
@@ -301,10 +303,7 @@ async fn delete(
     .get_result(&mut db)
     .await
     .map_err(|e| {
-        ApiError::new(
-            diesel_to_http(e),
-            "Failed to check metadata_type document metadata usage",
-        )
+        ApiError::from_diesel("Failed to check metadata_type document metadata usage", e)
     })?;
 
     if has_document_metadata {
@@ -316,7 +315,7 @@ async fn delete(
     let affected = diesel::delete(metadata_types::table.filter(metadata_types::id.eq(id)))
         .execute(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete metadata_type"))?;
+        .api_context("Failed to delete metadata_type")?;
 
     if affected == 0 {
         return Err(ApiError::not_found("Metadata type not found"));
@@ -369,7 +368,7 @@ pub async fn list(
         .count()
         .get_result::<i64>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count metadata_types"))?;
+        .api_context("Failed to count metadata_types")?;
 
     let mut query: metadata_types::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
@@ -419,7 +418,7 @@ pub async fn list(
         .select(MetadataType::as_select())
         .load::<MetadataType>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list metadata_types"))?;
+        .api_context("Failed to list metadata_types")?;
 
     Ok(Json(ResourceList {
         total,

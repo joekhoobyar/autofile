@@ -15,7 +15,7 @@ use crate::schema::{
     document_indexes, document_types, documents, tags,
 };
 use crate::shared::app_state::AppState;
-use crate::shared::util::{ApiError, JobResult};
+use crate::shared::errors::{AppError, AppErrorContext, AppErrorKind, AppResult, JobResult};
 
 #[derive(Clone)]
 struct PendingIndexValue {
@@ -34,10 +34,14 @@ struct TraversalFrame {
 pub async fn enqueue_document_index_document_updates(
     document_id: i64,
     state: Arc<AppState>,
-) -> Result<(), ApiError> {
+) -> AppResult<()> {
     tracing::info!(?document_id, "Enqueueing document_index updates");
     let mut db = state.db_pool.get().await.map_err(|e| {
-        ApiError::internal_server_error(&format!("Failed to fetch db connection: {}", e))
+        AppError::with_source(
+            AppErrorKind::DependencyFailure,
+            "Failed to fetch db connection",
+            e,
+        )
     })?;
 
     // Load the document index ids for all document_index rows where enabled = true.
@@ -46,9 +50,7 @@ pub async fn enqueue_document_index_document_updates(
         .select(document_indexes::id)
         .load::<i64>(&mut db)
         .await
-        .map_err(|e| {
-            ApiError::internal_server_error(&format!("Failed to fetch document indexes: {}", e))
-        })?;
+        .app_context("Failed to fetch document indexes")?;
 
     // Enqueue a job for each document index, passing the document_id and document_index_id.
     let mut fast_jobs = state.fast_jobs.as_ref().clone();
@@ -60,7 +62,11 @@ pub async fn enqueue_document_index_document_updates(
             })
             .await
             .map_err(|e| {
-                ApiError::internal_server_error(&format!("Failed to enqueue index job: {}", e))
+                AppError::with_source(
+                    AppErrorKind::DependencyFailure,
+                    "Failed to enqueue index job",
+                    e,
+                )
             })?;
     }
 
@@ -364,12 +370,13 @@ pub async fn delete_document_index_document(
 pub(crate) async fn build_template_document_view(
     db: &mut bb8::PooledConnection<'_, AsyncPgConnection>,
     document_view: DocumentView,
-) -> JobResult<TemplateDocumentView> {
+) -> AppResult<TemplateDocumentView> {
     let document_type_slug = document_types::table
         .find(document_view.document_type_id)
         .select(document_types::slug)
         .first::<String>(db)
-        .await?;
+        .await
+        .app_context("Failed to fetch document type")?;
 
     let tags: HashSet<String> = if document_view.tag_ids.is_empty() {
         HashSet::new()
@@ -378,7 +385,8 @@ pub(crate) async fn build_template_document_view(
             .filter(tags::id.eq_any(&document_view.tag_ids))
             .select(tags::slug)
             .load::<String>(db)
-            .await?
+            .await
+            .app_context("Failed to list document tags")?
             .into_iter()
             .collect()
     };
@@ -390,7 +398,8 @@ pub(crate) async fn build_template_document_view(
             .filter(cabinets::id.eq_any(&document_view.cabinet_ids))
             .select(cabinets::slug)
             .load::<String>(db)
-            .await?
+            .await
+            .app_context("Failed to list document cabinets")?
             .into_iter()
             .collect()
     };

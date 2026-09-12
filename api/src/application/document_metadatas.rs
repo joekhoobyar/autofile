@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::domain::metadata_types::DataType;
 use crate::schema::{document_metadatas, document_types_metadata_types, documents, metadata_types};
-use crate::shared::util::{ApiError, diesel_to_http};
+use crate::shared::errors::{ApiError, ApiErrorContext};
 
 use chrono::NaiveDate;
 use serde::Deserialize;
@@ -84,7 +84,7 @@ pub async fn document_metadatas_upsert(
         )
         .execute(&mut *db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete document_metadata"))?;
+        .api_context("Failed to delete document_metadata")?;
     }
 
     if upsert_input.is_empty() {
@@ -119,7 +119,7 @@ pub async fn document_metadatas_upsert(
         ))
         .execute(db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to save document_metadata"))?;
+        .api_context("Failed to save document_metadata")?;
 
     Ok(())
 }
@@ -229,7 +229,7 @@ async fn validate_document_metadata_input(
             ))
             .load::<(i64, bool, DataType, Option<Value>)>(db)
             .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to validate document metadata"))?
+            .api_context("Failed to validate document metadata")?
             .into_iter()
             .map(|(metadata_type_id, required, data_type, options)| {
                 (

@@ -4,9 +4,9 @@ use crate::domain::document_files::{DocumentFileOcrPage, DocumentFilePage};
 use crate::schema::{document_file_ocr_pages, document_file_pages, document_files};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
+use crate::shared::errors::{ApiError, ApiErrorContext};
 use crate::shared::extractors::DbConn;
 use crate::shared::s3::serve_s3_file;
-use crate::shared::util::{ApiError, diesel_to_http};
 
 use axum::{
     Json,
@@ -49,7 +49,7 @@ pub async fn list(
         .order(document_file_pages::page_number.asc())
         .load::<DocumentFilePage>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_file_pages"))?;
+        .api_context("Failed to list document_file_pages")?;
 
     Ok(Json(rows))
 }
@@ -86,7 +86,7 @@ pub async fn list_ocr(
         .order(document_file_ocr_pages::page_number.asc())
         .load::<DocumentFileOcrPage>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_file_ocr_pages"))?;
+        .api_context("Failed to list document_file_ocr_pages")?;
 
     Ok(Json(rows))
 }
@@ -128,7 +128,7 @@ pub async fn page_image_get(
             if matches!(e, diesel::result::Error::NotFound) {
                 ApiError::not_found("Document file not found")
             } else {
-                ApiError::new(diesel_to_http(e), "Failed to fetch document file")
+                ApiError::from_diesel("Failed to fetch document file", e)
             }
         })?;
 

@@ -4,8 +4,8 @@ use crate::domain::document_types_metadata_types::DocumentTypeMetadataType;
 use crate::schema::{document_types_metadata_types, metadata_types};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::{AdminUser, AuthUser};
+use crate::shared::errors::ApiError;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, diesel_to_http};
 
 use serde::Deserialize;
 
@@ -82,12 +82,7 @@ pub async fn get_by_ids(
         .select(DocumentTypeMetadataType::as_select())
         .first::<DocumentTypeMetadataType>(&mut db)
         .await
-        .map_err(|e| {
-            ApiError::new(
-                diesel_to_http(e),
-                "Failed to fetch document_type_metadata_type",
-            )
-        })?;
+        .map_err(|e| ApiError::from_diesel("Failed to fetch document_type_metadata_type", e))?;
 
     Ok(Json(row))
 }
@@ -119,10 +114,7 @@ async fn create(
             .get_result(&mut db)
             .await
             .map_err(|e| {
-                ApiError::new(
-                    diesel_to_http(e),
-                    "Failed to create document_type_metadata_type",
-                )
+                ApiError::from_diesel("Failed to create document_type_metadata_type", e)
             })?;
 
     Ok(Json(inserted))
@@ -166,12 +158,7 @@ async fn update(
     .returning(DocumentTypeMetadataType::as_returning())
     .get_result(&mut db)
     .await
-    .map_err(|e| {
-        ApiError::new(
-            diesel_to_http(e),
-            "Failed to update document_type_metadata_type",
-        )
-    })?;
+    .map_err(|e| ApiError::from_diesel("Failed to update document_type_metadata_type", e))?;
 
     Ok(Json(updated))
 }
@@ -230,12 +217,7 @@ async fn document_type_save(
             Ok(rows)
         })
         .await
-        .map_err(|e| {
-            ApiError::new(
-                diesel_to_http(e),
-                "Failed to save document_type_metadata_type",
-            )
-        })?;
+        .map_err(|e| ApiError::from_diesel("Failed to save document_type_metadata_type", e))?;
 
     Ok(Json(rows))
 }
@@ -268,12 +250,7 @@ async fn delete_junction(
     )
     .execute(&mut db)
     .await
-    .map_err(|e| {
-        ApiError::new(
-            diesel_to_http(e),
-            "Failed to delete document_type_metadata_type",
-        )
-    })?;
+    .map_err(|e| ApiError::from_diesel("Failed to delete document_type_metadata_type", e))?;
 
     if affected == 0 {
         return Err(ApiError::not_found("document_type_metadata_type not found"));
@@ -338,12 +315,7 @@ pub async fn list(
         .select(DocumentTypeMetadataType::as_select())
         .load::<DocumentTypeMetadataType>(&mut db)
         .await
-        .map_err(|e| {
-            ApiError::new(
-                diesel_to_http(e),
-                "Failed to list document_types_metadata_types",
-            )
-        })?;
+        .map_err(|e| ApiError::from_diesel("Failed to list document_types_metadata_types", e))?;
 
     Ok(Json(rows))
 }

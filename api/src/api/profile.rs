@@ -7,8 +7,8 @@ use crate::application::users::{
 use crate::domain::users::User;
 use crate::shared::app_state::AppState;
 use crate::shared::auth::{AuthUser, PasswordChangeUser};
+use crate::shared::errors::ApiError;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::ApiError;
 
 use axum::{Json, extract::State};
 use tower_cookies::Cookies;

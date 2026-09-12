@@ -8,8 +8,8 @@ use crate::shared::app_state::AppState;
 use crate::shared::auth::{
     hash_password, sign_access, sign_refresh, verify_password, verify_refresh,
 };
+use crate::shared::errors::{ApiError, ApiErrorContext};
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, diesel_to_http};
 
 use axum::{Json, extract::State, http::StatusCode};
 use chrono::Utc;
@@ -74,7 +74,7 @@ pub async fn register(
         .first::<User>(&mut db)
         .await
         .optional()
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to register user"))?;
+        .api_context("Failed to register user")?;
 
     let inserted = if let Some(existing_email) = existing_email {
         if existing_email.deleted_at.is_none() {
@@ -88,7 +88,7 @@ pub async fn register(
             .first::<User>(&mut db)
             .await
             .optional()
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to register user"))?;
+            .api_context("Failed to register user")?;
 
         if username_owner.is_some() {
             return Err(ApiError::conflict("Username is already taken"));
@@ -109,7 +109,7 @@ pub async fn register(
             .returning(User::as_returning())
             .get_result(&mut db)
             .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to register user"))?
+            .api_context("Failed to register user")?
     } else {
         let username_owner = users::table
             .filter(users::username.eq(&req.username))
@@ -117,7 +117,7 @@ pub async fn register(
             .first::<User>(&mut db)
             .await
             .optional()
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to register user"))?;
+            .api_context("Failed to register user")?;
 
         if username_owner.is_some() {
             return Err(ApiError::conflict("Username is already taken"));
@@ -136,7 +136,7 @@ pub async fn register(
             .returning(User::as_returning())
             .get_result(&mut db)
             .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to register user"))?
+            .api_context("Failed to register user")?
     };
 
     Ok(Json(inserted))

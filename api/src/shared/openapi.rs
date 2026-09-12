@@ -58,7 +58,7 @@ pub fn build_openapi_router() -> (axum::Router<Arc<AppState>>, utoipa::openapi::
     servers((url = "/api/v1", description = "Versioned API base path")),
     modifiers(&SecurityAddon),
     components(schemas(
-        crate::shared::util::ApiError,
+        crate::shared::errors::ApiError,
         crate::domain::users::User,
         crate::domain::app_settings::AppSettings,
         crate::domain::documents::Document,

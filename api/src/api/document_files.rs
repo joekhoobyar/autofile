@@ -11,9 +11,9 @@ use crate::infrastructure::s3::delete_prefix_from_s3;
 use crate::schema::{document_file_ocr_pages, document_file_pages, document_files, documents};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::{AuthUser, sign_download, verify_download};
+use crate::shared::errors::{ApiError, ApiErrorContext};
 use crate::shared::extractors::DbConn;
 use crate::shared::s3::serve_s3_file;
-use crate::shared::util::{ApiError, diesel_to_http};
 
 use axum::{
     Json,
@@ -105,7 +105,7 @@ pub async fn list(
         .order(document_files::id.asc())
         .load::<DocumentFileView>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_files"))?;
+        .api_context("Failed to list document_files")?;
 
     Ok(Json(rows))
 }
@@ -137,7 +137,7 @@ pub async fn get_by_ids(
         .select(DocumentFileView::as_select())
         .first::<DocumentFileView>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document_file"))?;
+        .api_context("Failed to fetch document_file")?;
 
     Ok(Json(row))
 }
@@ -256,16 +256,10 @@ pub async fn create(
                         "Failed to enqueue thumbnail job",
                     ))
                 } else {
-                    Err(ApiError::new(
-                        diesel_to_http(e),
-                        "Failed to create document_file",
-                    ))
+                    Err(ApiError::from_diesel("Failed to create document_file", e))
                 }
             } else {
-                Err(ApiError::new(
-                    diesel_to_http(e),
-                    "Failed to create document_file",
-                ))
+                Err(ApiError::from_diesel("Failed to create document_file", e))
             }
         }
     }
@@ -369,7 +363,7 @@ pub async fn delete(
             } else if matches!(e, diesel::result::Error::NotFound) {
                 ApiError::not_found("Document file not found")
             } else {
-                ApiError::new(diesel_to_http(e), "Failed to delete document_file")
+                ApiError::from_diesel("Failed to delete document_file", e)
             }
         })?;
 
@@ -415,7 +409,7 @@ pub async fn thumbnail_get(
         .select((document_files::s3_prefix, document_files::updated_at))
         .first::<(String, chrono::DateTime<chrono::Utc>)>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document file thumbnail"))?;
+        .api_context("Failed to fetch document file thumbnail")?;
 
     let s3_key = format!("{}/_thumb.png", s3_prefix);
     serve_s3_file(
@@ -489,7 +483,7 @@ pub async fn download(
             chrono::DateTime<chrono::Utc>,
         )>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document file download"))?;
+        .api_context("Failed to fetch document file download")?;
 
     let s3_key = format!("{}/{}", s3_prefix, filename);
     let mut response = serve_s3_file(
@@ -542,7 +536,7 @@ pub async fn create_download_ticket(
         .select(document_files::id)
         .first::<i64>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document file"))?;
+        .api_context("Failed to fetch document file")?;
 
     let token = sign_download(
         &state.jwt_secret,

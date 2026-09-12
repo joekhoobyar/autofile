@@ -5,8 +5,9 @@ use crate::domain::cabinet_documents::CabinetDocument;
 use crate::schema::cabinet_documents;
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
+use crate::shared::errors::{ApiError, ApiErrorContext};
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
+use crate::shared::responses::ResourceList;
 
 use axum::extract::State;
 use serde::Deserialize;
@@ -85,7 +86,7 @@ pub async fn get_by_ids(
         .select(CabinetDocument::as_select())
         .first::<CabinetDocument>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch cabinet_document"))?;
+        .api_context("Failed to fetch cabinet_document")?;
 
     Ok(Json(row))
 }
@@ -138,7 +139,7 @@ async fn upsert(
         .returning(CabinetDocument::as_returning())
         .get_results(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to save cabinet_document"))?;
+        .api_context("Failed to save cabinet_document")?;
 
     // Enqueue jobs to update document indexes for this document, as the cabinets may be used in index rules.
     for doc in values {
@@ -176,7 +177,7 @@ pub async fn list(
         .count()
         .get_result::<i64>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count cabinet_documents"))?;
+        .api_context("Failed to count cabinet_documents")?;
 
     let mut query = cabinet_documents::table.into_boxed();
     query = match (params.sf, params.sd) {
@@ -200,7 +201,7 @@ pub async fn list(
         .select(CabinetDocument::as_select())
         .load::<CabinetDocument>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list cabinet_documents"))?;
+        .api_context("Failed to list cabinet_documents")?;
 
     Ok(Json(ResourceList {
         total,
@@ -238,7 +239,7 @@ async fn delete(
     )
     .execute(&mut db)
     .await
-    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete cabinet_documents"))?;
+    .api_context("Failed to delete cabinet_documents")?;
 
     // Enqueue jobs to update document indexes for this document, as the cabinets may be used in index rules.
     for document_id in input {
@@ -277,7 +278,7 @@ async fn delete_junction(
     )
     .execute(&mut db)
     .await
-    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete cabinet_document"))?;
+    .api_context("Failed to delete cabinet_document")?;
 
     if affected == 0 {
         return Err(ApiError::not_found("cabinet_document not found"));

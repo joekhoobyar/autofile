@@ -11,7 +11,7 @@ use crate::application::document_index_documents::{
 };
 use crate::application::document_thumbnails::generate_thumbnail;
 use crate::shared::app_state::AppState;
-use crate::shared::util::JobResult;
+use crate::shared::errors::JobResult;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FastJob {

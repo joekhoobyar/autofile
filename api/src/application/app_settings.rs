@@ -5,7 +5,7 @@ use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
 use crate::domain::app_settings::AppSettings;
 use crate::schema::app_settings;
-use crate::shared::util::{ApiError, diesel_to_http};
+use crate::shared::errors::{ApiError, ApiErrorContext};
 
 const APP_SETTINGS_ID: i64 = 1;
 
@@ -23,7 +23,7 @@ pub async fn get_app_settings(
         .select(AppSettings::as_select())
         .first::<AppSettings>(db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch app settings"))
+        .api_context("Failed to fetch app settings")
 }
 
 pub async fn update_app_settings(
@@ -38,5 +38,5 @@ pub async fn update_app_settings(
         .returning(AppSettings::as_returning())
         .get_result(db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update app settings"))
+        .api_context("Failed to update app settings")
 }
