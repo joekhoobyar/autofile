@@ -7,7 +7,7 @@ use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
 use crate::domain::document_indexes::DocumentIndexValue;
-use crate::shared::util::{ApiError, diesel_to_http};
+use crate::shared::util::ApiError;
 
 #[derive(Debug, QueryableByName)]
 struct DocumentIndexValueRow {
@@ -69,12 +69,7 @@ pub async fn count_document_index_value_documents(
     .bind::<BigInt, _>(document_index_id)
     .load::<DocumentIndexValueDocumentCountRow>(db)
     .await
-    .map_err(|e| {
-        ApiError::new(
-            diesel_to_http(e),
-            "Failed to count document_index_value documents",
-        )
-    })?;
+    .map_err(|e| ApiError::from_diesel("Failed to count document_index_value documents", e))?;
 
     Ok(rows
         .into_iter()
@@ -111,12 +106,7 @@ pub async fn list_document_index_value_ancestors(
     .bind::<BigInt, _>(document_index_id)
     .load::<DocumentIndexValueRow>(db)
     .await
-    .map_err(|e| {
-        ApiError::new(
-            diesel_to_http(e),
-            "Failed to fetch document_index_value ancestors",
-        )
-    })?;
+    .map_err(|e| ApiError::from_diesel("Failed to fetch document_index_value ancestors", e))?;
 
     Ok(rows
         .into_iter()

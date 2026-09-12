@@ -6,7 +6,7 @@ use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{
-    ApiError, ResourceList, de_present_option, diesel_to_http, validate_slug,
+    ApiError, ApiErrorContext, ResourceList, de_present_option, validate_slug,
 };
 
 use serde::Deserialize;
@@ -95,7 +95,7 @@ pub async fn get_by_id(
         .select(Cabinet::as_select())
         .first::<Cabinet>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch cabinet"))?;
+        .api_context("Failed to fetch cabinet")?;
 
     Ok(Json(row))
 }
@@ -123,7 +123,7 @@ pub async fn get_by_slug(
         .select(Cabinet::as_select())
         .first::<Cabinet>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch cabinet"))?;
+        .api_context("Failed to fetch cabinet")?;
 
     Ok(Json(row))
 }
@@ -167,7 +167,7 @@ async fn create(
         .returning(Cabinet::as_returning())
         .get_result(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to create cabinet"))?;
+        .api_context("Failed to create cabinet")?;
 
     Ok(Json(inserted))
 }
@@ -233,8 +233,7 @@ async fn update(
     };
 
     // Update + return the updated row in one round-trip.
-    let updated: Cabinet =
-        base.map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update cabinet"))?;
+    let updated: Cabinet = base.api_context("Failed to update cabinet")?;
 
     Ok(Json(updated))
 }
@@ -260,7 +259,7 @@ async fn delete(
     let affected = diesel::delete(cabinets::table.filter(cabinets::id.eq(id)))
         .execute(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete cabinet"))?;
+        .api_context("Failed to delete cabinet")?;
 
     if affected == 0 {
         return Err(ApiError::not_found("Cabinet not found"));
@@ -321,7 +320,7 @@ pub async fn list(
         .count()
         .get_result::<i64>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count cabinets"))?;
+        .api_context("Failed to count cabinets")?;
 
     let mut query: cabinets::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
@@ -371,7 +370,7 @@ pub async fn list(
         .select(Cabinet::as_select())
         .load::<Cabinet>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list cabinets"))?;
+        .api_context("Failed to list cabinets")?;
     let cabinet_ids: Vec<i64> = cabinets.iter().map(|cabinet| cabinet.id).collect();
 
     let mut document_counts_by_cabinet: HashMap<i64, i64> = HashMap::new();
@@ -385,7 +384,7 @@ pub async fn list(
             ))
             .load::<(i64, i64)>(&mut db)
             .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count cabinet documents"))?;
+            .api_context("Failed to count cabinet documents")?;
 
         for (cabinet_id, document_count) in document_count_rows {
             document_counts_by_cabinet.insert(cabinet_id, document_count);

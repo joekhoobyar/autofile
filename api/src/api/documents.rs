@@ -24,7 +24,7 @@ use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
 use crate::shared::s3::serve_s3_file;
-use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
+use crate::shared::util::{ApiError, ApiErrorContext, ResourceList};
 
 use axum::extract::DefaultBodyLimit;
 use diesel::dsl::{exists, sum};
@@ -332,7 +332,7 @@ async fn test_classifier_block(
             if matches!(e, diesel::result::Error::NotFound) {
                 ApiError::not_found("Classifier block not found")
             } else {
-                ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block")
+                ApiError::from_diesel("Failed to fetch classifier_block", e)
             }
         })?;
 
@@ -430,7 +430,7 @@ pub async fn thumbnail_get(
         .select((documents::s3_thumbnail, documents::updated_at))
         .first::<(Option<String>, chrono::DateTime<chrono::Utc>)>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document thumbnail"))?;
+        .api_context("Failed to fetch document thumbnail")?;
 
     let s3_key = s3_thumbnail.ok_or_else(|| ApiError::not_found("Thumbnail not available"))?;
 
@@ -728,7 +728,7 @@ pub async fn list(
         .count()
         .get_result::<i64>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count document_types"))?;
+        .api_context("Failed to count document_types")?;
 
     // Apply sorting based on query parameters, with tie-breaker on ID for consistent pagination.
     let mut query: documents::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
@@ -763,7 +763,7 @@ pub async fn list(
         .select(Document::as_select())
         .load::<Document>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list documents"))?;
+        .api_context("Failed to list documents")?;
     let document_ids: Vec<i64> = documents.iter().map(|doc| doc.id).collect();
 
     // Fetch pages per document for all documents in the page in a single query.
@@ -775,7 +775,7 @@ pub async fn list(
             .select((document_files::document_id, sum(document_files::pages)))
             .load::<(i64, Option<i64>)>(&mut db)
             .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document pages"))?;
+            .api_context("Failed to list document pages")?;
 
         for (document_id, pages_sum) in pages_rows {
             let pages = pages_sum.unwrap_or(0) as i32;
@@ -796,7 +796,7 @@ pub async fn list(
             ))
             .load::<(i64, String, String)>(&mut db)
             .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document metadata"))?;
+            .api_context("Failed to list document metadata")?;
 
         for (document_id, slug, value) in metadata_rows {
             metadata_by_document
@@ -817,9 +817,7 @@ pub async fn list(
             ))
             .load::<(i64, i64)>(&mut db)
             .await
-            .map_err(|e| {
-                ApiError::new(diesel_to_http(e), "Failed to list cabinets for documents")
-            })?;
+            .map_err(|e| ApiError::from_diesel("Failed to list cabinets for documents", e))?;
 
         for (document_id, cabinet_id) in cabinet_rows {
             cabinets_by_document
@@ -837,7 +835,7 @@ pub async fn list(
             .select((tag_documents::document_id, tag_documents::tag_id))
             .load::<(i64, i64)>(&mut db)
             .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list tags for documents"))?;
+            .api_context("Failed to list tags for documents")?;
 
         for (document_id, tag_id) in tag_rows {
             tags_by_document
@@ -898,7 +896,7 @@ pub async fn list_index_values(
         .order(document_index_values::id.asc())
         .load::<DocumentIndexValue>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_index_values"))?;
+        .api_context("Failed to list document_index_values")?;
 
     Ok(Json(items))
 }

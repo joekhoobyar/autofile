@@ -30,7 +30,7 @@ use crate::schema::{
     document_files, metadata_types, tag_documents, tags,
 };
 use crate::shared::app_state::AppState;
-use crate::shared::util::{ApiError, JobResult, diesel_to_http};
+use crate::shared::util::{ApiError, ApiErrorContext, JobResult};
 
 #[derive(Debug)]
 pub struct UpdateClassifierBlockInput {
@@ -317,7 +317,7 @@ pub async fn create_classifier_block(
             .await
     })
     .await
-    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to create classifier_block"))
+    .api_context("Failed to create classifier_block")
 }
 
 pub async fn update_classifier_block(
@@ -348,7 +348,7 @@ pub async fn update_classifier_block(
         .returning(ClassifierBlock::as_returning())
         .get_result(db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update classifier_block"))
+        .api_context("Failed to update classifier_block")
 }
 
 pub async fn delete_classifier_block(
@@ -382,7 +382,7 @@ pub async fn delete_classifier_block(
         if matches!(e, diesel::result::Error::NotFound) {
             ApiError::not_found("Classifier block not found")
         } else {
-            ApiError::new(diesel_to_http(e), "Failed to delete classifier_block")
+            ApiError::from_diesel("Failed to delete classifier_block", e)
         }
     })
 }
@@ -415,7 +415,7 @@ pub async fn reorder_classifier_block(
         diesel::sql_query("LOCK TABLE classifier_blocks IN EXCLUSIVE MODE")
             .execute(conn)
             .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to lock classifier_blocks"))?;
+            .api_context("Failed to lock classifier_blocks")?;
 
         let current_order = classifier_blocks::table
             .filter(classifier_blocks::id.eq(id))
@@ -426,7 +426,7 @@ pub async fn reorder_classifier_block(
                 if matches!(e, diesel::result::Error::NotFound) {
                     ApiError::not_found("Classifier block not found")
                 } else {
-                    ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block")
+                    ApiError::from_diesel("Failed to fetch classifier_block", e)
                 }
             })?;
 
@@ -434,9 +434,7 @@ pub async fn reorder_classifier_block(
             .select(diesel::dsl::max(classifier_blocks::order))
             .get_result::<Option<i32>>(conn)
             .await
-            .map_err(|e| {
-                ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block order")
-            })?
+            .map_err(|e| ApiError::from_diesel("Failed to fetch classifier_block order", e))?
             .unwrap_or(0);
 
         if !(1..=max_order).contains(&target_order) {
@@ -452,19 +450,14 @@ pub async fn reorder_classifier_block(
                 .select(ClassifierBlock::as_select())
                 .first::<ClassifierBlock>(conn)
                 .await
-                .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block"))
+                .api_context("Failed to fetch classifier_block")
                 .map_err(Into::into);
         }
 
         diesel::sql_query("SET CONSTRAINTS classifier_blocks_order_key DEFERRED")
             .execute(conn)
             .await
-            .map_err(|e| {
-                ApiError::new(
-                    diesel_to_http(e),
-                    "Failed to prepare classifier_block reorder",
-                )
-            })?;
+            .map_err(|e| ApiError::from_diesel("Failed to prepare classifier_block reorder", e))?;
 
         diesel::sql_query(
             r#"
@@ -494,21 +487,21 @@ pub async fn reorder_classifier_block(
         .bind::<BigInt, _>(user_id)
         .execute(conn)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to reorder classifier_block"))?;
+        .api_context("Failed to reorder classifier_block")?;
 
         classifier_blocks::table
             .find(id)
             .select(ClassifierBlock::as_select())
             .first::<ClassifierBlock>(conn)
             .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block"))
+            .api_context("Failed to fetch classifier_block")
             .map_err(Into::into)
     })
     .await
     .map_err(|e| match e {
         ReorderClassifierBlockError::Api(err) => err,
         ReorderClassifierBlockError::Diesel(err) => {
-            ApiError::new(diesel_to_http(err), "Failed to reorder classifier_block")
+            ApiError::from_diesel("Failed to reorder classifier_block", err)
         }
     })
 }

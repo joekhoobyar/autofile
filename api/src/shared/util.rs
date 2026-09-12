@@ -29,6 +29,8 @@ pub struct ApiError {
     pub code: Option<&'static str>,
 }
 
+pub type ApiResult<T> = Result<T, ApiError>;
+
 impl ApiError {
     pub fn new(status: StatusCode, message: impl Into<String>) -> Self {
         Self {
@@ -69,6 +71,10 @@ impl ApiError {
     pub fn unauthorized(message: &str) -> Self {
         Self::new(StatusCode::UNAUTHORIZED, message)
     }
+
+    pub fn from_diesel(message: impl Into<String>, err: DieselError) -> Self {
+        Self::new(diesel_error_status(&err), message)
+    }
 }
 
 impl IntoResponse for ApiError {
@@ -85,8 +91,29 @@ impl fmt::Display for ApiError {
 
 impl std::error::Error for ApiError {}
 
+impl From<DieselError> for ApiError {
+    fn from(err: DieselError) -> Self {
+        let message = match &err {
+            DieselError::NotFound => "Resource not found",
+            _ => "Database query failed",
+        };
+
+        ApiError::from_diesel(message, err)
+    }
+}
+
+pub trait ApiErrorContext<T> {
+    fn api_context(self, message: &'static str) -> ApiResult<T>;
+}
+
+impl<T> ApiErrorContext<T> for Result<T, DieselError> {
+    fn api_context(self, message: &'static str) -> ApiResult<T> {
+        self.map_err(|err| ApiError::from_diesel(message, err))
+    }
+}
+
 // Map a Diesel error to an appropriate HTTP status code.
-pub fn diesel_to_http(e: DieselError) -> StatusCode {
+fn diesel_error_status(e: &DieselError) -> StatusCode {
     match e {
         DieselError::NotFound => StatusCode::NOT_FOUND,
         DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => StatusCode::CONFLICT,
@@ -99,7 +126,7 @@ pub fn diesel_to_http(e: DieselError) -> StatusCode {
         DieselError::DatabaseError(DatabaseErrorKind::CheckViolation, _) => {
             StatusCode::UNPROCESSABLE_ENTITY
         }
-        _ => StatusCode::BAD_REQUEST,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 

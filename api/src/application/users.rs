@@ -1,7 +1,7 @@
 use crate::domain::users::{User, UserRole};
 use crate::schema::users;
 use crate::shared::auth::hash_password;
-use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
+use crate::shared::util::{ApiError, ApiErrorContext, ResourceList};
 
 use bb8::PooledConnection;
 use diesel::prelude::*;
@@ -91,7 +91,7 @@ pub async fn get_user_by_id(
         .select(User::as_select())
         .first::<User>(db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch user"))
+        .api_context("Failed to fetch user")
 }
 
 pub async fn get_user_by_username(
@@ -104,7 +104,7 @@ pub async fn get_user_by_username(
         .select(User::as_select())
         .first::<User>(db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch user"))
+        .api_context("Failed to fetch user")
 }
 
 pub async fn get_profile(
@@ -117,7 +117,7 @@ pub async fn get_profile(
         .select(User::as_select())
         .first::<User>(db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch user"))
+        .api_context("Failed to fetch user")
 }
 
 pub async fn update_profile(
@@ -143,7 +143,7 @@ pub async fn update_profile(
     .returning(User::as_returning())
     .get_result(db)
     .await
-    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update profile"))
+    .api_context("Failed to update profile")
 }
 
 pub async fn change_password(
@@ -171,7 +171,7 @@ pub async fn change_password(
     .returning(User::as_returning())
     .get_result(db)
     .await
-    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to change password"))
+    .api_context("Failed to change password")
 }
 
 pub async fn update_user(
@@ -209,7 +209,7 @@ pub async fn update_user(
     .returning(User::as_returning())
     .get_result(db)
     .await
-    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update user"))
+    .api_context("Failed to update user")
 }
 
 pub async fn delete_user(
@@ -237,7 +237,7 @@ pub async fn delete_user(
     ))
     .execute(db)
     .await
-    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete user"))?;
+    .api_context("Failed to delete user")?;
 
     if affected == 0 {
         return Err(ApiError::not_found("User not found"));
@@ -267,7 +267,7 @@ pub async fn restore_user(
     .returning(User::as_returning())
     .get_result(db)
     .await
-    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to restore user"))
+    .api_context("Failed to restore user")
 }
 
 pub async fn list_users(
@@ -303,7 +303,7 @@ pub async fn list_users(
         .count()
         .get_result::<i64>(db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count users"))?;
+        .api_context("Failed to count users")?;
 
     let mut query: users::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (input.sf, input.sd) {
@@ -353,7 +353,7 @@ pub async fn list_users(
         .select(User::as_select())
         .load::<User>(db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list users"))?;
+        .api_context("Failed to list users")?;
 
     Ok(ResourceList {
         total,

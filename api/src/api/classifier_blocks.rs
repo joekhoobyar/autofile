@@ -12,7 +12,7 @@ use crate::schema::classifier_blocks;
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
+use crate::shared::util::{ApiError, ApiErrorContext, ResourceList};
 
 use serde::Deserialize;
 
@@ -95,7 +95,7 @@ pub async fn get_by_id(
         .select(ClassifierBlock::as_select())
         .first::<ClassifierBlock>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch classifier_block"))?;
+        .api_context("Failed to fetch classifier_block")?;
 
     Ok(Json(row))
 }
@@ -278,7 +278,7 @@ pub async fn list(
         .count()
         .get_result::<i64>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count classifier_blocks"))?;
+        .api_context("Failed to count classifier_blocks")?;
 
     let mut query: classifier_blocks::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
@@ -338,7 +338,7 @@ pub async fn list(
         .select(ClassifierBlock::as_select())
         .load::<ClassifierBlock>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list classifier_blocks"))?;
+        .api_context("Failed to list classifier_blocks")?;
 
     Ok(Json(ResourceList {
         total,

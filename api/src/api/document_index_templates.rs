@@ -5,7 +5,7 @@ use crate::schema::document_index_templates;
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ResourceList, de_present_option, diesel_to_http};
+use crate::shared::util::{ApiError, ApiErrorContext, ResourceList, de_present_option};
 
 use serde::Deserialize;
 
@@ -98,7 +98,7 @@ pub async fn get_by_id(
         .select(DocumentIndexTemplate::as_select())
         .first::<DocumentIndexTemplate>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document_index_template"))?;
+        .api_context("Failed to fetch document_index_template")?;
 
     Ok(Json(row))
 }
@@ -150,12 +150,7 @@ async fn create(
         .returning(DocumentIndexTemplate::as_returning())
         .get_result(&mut db)
         .await
-        .map_err(|e| {
-            ApiError::new(
-                diesel_to_http(e),
-                "Failed to create document_index_template",
-            )
-        })?;
+        .map_err(|e| ApiError::from_diesel("Failed to create document_index_template", e))?;
 
     Ok(Json(inserted))
 }
@@ -236,12 +231,8 @@ async fn update(
         }
     };
 
-    let updated: DocumentIndexTemplate = base.map_err(|e| {
-        ApiError::new(
-            diesel_to_http(e),
-            "Failed to update document_index_template",
-        )
-    })?;
+    let updated: DocumentIndexTemplate =
+        base.map_err(|e| ApiError::from_diesel("Failed to update document_index_template", e))?;
 
     Ok(Json(updated))
 }
@@ -274,12 +265,7 @@ async fn delete(
     )
     .execute(&mut db)
     .await
-    .map_err(|e| {
-        ApiError::new(
-            diesel_to_http(e),
-            "Failed to delete document_index_template",
-        )
-    })?;
+    .map_err(|e| ApiError::from_diesel("Failed to delete document_index_template", e))?;
 
     if affected == 0 {
         return Err(ApiError::not_found("Document index template not found"));
@@ -338,12 +324,7 @@ pub async fn list(
         .count()
         .get_result::<i64>(&mut db)
         .await
-        .map_err(|e| {
-            ApiError::new(
-                diesel_to_http(e),
-                "Failed to count document_index_templates",
-            )
-        })?;
+        .map_err(|e| ApiError::from_diesel("Failed to count document_index_templates", e))?;
 
     let mut query: document_index_templates::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
@@ -407,7 +388,7 @@ pub async fn list(
         .select(DocumentIndexTemplate::as_select())
         .load::<DocumentIndexTemplate>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_index_templates"))?;
+        .api_context("Failed to list document_index_templates")?;
 
     Ok(Json(ResourceList {
         total,

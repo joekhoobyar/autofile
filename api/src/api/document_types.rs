@@ -5,7 +5,7 @@ use crate::schema::{document_types, document_types_metadata_types, documents};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::{AdminUser, AuthUser};
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ResourceList, diesel_to_http, validate_slug};
+use crate::shared::util::{ApiError, ApiErrorContext, ResourceList, validate_slug};
 
 use serde::Deserialize;
 
@@ -83,7 +83,7 @@ pub async fn get_by_id(
         .select(DocumentType::as_select())
         .first::<DocumentType>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document_type"))?;
+        .api_context("Failed to fetch document_type")?;
 
     Ok(Json(row))
 }
@@ -111,7 +111,7 @@ pub async fn get_by_slug(
         .select(DocumentType::as_select())
         .first::<DocumentType>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document_type"))?;
+        .api_context("Failed to fetch document_type")?;
 
     Ok(Json(row))
 }
@@ -146,7 +146,7 @@ async fn create(
         .returning(DocumentType::as_returning())
         .get_result(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to create document_type"))?;
+        .api_context("Failed to create document_type")?;
 
     Ok(Json(inserted))
 }
@@ -182,7 +182,7 @@ async fn update(
             .returning(DocumentType::as_returning())
             .get_result(&mut db)
             .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update document_type"))?;
+            .api_context("Failed to update document_type")?;
 
     Ok(Json(updated))
 }
@@ -248,7 +248,7 @@ async fn delete(
         if matches!(e, diesel::result::Error::NotFound) {
             ApiError::not_found("Document type not found")
         } else {
-            ApiError::new(diesel_to_http(e), "Failed to delete document_type")
+            ApiError::from_diesel("Failed to delete document_type", e)
         }
     })?;
 
@@ -298,7 +298,7 @@ pub async fn list(
         .count()
         .get_result::<i64>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count document_types"))?;
+        .api_context("Failed to count document_types")?;
 
     let mut query: document_types::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
@@ -343,7 +343,7 @@ pub async fn list(
         .select(DocumentType::as_select())
         .load::<DocumentType>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_types"))?;
+        .api_context("Failed to list document_types")?;
     let document_type_ids: Vec<i64> = document_types
         .iter()
         .map(|document_type| document_type.id)
@@ -360,9 +360,7 @@ pub async fn list(
             ))
             .load::<(i64, i64)>(&mut db)
             .await
-            .map_err(|e| {
-                ApiError::new(diesel_to_http(e), "Failed to count document_type documents")
-            })?;
+            .map_err(|e| ApiError::from_diesel("Failed to count document_type documents", e))?;
 
         for (document_type_id, document_count) in document_count_rows {
             document_counts_by_type.insert(document_type_id, document_count);

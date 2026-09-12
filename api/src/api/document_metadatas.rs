@@ -7,7 +7,7 @@ use crate::schema::{document_metadatas, document_types_metadata_types, documents
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, diesel_to_http};
+use crate::shared::util::{ApiError, ApiErrorContext};
 
 use axum::extract::State;
 
@@ -42,7 +42,7 @@ pub async fn get_by_ids(
         .select(DocumentMetadata::as_select())
         .first::<DocumentMetadata>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document_metadata"))?;
+        .api_context("Failed to fetch document_metadata")?;
 
     Ok(Json(row))
 }
@@ -79,7 +79,7 @@ async fn upsert(
     // Fetch and return the updated rows.
     let rows = do_list(DbConn(db), document_id)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_metadatas"))?;
+        .api_context("Failed to list document_metadatas")?;
 
     Ok(Json(rows))
 }
@@ -116,7 +116,7 @@ pub async fn list(
 ) -> Result<Json<Vec<DocumentMetadata>>, ApiError> {
     let rows = do_list(DbConn(db), document_id)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_metadatas"))?;
+        .api_context("Failed to list document_metadatas")?;
 
     Ok(Json(rows))
 }
@@ -164,10 +164,7 @@ async fn delete_junction(
         }
         Err(diesel::result::Error::NotFound) => {}
         Err(e) => {
-            return Err(ApiError::new(
-                diesel_to_http(e),
-                "Failed to validate document_metadata deletion",
-            ));
+            return Err(ApiError::from_diesel("Failed to validate document_metadata deletion", e));
         }
     }
 
@@ -178,7 +175,7 @@ async fn delete_junction(
     )
     .execute(&mut db)
     .await
-    .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to delete document_metadatas"))?;
+    .api_context("Failed to delete document_metadatas")?;
 
     if affected == 0 {
         return Err(ApiError::not_found("document_metadatas not found"));

@@ -8,7 +8,7 @@ use crate::schema::document_index_values;
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
+use crate::shared::util::{ApiError, ApiErrorContext, ResourceList};
 
 use serde::Deserialize;
 
@@ -102,7 +102,7 @@ pub async fn list(
         .count()
         .get_result::<i64>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count document_index_values"))?;
+        .api_context("Failed to count document_index_values")?;
 
     let mut query: document_index_values::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
@@ -146,7 +146,7 @@ pub async fn list(
         .select(DocumentIndexValue::as_select())
         .load::<DocumentIndexValue>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_index_values"))?;
+        .api_context("Failed to list document_index_values")?;
 
     let value_ids: Vec<i64> = values.iter().map(|value| value.id).collect();
     let document_counts =

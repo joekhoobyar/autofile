@@ -9,7 +9,7 @@ use crate::schema::{
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
 use crate::shared::extractors::DbConn;
-use crate::shared::util::{ApiError, ResourceList, diesel_to_http, validate_slug};
+use crate::shared::util::{ApiError, ApiErrorContext, ResourceList, validate_slug};
 
 use serde::Deserialize;
 
@@ -90,7 +90,7 @@ pub async fn get_by_id(
         .select(DocumentIndex::as_select())
         .first::<DocumentIndex>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document_index"))?;
+        .api_context("Failed to fetch document_index")?;
 
     Ok(Json(row))
 }
@@ -118,7 +118,7 @@ pub async fn get_by_slug(
         .select(DocumentIndex::as_select())
         .first::<DocumentIndex>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to fetch document_index"))?;
+        .api_context("Failed to fetch document_index")?;
 
     Ok(Json(row))
 }
@@ -153,7 +153,7 @@ async fn create(
         .returning(DocumentIndex::as_returning())
         .get_result(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to create document_index"))?;
+        .api_context("Failed to create document_index")?;
 
     Ok(Json(inserted))
 }
@@ -189,7 +189,7 @@ async fn update(
             .returning(DocumentIndex::as_returning())
             .get_result(&mut db)
             .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to update document_index"))?;
+            .api_context("Failed to update document_index")?;
 
     Ok(Json(updated))
 }
@@ -266,7 +266,7 @@ async fn delete(
         if matches!(e, diesel::result::Error::NotFound) {
             ApiError::not_found("Document type not found")
         } else {
-            ApiError::new(diesel_to_http(e), "Failed to delete document_index")
+            ApiError::from_diesel("Failed to delete document_index", e)
         }
     })?;
 
@@ -302,7 +302,7 @@ async fn rebuild(
             if matches!(e, diesel::result::Error::NotFound) {
                 ApiError::not_found("Document index not found")
             } else {
-                ApiError::new(diesel_to_http(e), "Failed to fetch document_index")
+                ApiError::from_diesel("Failed to fetch document_index", e)
             }
         })?;
 
@@ -365,7 +365,7 @@ pub async fn list(
         .count()
         .get_result::<i64>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count document_indexes"))?;
+        .api_context("Failed to count document_indexes")?;
 
     let mut query: document_indexes::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
@@ -422,7 +422,7 @@ pub async fn list(
         .select(DocumentIndex::as_select())
         .load::<DocumentIndex>(&mut db)
         .await
-        .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to list document_indexes"))?;
+        .api_context("Failed to list document_indexes")?;
     let index_ids: Vec<i64> = indexes.iter().map(|doc| doc.id).collect();
 
     let mut document_counts_by_index: HashMap<i64, i64> = HashMap::new();
@@ -439,7 +439,7 @@ pub async fn list(
             ))
             .load::<(i64, i64)>(&mut db)
             .await
-            .map_err(|e| ApiError::new(diesel_to_http(e), "Failed to count documents"))?;
+            .api_context("Failed to count documents")?;
 
         for (index_id, document_count) in document_count_rows {
             document_counts_by_index.insert(index_id, document_count);
