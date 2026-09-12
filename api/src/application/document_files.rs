@@ -21,6 +21,8 @@ use crate::shared::app_state::AppState;
 use crate::shared::errors::{ApiError, JobResult};
 use crate::shared::uploads::write_field_to_temp_file;
 
+const PANDOC_PDF_ENGINE: &str = "--pdf-engine=weasyprint";
+
 #[derive(Debug, Insertable)]
 #[diesel(table_name = document_files)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -593,7 +595,7 @@ async fn convert_plaintext_to_pdf_with_runner<R: ProcessRunner + ?Sized>(
         text_file.to_string(),
         "-o".to_string(),
         pdf_file.clone(),
-        "--pdf-engine=xelatex".to_string(),
+        PANDOC_PDF_ENGINE.to_string(),
     ];
     run_process(runner, "pandoc", &args, "pandoc").await?;
 
@@ -670,7 +672,7 @@ async fn convert_csv_to_pdf_with_runner<R: ProcessRunner + ?Sized>(
         csv_file.to_string(),
         "-o".to_string(),
         pdf_file.clone(),
-        "--pdf-engine=xelatex".to_string(),
+        PANDOC_PDF_ENGINE.to_string(),
     ];
     run_process(runner, "pandoc", &args, "pandoc").await?;
 
@@ -844,7 +846,7 @@ async fn convert_tsv_to_pdf_with_runner<R: ProcessRunner + ?Sized>(
         tsv_file.to_string(),
         "-o".to_string(),
         pdf_file.clone(),
-        "--pdf-engine=xelatex".to_string(),
+        PANDOC_PDF_ENGINE.to_string(),
     ];
     run_process(runner, "pandoc", &args, "pandoc").await?;
 
@@ -916,7 +918,7 @@ async fn convert_markdown_to_pdf_with_runner<R: ProcessRunner + ?Sized>(
         markdown_file.to_string(),
         "-o".to_string(),
         pdf_file.clone(),
-        "--pdf-engine=xelatex".to_string(),
+        PANDOC_PDF_ENGINE.to_string(),
     ];
     run_process(runner, "pandoc", &args, "pandoc").await?;
 
@@ -1833,7 +1835,7 @@ mod tests {
                 "/tmp/input.txt",
                 "-o",
                 "/tmp/input.txt.pdf",
-                "--pdf-engine=xelatex",
+                "--pdf-engine=weasyprint",
             ],
         );
     }
@@ -1856,7 +1858,7 @@ mod tests {
                 "/tmp/input.md",
                 "-o",
                 "/tmp/input.md.pdf",
-                "--pdf-engine=xelatex",
+                "--pdf-engine=weasyprint",
             ],
         );
     }
@@ -1879,7 +1881,7 @@ mod tests {
                 "/tmp/input.csv",
                 "-o",
                 "/tmp/input.csv.pdf",
-                "--pdf-engine=xelatex",
+                "--pdf-engine=weasyprint",
             ],
         );
     }
@@ -1902,7 +1904,7 @@ mod tests {
                 "/tmp/input.tsv",
                 "-o",
                 "/tmp/input.tsv.pdf",
-                "--pdf-engine=xelatex",
+                "--pdf-engine=weasyprint",
             ],
         );
     }

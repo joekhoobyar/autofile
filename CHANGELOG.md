@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Change pandoc PDF engine to weasyprint
+
+### Security
+
+- Remove texlive package
+
 ## [0.5.3] - 2026-09-12
 
 ### Security
