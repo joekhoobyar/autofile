@@ -90,6 +90,8 @@ jobs:
     name: Push Multi-Arch Manifests
     runs-on: ubuntu-24.04
     needs: images
+    outputs:
+      trivy-images: ${{ steps.trivy-images.outputs.images }}
 
     steps:
       - name: Checkout
@@ -166,3 +168,61 @@ jobs:
                     ;;
                 esac
               done
+
+      - name: Collect Trivy image matrix
+        id: trivy-images
+        shell: bash
+        env:
+          GIT_SHA: ${{ steps.manifest-vars.outputs.git_sha }}
+          RELEASE_TAG: ${{ steps.manifest-vars.outputs.release_tag }}
+          BAKE_GROUP: ${{ steps.manifest-vars.outputs.bake_group }}
+        run: |
+          export GIT_SHA RELEASE_TAG
+          BUILD_CREATED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          export BUILD_CREATED
+          export BASE_TAG="latest"
+          export ARCH="amd64"
+
+          images="$({
+            docker buildx bake --print "${BAKE_GROUP}" \
+              | jq -c '[.target[]?.tags[]? | select(endswith("-amd64")) | sub("-amd64$"; "") | { image: ., category: (sub("^ghcr.io/"; "") | gsub("[/:.]"; "-")) }]'
+          })"
+
+          echo "images=${images}" >> "$GITHUB_OUTPUT"
+
+  trivy:
+    name: Scan ${{ matrix.image }}
+    runs-on: ubuntu-24.04
+    needs: manifests
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.manifests.outputs.trivy-images) }}
+
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          format: sarif
+          output: trivy-${{ matrix.category }}.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: false
+          exit-code: '0'
+
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-${{ matrix.category }}.sarif
+          category: trivy-${{ matrix.category }}
