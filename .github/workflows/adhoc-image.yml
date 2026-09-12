@@ -198,7 +198,7 @@ jobs:
           echo "images=${images}" >> "$GITHUB_OUTPUT"
 
   trivy:
-    name: Scan ${{ matrix.image }}
+    name: Scan ${{ matrix.category }}
     if: github.event_name == 'workflow_dispatch' && inputs.target == 'adhoc'
     runs-on: ubuntu-24.04
     needs: manifests
