@@ -35,7 +35,8 @@ use autofile_api::shared::util::ApiError;
 async fn main() {
     // Dump the OpenAPI specification without requiring any runtime
     // configuration (JWT, Redis, database, S3). Release workflows reuse the
-    // built image for this: `docker run --rm <image> --dump-openapi`.
+    // built image for this (overriding the tini entrypoint):
+    // `docker run --rm --entrypoint /usr/local/bin/autofile-api <image> --dump-openapi`.
     if std::env::args().any(|arg| arg == "--dump-openapi") {
         let (_, openapi) = build_openapi_router();
         let json = openapi

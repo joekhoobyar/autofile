@@ -121,7 +121,9 @@ jobs:
         run: |
           image="ghcr.io/joekhoobyar/autofile-api:${GITHUB_REF_NAME}-amd64"
           docker pull "$image"
-          docker run --rm "$image" --dump-openapi > openapi.json
+          # ENTRYPOINT is tini, so override it: appending args alone would make
+          # tini try to exec the flag itself.
+          docker run --rm --entrypoint /usr/local/bin/autofile-api "$image" --dump-openapi > openapi.json
           python3 -c "import json; spec = json.load(open('openapi.json')); print(f\"paths: {len(spec.get('paths', {}))}\")"
           gh release upload "${GITHUB_REF_NAME}" openapi.json --clobber
 
