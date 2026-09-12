@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use axum::{Json, Router, routing::get};
+use axum::Json;
+use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::application::app_settings::get_app_settings;
 use crate::shared::app_state::AppState;
@@ -11,11 +12,19 @@ use crate::shared::util::ApiError;
 ///
 /// This is an explicit allowlist: new `AppSettings` fields are never
 /// public unless they are deliberately added to this struct.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct PublicSettingsResponse {
     pub allow_user_registration: bool,
 }
 
+#[utoipa::path(
+    get,
+    path = "/settings",
+    tag = "public",
+    responses(
+        (status = 200, description = "Publicly visible settings", body = PublicSettingsResponse),
+    )
+)]
 pub async fn get_public_settings(
     DbConn(mut db): DbConn,
 ) -> Result<Json<PublicSettingsResponse>, ApiError> {
@@ -26,6 +35,6 @@ pub async fn get_public_settings(
     }))
 }
 
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new().route("/settings", get(get_public_settings))
+pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new().routes(routes!(get_public_settings))
 }

@@ -11,16 +11,17 @@ use crate::shared::auth::{
 use crate::shared::extractors::DbConn;
 use crate::shared::util::{ApiError, diesel_to_http};
 
-use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
+use axum::{Json, extract::State, http::StatusCode};
 use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use tower_cookies::{Cookie, Cookies};
+use utoipa_axum::{router::OpenApiRouter, routes};
 
 const ACCESS_TTL_SECONDS: i64 = 3600; // 1 hour
 const REFRESH_TTL_SECONDS: i64 = 3600 * 24 * 30; // 30 days
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct RegisterRequest {
     pub username: String,
     pub email: String,
@@ -28,19 +29,31 @@ pub struct RegisterRequest {
     pub password: String,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct AccessTokenResponse {
     pub access_token: String,
     pub token_type: &'static str, // "Bearer"
     pub expires_in: i64,          // seconds
 }
 
+#[utoipa::path(
+    post,
+    path = "/register",
+    tag = "auth",
+    request_body = RegisterRequest,
+    responses(
+        (status = 200, description = "Registered user (disabled until an admin enables them)", body = User),
+        (status = 400, description = "Invalid request, e.g. password shorter than 12 characters", body = ApiError),
+        (status = 403, description = "User registration is disabled", body = ApiError),
+        (status = 409, description = "Email address is already registered or username is taken", body = ApiError),
+    )
+)]
 pub async fn register(
     DbConn(mut db): DbConn,
     Json(req): Json<RegisterRequest>,
@@ -166,6 +179,16 @@ pub fn issue_tokens(
     })
 }
 
+#[utoipa::path(
+    post,
+    path = "/login",
+    tag = "auth",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "Access token; a refresh_token is set as an HTTP-only cookie scoped to /api/v1/auth", body = AccessTokenResponse),
+        (status = 401, description = "Invalid credentials", body = ApiError),
+    )
+)]
 pub async fn login(
     State(state): State<Arc<AppState>>,
     cookies: Cookies,
@@ -190,6 +213,15 @@ pub async fn login(
     Ok(Json(issue_tokens(&state, &cookies, &user)?))
 }
 
+#[utoipa::path(
+    post,
+    path = "/logout",
+    tag = "auth",
+    responses(
+        (status = 204, description = "Logged out; the refresh-token cookie is cleared"),
+        (status = 500, description = "Internal error", body = ApiError),
+    )
+)]
 pub async fn logout(cookies: Cookies) -> Result<StatusCode, ApiError> {
     // Clear the refresh token cookie
     let mut cookie = Cookie::new("refresh_token", "");
@@ -203,6 +235,15 @@ pub async fn logout(cookies: Cookies) -> Result<StatusCode, ApiError> {
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(
+    post,
+    path = "/refresh",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Fresh access token; requires the refresh_token cookie and rotates it", body = AccessTokenResponse),
+        (status = 401, description = "Missing or invalid refresh token", body = ApiError),
+    )
+)]
 pub async fn refresh(
     State(state): State<Arc<AppState>>,
     cookies: Cookies,
@@ -247,12 +288,12 @@ fn validate_refresh_user(user: &User) -> Result<(), ApiError> {
     Ok(())
 }
 
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/register", post(register))
-        .route("/login", post(login))
-        .route("/refresh", post(refresh))
-        .route("/logout", post(logout))
+pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new()
+        .routes(routes!(register))
+        .routes(routes!(login))
+        .routes(routes!(refresh))
+        .routes(routes!(logout))
 }
 
 #[cfg(test)]

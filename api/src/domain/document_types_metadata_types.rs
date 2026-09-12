@@ -6,7 +6,7 @@ use crate::domain::document_types::DocumentType;
 use crate::domain::metadata_types::MetadataType;
 use crate::schema::document_types_metadata_types;
 
-#[derive(Debug, Serialize, Identifiable, Associations, Queryable, Selectable)]
+#[derive(Debug, Serialize, Identifiable, Associations, Queryable, Selectable, utoipa::ToSchema)]
 #[diesel(belongs_to(DocumentType))]
 #[diesel(belongs_to(MetadataType))]
 #[diesel(table_name = document_types_metadata_types)]

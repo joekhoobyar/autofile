@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::schema::cabinets;
 
-#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
+#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable, utoipa::ToSchema)]
 #[diesel(table_name = cabinets)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Cabinet {
@@ -19,7 +19,7 @@ pub struct Cabinet {
     pub parent_id: Option<i64>,
 }
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq, utoipa::ToSchema)]
 pub struct CabinetView {
     pub id: i64,
     pub slug: String,

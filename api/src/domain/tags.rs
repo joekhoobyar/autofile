@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::schema::tags;
 
-#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
+#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable, utoipa::ToSchema)]
 #[diesel(table_name = tags)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Tag {
@@ -18,7 +18,7 @@ pub struct Tag {
     pub updated_by: i64,
 }
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq, utoipa::ToSchema)]
 pub struct TagView {
     pub id: i64,
     pub slug: String,

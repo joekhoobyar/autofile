@@ -10,14 +10,14 @@ use crate::shared::util::{ApiError, ResourceList, diesel_to_http, validate_slug}
 use serde::Deserialize;
 
 use axum::{
-    Json, Router,
+    Json,
     extract::{Path, Query},
-    routing::get,
 };
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
+use utoipa_axum::{router::OpenApiRouter, routes};
 
-#[derive(Debug, Deserialize, Insertable)]
+#[derive(Debug, Deserialize, Insertable, utoipa::ToSchema)]
 #[diesel(table_name = document_types)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct NewDocumentType {
@@ -26,7 +26,7 @@ struct NewDocumentType {
     description: Option<String>,
 }
 
-#[derive(Debug, Deserialize, AsChangeset)]
+#[derive(Debug, Deserialize, AsChangeset, utoipa::ToSchema)]
 #[diesel(table_name = document_types)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct DocumentTypeChangeset {
@@ -34,7 +34,7 @@ struct DocumentTypeChangeset {
     description: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DocumentTypeSortField {
     Id,
@@ -45,20 +45,34 @@ pub enum DocumentTypeSortField {
     UpdatedAt,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListDocumentTypesQuery {
-    // 1-based page number
+    /// 1-based page number.
     pub page: Option<i64>,
-    // items per page (cap it)
+    /// Items per page (1 through 200).
     pub per_page: Option<i64>,
-    // optional substring search
+    /// Case-insensitive search of slug, name, and description.
     pub q: Option<String>,
-    // optional sort field
+    /// Sort field.
     pub sf: Option<DocumentTypeSortField>,
-    // optional sort descending
+    /// Set to true for descending order.
     pub sd: Option<bool>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/{id}",
+    tag = "document-types",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Document Type ID")),
+    responses(
+        (status = 200, description = "Document Type", body = DocumentType),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document Type not found", body = ApiError),
+    )
+)]
 pub async fn get_by_id(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -74,6 +88,19 @@ pub async fn get_by_id(
     Ok(Json(row))
 }
 
+#[utoipa::path(
+    get,
+    path = "/by-slug/{slug}",
+    tag = "document-types",
+    security(("bearer" = [])),
+    params(("slug" = String, Path, description = "Exact document type slug")),
+    responses(
+        (status = 200, description = "Document Type", body = DocumentType),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document Type not found", body = ApiError),
+    )
+)]
 pub async fn get_by_slug(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -89,6 +116,20 @@ pub async fn get_by_slug(
     Ok(Json(row))
 }
 
+#[utoipa::path(
+    post,
+    path = "/",
+    tag = "document-types",
+    security(("bearer" = [])),
+    request_body = NewDocumentType,
+    responses(
+        (status = 200, description = "Created Document Type", body = DocumentType),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Admin role required", body = ApiError),
+        (status = 409, description = "Slug is already taken", body = ApiError),
+        (status = 422, description = "Invalid slug", body = ApiError),
+    )
+)]
 async fn create(
     user: AdminUser,
     DbConn(mut db): DbConn,
@@ -110,6 +151,20 @@ async fn create(
     Ok(Json(inserted))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/{id}",
+    tag = "document-types",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Document Type ID")),
+    request_body = DocumentTypeChangeset,
+    responses(
+        (status = 200, description = "Updated Document Type", body = DocumentType),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Admin role required", body = ApiError),
+        (status = 404, description = "Document Type not found", body = ApiError),
+    )
+)]
 async fn update(
     user: AdminUser,
     DbConn(mut db): DbConn,
@@ -132,6 +187,20 @@ async fn update(
     Ok(Json(updated))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/{id}",
+    tag = "document-types",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Document Type ID")),
+    responses(
+        (status = 200, description = "Document Type deleted; its documents are reassigned to the default type"),
+        (status = 400, description = "Cannot delete the default document type", body = ApiError),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Admin role required", body = ApiError),
+        (status = 404, description = "Document Type not found", body = ApiError),
+    )
+)]
 async fn delete(
     user: AdminUser,
     DbConn(mut db): DbConn,
@@ -186,6 +255,18 @@ async fn delete(
     Ok(Json(()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/",
+    tag = "document-types",
+    security(("bearer" = [])),
+    params(ListDocumentTypesQuery),
+    responses(
+        (status = 200, description = "Paginated Document Type list with document counts", body = ResourceList<DocumentTypeView>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+    )
+)]
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -314,9 +395,12 @@ pub async fn list(
     }))
 }
 
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/", get(list).post(create))
-        .route("/{id}", get(get_by_id).patch(update).delete(delete))
-        .route("/by-slug/{slug}", get(get_by_slug))
+pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(create))
+        .routes(routes!(get_by_id))
+        .routes(routes!(update))
+        .routes(routes!(delete))
+        .routes(routes!(get_by_slug))
 }

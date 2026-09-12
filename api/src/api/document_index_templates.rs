@@ -10,15 +10,15 @@ use crate::shared::util::{ApiError, ResourceList, de_present_option, diesel_to_h
 use serde::Deserialize;
 
 use axum::{
-    Json, Router,
+    Json,
     extract::{Path, Query},
     http::StatusCode,
-    routing::get,
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use utoipa_axum::{router::OpenApiRouter, routes};
 
-#[derive(Debug, Deserialize, Insertable)]
+#[derive(Debug, Deserialize, Insertable, utoipa::ToSchema)]
 #[diesel(table_name = document_index_templates)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct NewDocumentIndexTemplate {
@@ -28,7 +28,7 @@ struct NewDocumentIndexTemplate {
     parent_id: Option<i64>,
 }
 
-#[derive(Debug, Deserialize, AsChangeset)]
+#[derive(Debug, Deserialize, AsChangeset, utoipa::ToSchema)]
 #[diesel(table_name = document_index_templates)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct DocumentIndexTemplateChangeset {
@@ -36,11 +36,13 @@ struct DocumentIndexTemplateChangeset {
     is_leaf: Option<bool>,
     enabled: Option<bool>,
 
+    /// Set a new parent, or null to detach. Omitted when unchanged.
     #[serde(default, deserialize_with = "de_present_option")]
+    #[schema(value_type = Option<i64>)]
     parent_id: Option<Option<i64>>,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DocumentIndexTemplateSortField {
     Id,
@@ -52,22 +54,39 @@ pub enum DocumentIndexTemplateSortField {
     UpdatedAt,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListDocumentIndexTemplatesQuery {
-    // 1-based page number
+    /// 1-based page number.
     pub page: Option<i64>,
-    // items per page (cap it)
+    /// Items per page (1 through 200).
     pub per_page: Option<i64>,
-    // optional substring search
+    /// Case-insensitive template substring search.
     pub q: Option<String>,
-    // Filter by parent_id: "null" for null, or numeric value
+    /// Filter by parent: "null" for top-level templates, or a numeric ID.
     pub parent_id: Option<String>,
-    // optional sort field
+    /// Sort field.
     pub sf: Option<DocumentIndexTemplateSortField>,
-    // optional sort descending
+    /// Set to true for descending order.
     pub sd: Option<bool>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/{document_index_id}/templates/{id}",
+    tag = "document-indexes",
+    security(("bearer" = [])),
+    params(
+        ("document_index_id" = i64, Path, description = "Document Index ID"),
+        ("id" = i64, Path, description = "Template ID"),
+    ),
+    responses(
+        (status = 200, description = "Document Index Template", body = DocumentIndexTemplate),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Template not found", body = ApiError),
+    )
+)]
 pub async fn get_by_id(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -84,6 +103,21 @@ pub async fn get_by_id(
     Ok(Json(row))
 }
 
+#[utoipa::path(
+    post,
+    path = "/{document_index_id}/templates",
+    tag = "document-indexes",
+    security(("bearer" = [])),
+    params(("document_index_id" = i64, Path, description = "Document Index ID")),
+    request_body = NewDocumentIndexTemplate,
+    responses(
+        (status = 200, description = "Created Template", body = DocumentIndexTemplate),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document Index not found", body = ApiError),
+        (status = 422, description = "Invalid document index or parent template", body = ApiError),
+    )
+)]
 async fn create(
     user: AuthUser,
     DbConn(mut db): DbConn,
@@ -126,6 +160,24 @@ async fn create(
     Ok(Json(inserted))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/{document_index_id}/templates/{id}",
+    tag = "document-indexes",
+    security(("bearer" = [])),
+    params(
+        ("document_index_id" = i64, Path, description = "Document Index ID"),
+        ("id" = i64, Path, description = "Template ID"),
+    ),
+    request_body = DocumentIndexTemplateChangeset,
+    responses(
+        (status = 200, description = "Updated Template", body = DocumentIndexTemplate),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Template not found", body = ApiError),
+        (status = 422, description = "Invalid parent template", body = ApiError),
+    )
+)]
 async fn update(
     user: AuthUser,
     DbConn(mut db): DbConn,
@@ -194,6 +246,22 @@ async fn update(
     Ok(Json(updated))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/{document_index_id}/templates/{id}",
+    tag = "document-indexes",
+    security(("bearer" = [])),
+    params(
+        ("document_index_id" = i64, Path, description = "Document Index ID"),
+        ("id" = i64, Path, description = "Template ID"),
+    ),
+    responses(
+        (status = 200, description = "Template deleted"),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Template not found", body = ApiError),
+    )
+)]
 async fn delete(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -220,6 +288,21 @@ async fn delete(
     Ok(Json(()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/{document_index_id}/templates",
+    tag = "document-indexes",
+    security(("bearer" = [])),
+    params(
+        ("document_index_id" = i64, Path, description = "Document Index ID"),
+        ListDocumentIndexTemplatesQuery,
+    ),
+    responses(
+        (status = 200, description = "Paginated Template list", body = ResourceList<DocumentIndexTemplate>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+    )
+)]
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -334,11 +417,11 @@ pub async fn list(
     }))
 }
 
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/{document_index_id}/templates", get(list).post(create))
-        .route(
-            "/{document_index_id}/templates/{id}",
-            get(get_by_id).patch(update).delete(delete),
-        )
+pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(create))
+        .routes(routes!(get_by_id))
+        .routes(routes!(update))
+        .routes(routes!(delete))
 }

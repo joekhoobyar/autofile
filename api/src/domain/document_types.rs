@@ -6,7 +6,7 @@ use crate::schema::document_types;
 
 pub const UNSPECIFIED_DOCUMENT_TYPE_ID: i64 = 1;
 
-#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
+#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable, utoipa::ToSchema)]
 #[diesel(table_name = document_types)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct DocumentType {
@@ -20,7 +20,7 @@ pub struct DocumentType {
     pub description: Option<String>,
 }
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq, utoipa::ToSchema)]
 pub struct DocumentTypeView {
     pub id: i64,
     pub slug: String,
