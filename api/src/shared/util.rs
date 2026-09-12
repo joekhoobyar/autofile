@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct ResourceList<T> {
     pub total: i64,
     pub page: i64,
@@ -20,7 +20,7 @@ pub struct ResourceList<T> {
     pub items: Vec<T>,
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct ApiError {
     #[serde(skip_serializing)]
     pub status: StatusCode,

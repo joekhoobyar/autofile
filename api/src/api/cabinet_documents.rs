@@ -12,17 +12,17 @@ use axum::extract::State;
 use serde::Deserialize;
 
 use axum::{
-    Json, Router,
+    Json,
     extract::{Path, Query},
-    routing::get,
 };
 use diesel::prelude::*;
 use diesel::upsert::excluded;
 use diesel_async::RunQueryDsl;
+use utoipa_axum::{router::OpenApiRouter, routes};
 
 use chrono::Utc;
 
-#[derive(Debug, Deserialize, Insertable)]
+#[derive(Debug, Deserialize, Insertable, utoipa::ToSchema)]
 #[diesel(table_name = cabinet_documents)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct NewCabinetDocument {
@@ -38,7 +38,7 @@ struct InsertableCabinetDocument {
     updated_by: i64,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CabinetDocumentSortField {
     DocumentId,
@@ -46,18 +46,35 @@ pub enum CabinetDocumentSortField {
     UpdatedAt,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListCabinetDocumentsQuery {
-    // 1-based page number
+    /// 1-based page number.
     pub page: Option<i64>,
-    // items per page (cap it)
+    /// Items per page (1 through 200).
     pub per_page: Option<i64>,
-    // optional sort field
+    /// Sort field.
     pub sf: Option<CabinetDocumentSortField>,
-    // optional sort descending
+    /// Set to true for descending order.
     pub sd: Option<bool>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/{cabinet_id}/documents/{document_id}",
+    tag = "cabinets",
+    security(("bearer" = [])),
+    params(
+        ("cabinet_id" = i64, Path, description = "Cabinet ID"),
+        ("document_id" = i64, Path, description = "Document ID"),
+    ),
+    responses(
+        (status = 200, description = "Cabinet-document association", body = CabinetDocument),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Association not found", body = ApiError),
+    )
+)]
 pub async fn get_by_ids(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -73,6 +90,21 @@ pub async fn get_by_ids(
     Ok(Json(row))
 }
 
+#[utoipa::path(
+    post,
+    path = "/{cabinet_id}/documents",
+    tag = "cabinets",
+    security(("bearer" = [])),
+    params(("cabinet_id" = i64, Path, description = "Cabinet ID")),
+    request_body = Vec<NewCabinetDocument>,
+    responses(
+        (status = 200, description = "Created or updated associations", body = Vec<CabinetDocument>),
+        (status = 400, description = "Invalid request", body = ApiError),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 422, description = "Unprocessable request", body = ApiError),
+    )
+)]
 async fn upsert(
     user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -116,6 +148,21 @@ async fn upsert(
     Ok(Json(items))
 }
 
+#[utoipa::path(
+    get,
+    path = "/{cabinet_id}/documents",
+    tag = "cabinets",
+    security(("bearer" = [])),
+    params(
+        ("cabinet_id" = i64, Path, description = "Cabinet ID"),
+        ListCabinetDocumentsQuery,
+    ),
+    responses(
+        (status = 200, description = "Paginated cabinet-document associations", body = ResourceList<CabinetDocument>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+    )
+)]
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -163,6 +210,20 @@ pub async fn list(
     }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/{cabinet_id}/documents/delete",
+    tag = "cabinets",
+    security(("bearer" = [])),
+    params(("cabinet_id" = i64, Path, description = "Cabinet ID")),
+    request_body = Vec<i64>,
+    responses(
+        (status = 200, description = "Associations removed"),
+        (status = 400, description = "Invalid request", body = ApiError),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+    )
+)]
 async fn delete(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -187,6 +248,22 @@ async fn delete(
     Ok(Json(()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/{cabinet_id}/documents/{document_id}",
+    tag = "cabinets",
+    security(("bearer" = [])),
+    params(
+        ("cabinet_id" = i64, Path, description = "Cabinet ID"),
+        ("document_id" = i64, Path, description = "Document ID"),
+    ),
+    responses(
+        (status = 200, description = "Association removed"),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Association not found", body = ApiError),
+    )
+)]
 async fn delete_junction(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -212,15 +289,11 @@ async fn delete_junction(
     Ok(Json(()))
 }
 
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/{cabinet_id}/documents", get(list).post(upsert))
-        .route(
-            "/{cabinet_id}/documents/delete",
-            axum::routing::post(delete),
-        )
-        .route(
-            "/{cabinet_id}/documents/{document_id}",
-            get(get_by_ids).delete(delete_junction),
-        )
+pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(upsert))
+        .routes(routes!(delete))
+        .routes(routes!(get_by_ids))
+        .routes(routes!(delete_junction))
 }

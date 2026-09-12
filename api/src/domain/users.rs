@@ -12,7 +12,7 @@ use crate::schema::users;
 
 pub const SYSTEM_USER_ID: i64 = 1;
 
-#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
+#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable, utoipa::ToSchema)]
 #[diesel(table_name = users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
@@ -31,7 +31,18 @@ pub struct User {
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, AsExpression, FromSqlRow)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    AsExpression,
+    FromSqlRow,
+    utoipa::ToSchema,
+)]
 #[diesel(sql_type = Varchar)]
 #[serde(rename_all = "lowercase")]
 pub enum UserRole {

@@ -42,6 +42,9 @@ redis = { version = "1", features = ["tokio-comp"] }
 
 minijinja = { version = "2.18" } 
 regex = "1.12.3"
+utoipa = { version = "5.5.0", features = ["axum_extras", "chrono"] }
+utoipa-axum = "0.2.0"
+utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
 
 [dev-dependencies]
 testcontainers = "0.27"

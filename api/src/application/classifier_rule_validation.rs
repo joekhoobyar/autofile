@@ -3,20 +3,20 @@ use serde::Serialize;
 
 use crate::domain::classifier_blocks::{ClassifierPattern, ClassifierRules};
 
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 pub struct ClassifierRulesValidationIssue {
     pub path: String,
     pub code: &'static str,
     pub message: String,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 pub struct ClassifierPatternValidation {
     pub path: String,
     pub capture_count: usize,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 pub struct ClassifierRulesValidation {
     pub valid: bool,
     pub issues: Vec<ClassifierRulesValidationIssue>,

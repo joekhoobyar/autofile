@@ -10,15 +10,15 @@ use crate::shared::util::{ApiError, ResourceList, diesel_to_http, validate_slug}
 use serde::Deserialize;
 
 use axum::{
-    Json, Router,
+    Json,
     extract::{Path, Query},
-    routing::get,
 };
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use utoipa_axum::{router::OpenApiRouter, routes};
 
-#[derive(Debug, Deserialize, Insertable)]
+#[derive(Debug, Deserialize, Insertable, utoipa::ToSchema)]
 #[diesel(table_name = tags)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct NewTag {
@@ -27,7 +27,7 @@ struct NewTag {
     color: String,
 }
 
-#[derive(Debug, Deserialize, AsChangeset)]
+#[derive(Debug, Deserialize, AsChangeset, utoipa::ToSchema)]
 #[diesel(table_name = tags)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct TagChangeset {
@@ -36,7 +36,7 @@ struct TagChangeset {
     updated_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TagSortField {
     Id,
@@ -46,20 +46,34 @@ pub enum TagSortField {
     UpdatedAt,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListTagsQuery {
-    // 1-based page number
+    /// 1-based page number.
     pub page: Option<i64>,
-    // items per page (cap it)
+    /// Items per page (1 through 200).
     pub per_page: Option<i64>,
-    // optional substring search
+    /// Case-insensitive search of slug and name.
     pub q: Option<String>,
-    // optional sort field
+    /// Sort field.
     pub sf: Option<TagSortField>,
-    // optional sort descending
+    /// Set to true for descending order.
     pub sd: Option<bool>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/{id}",
+    tag = "tags",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Tag ID")),
+    responses(
+        (status = 200, description = "Tag", body = Tag),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Tag not found", body = ApiError),
+    )
+)]
 pub async fn get_by_id(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -75,6 +89,19 @@ pub async fn get_by_id(
     Ok(Json(row))
 }
 
+#[utoipa::path(
+    get,
+    path = "/by-slug/{slug}",
+    tag = "tags",
+    security(("bearer" = [])),
+    params(("slug" = String, Path, description = "Exact tag slug")),
+    responses(
+        (status = 200, description = "Tag", body = Tag),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Tag not found", body = ApiError),
+    )
+)]
 pub async fn get_by_slug(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -90,6 +117,20 @@ pub async fn get_by_slug(
     Ok(Json(row))
 }
 
+#[utoipa::path(
+    post,
+    path = "/",
+    tag = "tags",
+    security(("bearer" = [])),
+    request_body = NewTag,
+    responses(
+        (status = 200, description = "Created tag", body = Tag),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 409, description = "Slug is already taken", body = ApiError),
+        (status = 422, description = "Invalid slug", body = ApiError),
+    )
+)]
 async fn create(
     user: AuthUser,
     DbConn(mut db): DbConn,
@@ -111,6 +152,20 @@ async fn create(
     Ok(Json(inserted))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/{id}",
+    tag = "tags",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Tag ID")),
+    request_body = TagChangeset,
+    responses(
+        (status = 200, description = "Updated tag", body = Tag),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Tag not found", body = ApiError),
+    )
+)]
 async fn update(
     user: AuthUser,
     DbConn(mut db): DbConn,
@@ -138,6 +193,19 @@ async fn update(
     Ok(Json(updated))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/{id}",
+    tag = "tags",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Tag ID")),
+    responses(
+        (status = 200, description = "Tag deleted"),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Tag not found", body = ApiError),
+    )
+)]
 async fn delete(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -155,6 +223,18 @@ async fn delete(
     Ok(Json(()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/",
+    tag = "tags",
+    security(("bearer" = [])),
+    params(ListTagsQuery),
+    responses(
+        (status = 200, description = "Paginated tag list with document counts", body = ResourceList<TagView>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+    )
+)]
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -255,9 +335,12 @@ pub async fn list(
     }))
 }
 
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/", get(list).post(create))
-        .route("/{id}", get(get_by_id).patch(update).delete(delete))
-        .route("/by-slug/{slug}", get(get_by_slug))
+pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(create))
+        .routes(routes!(get_by_id))
+        .routes(routes!(update))
+        .routes(routes!(delete))
+        .routes(routes!(get_by_slug))
 }

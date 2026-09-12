@@ -24,14 +24,12 @@ use apalis::prelude::*;
 use apalis_redis::RedisStorage;
 
 use autofile_api::application::jobs::{FastJob, MediumJob, handle_fast_job, handle_medium_job};
+use autofile_api::application::jobs::{SlowJob, handle_slow_job};
 use autofile_api::run_migrations;
 use autofile_api::shared::app_state::AppState;
 use autofile_api::shared::extractors::DbConn;
+use autofile_api::shared::openapi::build_openapi_router;
 use autofile_api::shared::util::ApiError;
-use autofile_api::{
-    api,
-    application::jobs::{SlowJob, handle_slow_job},
-};
 
 #[tokio::main]
 async fn main() {
@@ -219,37 +217,13 @@ async fn main() {
         .allow_credentials(true)
         .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT]);
 
-    let api_v1 = Router::new()
-        .route("/health/ready", get(health_ready))
-        .nest("/about", api::about::routes())
-        .nest("/settings", api::app_settings::routes())
-        .nest("/auth", api::auth::routes())
-        .nest("/cabinets", api::cabinets::routes())
-        .nest("/cabinets", api::cabinet_documents::routes())
-        .nest("/classifier-blocks", api::classifier_blocks::routes())
-        .nest("/document-indexes", api::document_indexes::routes())
-        .nest("/document-indexes", api::document_index_templates::routes())
-        .nest("/document-indexes", api::document_index_values::routes())
-        .nest("/document-types", api::document_types::routes())
-        .nest(
-            "/document-types-metadata-types",
-            api::document_types_metadata_types::routes(),
-        )
-        .nest("/documents", api::documents::routes())
-        .nest("/documents", api::document_file_pages::routes())
-        .nest("/documents", api::document_files::routes())
-        .nest("/documents", api::document_metadatas::routes())
-        .nest("/metadata-types", api::metadata_types::routes())
-        .nest("/ping", api::ping::routes())
-        .nest("/profile", api::profile::routes())
-        .nest("/public", api::public_settings::routes())
-        .nest("/users", api::users::routes())
-        .nest("/tags", api::tags::routes())
-        .nest("/tags", api::tag_documents::routes());
+    let (api_v1_router, openapi) = build_openapi_router();
 
     // Build the router (wrap state in Arc for efficient sharing)
     let app = Router::new()
-        .nest("/api/v1", api_v1)
+        .route("/api/v1/health/ready", get(health_ready))
+        .nest("/api/v1", api_v1_router)
+        .merge(utoipa_swagger_ui::SwaggerUi::new("/api/docs").url("/api/v1/openapi.json", openapi))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())

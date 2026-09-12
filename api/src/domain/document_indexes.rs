@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::schema::{document_index_templates, document_index_values, document_indexes};
 
-#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
+#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable, utoipa::ToSchema)]
 #[diesel(table_name = document_indexes)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct DocumentIndex {
@@ -19,7 +19,7 @@ pub struct DocumentIndex {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq, utoipa::ToSchema)]
 pub struct DocumentIndexView {
     pub id: i64,
     pub slug: String,
@@ -33,7 +33,7 @@ pub struct DocumentIndexView {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
+#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable, utoipa::ToSchema)]
 #[diesel(table_name = document_index_templates)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct DocumentIndexTemplate {
@@ -49,7 +49,7 @@ pub struct DocumentIndexTemplate {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
+#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable, utoipa::ToSchema)]
 #[diesel(table_name = document_index_values)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct DocumentIndexValue {
@@ -61,7 +61,7 @@ pub struct DocumentIndexValue {
     pub is_leaf: bool,
 }
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq, utoipa::ToSchema)]
 pub struct DocumentIndexValueView {
     pub id: i64,
     pub value: String,

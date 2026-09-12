@@ -32,17 +32,17 @@ use diesel_full_text_search::*;
 use serde::Deserialize;
 
 use axum::{
-    Json, Router,
+    Json,
     extract::{Multipart, Path, Query, State},
     http::HeaderMap,
     response::Response,
-    routing::{get, post},
 };
 use diesel::prelude::*;
 use diesel::sql_types::Bool;
 use diesel_async::RunQueryDsl;
+use utoipa_axum::{router::OpenApiRouter, routes};
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, serde::Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DocumentSortField {
     Id,
@@ -51,42 +51,58 @@ pub enum DocumentSortField {
     UpdatedAt,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListDocumentsQuery {
-    // 1-based page number
+    /// 1-based page number.
     pub page: Option<i64>,
-    // items per page (cap it)
+    /// Items per page (1 through 200).
     pub per_page: Option<i64>,
-    // if true, match any of the search criteria instead of all.
+    /// When true, match any of the text-search criteria instead of all.
     pub match_any: Option<bool>,
-    // optional title search
+    /// Case-insensitive title substring search.
     pub q: Option<String>,
-    // optional text search
+    /// Full-text search over extracted document text and OCR text.
     pub text: Option<String>,
-    // optional document type search
+    /// Narrow results to one Document Type.
     pub document_type_id: Option<i64>,
-    // optional cabinet search
+    /// Narrow results to documents in one cabinet.
     pub cabinet_id: Option<i64>,
-    // optional tag search
+    /// Narrow results to documents with one tag.
     pub tag_id: Option<i64>,
-    // optional metadata type search
+    /// Narrow results to documents with a value for one Metadata Type.
     pub metadata_type_id: Option<i64>,
-    // optional metadata value search
+    /// Case-insensitive metadata value substring match.
     pub metadata_value: Option<String>,
-    // optional file name search
+    /// Case-insensitive filename substring search.
     pub filename: Option<String>,
-    // optional file content type search
+    /// Narrow results to documents with a file content type substring match.
     pub file_content_type: Option<String>,
-    // optional document index value search
+    /// Narrow results to documents assigned to one document index value.
     pub document_index_value_id: Option<i64>,
-    // optional duplicate search
+    /// When true, narrow results to documents sharing a title with another document.
     pub duplicates: Option<bool>,
-    // optional duplicate file checksum search
+    /// When true, narrow results to documents with a file checksum also present on another document.
     pub duplicate_checksum: Option<bool>,
-    // optional sort field
+    /// Sort field.
     pub sf: Option<DocumentSortField>,
-    // optional sort descending
+    /// Set to true for descending order.
     pub sd: Option<bool>,
+}
+
+/// Documented shape of the `multipart/form-data` body accepted by document
+/// creation. This type is never constructed; it only describes the wire format
+/// because the handler parses the multipart stream manually.
+#[derive(utoipa::ToSchema)]
+#[allow(dead_code)]
+struct CreateDocumentMultipart {
+    /// Document title (required).
+    title: String,
+    /// Owning document type ID (required).
+    document_type_id: i64,
+    /// Optional uploaded file bytes.
+    #[schema(value_type = Option<String>, format = Binary)]
+    file: Option<String>,
 }
 
 struct ParsedMultipart {
@@ -95,22 +111,22 @@ struct ParsedMultipart {
     file_temp: Option<BufferedDocumentFileUpload>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct TestClassifierBlockInput {
     classifier_block_id: i64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct TestTemplateInput {
     template: String,
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 struct TestClassifierBlockResponse {
     computed_actions: HashMap<String, String>,
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 struct TestTemplateResponse {
     rendered: Option<String>,
     error: Option<String>,
@@ -169,6 +185,19 @@ async fn parse_create_multipart(multipart: &mut Multipart) -> Result<ParsedMulti
     })
 }
 
+#[utoipa::path(
+    get,
+    path = "/{id}",
+    tag = "documents",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Document ID")),
+    responses(
+        (status = 200, description = "Document detail", body = DocumentView),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document not found", body = ApiError),
+    )
+)]
 pub async fn get_by_id(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -178,6 +207,19 @@ pub async fn get_by_id(
     Ok(Json(document_view))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/{id}",
+    tag = "documents",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Document ID")),
+    responses(
+        (status = 200, description = "Document deleted"),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document not found", body = ApiError),
+    )
+)]
 pub async fn delete(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -188,6 +230,20 @@ pub async fn delete(
     Ok(Json(()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/{id}/process-file-pages",
+    tag = "documents",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Document ID")),
+    responses(
+        (status = 200, description = "File page processing job enqueued"),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document not found", body = ApiError),
+        (status = 500, description = "Failed to enqueue job", body = ApiError),
+    )
+)]
 pub async fn process_file_pages(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -198,6 +254,20 @@ pub async fn process_file_pages(
     Ok(Json(()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/{id}/generate-thumbnail",
+    tag = "documents",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Document ID")),
+    responses(
+        (status = 200, description = "Thumbnail job enqueued"),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document not found", body = ApiError),
+        (status = 500, description = "Failed to enqueue job", body = ApiError),
+    )
+)]
 pub async fn generate_thumbnail(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -208,6 +278,20 @@ pub async fn generate_thumbnail(
     Ok(Json(()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/{id}/classify-document",
+    tag = "documents",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Document ID")),
+    responses(
+        (status = 200, description = "Classification job enqueued"),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document not found", body = ApiError),
+        (status = 500, description = "Failed to enqueue job", body = ApiError),
+    )
+)]
 pub async fn classify_document(
     user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -218,6 +302,21 @@ pub async fn classify_document(
     Ok(Json(()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/{id}/test-classifier-block",
+    tag = "documents",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Document ID")),
+    request_body = TestClassifierBlockInput,
+    responses(
+        (status = 200, description = "Actions the block would compute for this document", body = TestClassifierBlockResponse),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document or classifier block not found", body = ApiError),
+        (status = 500, description = "Failed to compute actions", body = ApiError),
+    )
+)]
 async fn test_classifier_block(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -255,6 +354,21 @@ async fn test_classifier_block(
     Ok(Json(TestClassifierBlockResponse { computed_actions }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/{id}/test-template",
+    tag = "documents",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Document ID")),
+    request_body = TestTemplateInput,
+    responses(
+        (status = 200, description = "Rendered template, or the render error; template errors return 200 with an error field", body = TestTemplateResponse),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document not found", body = ApiError),
+        (status = 500, description = "Failed to build template view", body = ApiError),
+    )
+)]
 async fn test_template(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -291,6 +405,19 @@ async fn test_template(
  * This handler serves the thumbnail image for a document, streaming it directly from S3.
  * It supports conditional GET with If-Modified-Since header to optimize caching.
  */
+#[utoipa::path(
+    get,
+    path = "/{id}/thumbnail",
+    tag = "documents",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Document ID")),
+    responses(
+        (status = 200, description = "Document thumbnail bytes", content_type = "image/png", body = Vec<u8>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Thumbnail not available", body = ApiError),
+    )
+)]
 pub async fn thumbnail_get(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -318,6 +445,25 @@ pub async fn thumbnail_get(
     .await
 }
 
+#[utoipa::path(
+    post,
+    path = "/",
+    tag = "documents",
+    security(("bearer" = [])),
+    request_body(
+        content = CreateDocumentMultipart,
+        content_type = "multipart/form-data",
+        description = "Document fields with an optional uploaded file"
+    ),
+    responses(
+        (status = 200, description = "Created document", body = Document),
+        (status = 400, description = "Invalid request, e.g. missing title or document_type_id", body = ApiError),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document type not found", body = ApiError),
+        (status = 422, description = "Unprocessable request", body = ApiError),
+    )
+)]
 async fn create(
     user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -345,6 +491,22 @@ async fn create(
     Ok(Json(document))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/{id}",
+    tag = "documents",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Document ID")),
+    request_body = DocumentChangeset,
+    responses(
+        (status = 200, description = "Updated document", body = Document),
+        (status = 400, description = "Invalid request", body = ApiError),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document not found", body = ApiError),
+        (status = 422, description = "Unprocessable request", body = ApiError),
+    )
+)]
 async fn update(
     user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -360,6 +522,19 @@ async fn update(
     Ok(Json(updated))
 }
 
+#[utoipa::path(
+    get,
+    path = "/",
+    tag = "documents",
+    security(("bearer" = [])),
+    params(ListDocumentsQuery),
+    responses(
+        (status = 200, description = "Paginated document list", body = ResourceList<DocumentView>),
+        (status = 400, description = "Invalid query", body = ApiError),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+    )
+)]
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -698,6 +873,19 @@ pub async fn list(
     }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/{id}/index-values",
+    tag = "documents",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Document ID")),
+    responses(
+        (status = 200, description = "Index values assigned to the document", body = Vec<DocumentIndexValue>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document not found", body = ApiError),
+    )
+)]
 pub async fn list_index_values(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -715,17 +903,20 @@ pub async fn list_index_values(
     Ok(Json(items))
 }
 
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/", get(list).post(create))
+pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(create))
         // Allow up to 100MB uploads for document creation.
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024 * 1024))
-        .route("/{id}", get(get_by_id).patch(update).delete(delete))
-        .route("/{id}/classify-document", post(classify_document))
-        .route("/{id}/test-classifier-block", post(test_classifier_block))
-        .route("/{id}/test-template", post(test_template))
-        .route("/{id}/index-values", get(list_index_values))
-        .route("/{id}/thumbnail", get(thumbnail_get))
-        .route("/{id}/generate-thumbnail", post(generate_thumbnail))
-        .route("/{id}/process-file-pages", post(process_file_pages))
+        .routes(routes!(get_by_id))
+        .routes(routes!(update))
+        .routes(routes!(delete))
+        .routes(routes!(classify_document))
+        .routes(routes!(test_classifier_block))
+        .routes(routes!(test_template))
+        .routes(routes!(list_index_values))
+        .routes(routes!(thumbnail_get))
+        .routes(routes!(generate_thumbnail))
+        .routes(routes!(process_file_pages))
 }

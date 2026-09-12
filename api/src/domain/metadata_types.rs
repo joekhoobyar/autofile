@@ -11,7 +11,7 @@ use std::io::Write;
 
 use crate::schema::metadata_types;
 
-#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
+#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable, utoipa::ToSchema)]
 #[diesel(table_name = metadata_types)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct MetadataType {
@@ -27,7 +27,18 @@ pub struct MetadataType {
     pub options: Option<Value>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, AsExpression, FromSqlRow)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    AsExpression,
+    FromSqlRow,
+    utoipa::ToSchema,
+)]
 #[diesel(sql_type = Varchar)]
 #[serde(rename_all = "lowercase")]
 pub enum DataType {
