@@ -1,5 +1,9 @@
 # Autofile Helm Chart
 
+Autofile is an open-source self-hosted document management application that turns your documents into indexed and searchable archives. It has a blazing fast backend written in Rust, stores document files in S3-compatible object storage, and keeps structured metadata and search indexes in PostgreSQL.
+
+For installation guides, concepts, configuration, and API reference, see the full documentation at [autofile.dev](https://autofile.dev/).
+
 This chart deploys Autofile's API and UI, with optional bundled Valkey, RustFS, and CloudNativePG resources.
 
 By default, the chart installs:
