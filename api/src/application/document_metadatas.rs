@@ -49,10 +49,7 @@ pub async fn document_metadatas_upsert(
     const MAX_METADATA_UPSERT_ITEMS: usize = 1000;
 
     if input.len() > MAX_METADATA_UPSERT_ITEMS {
-        return Err(ApiError::new(
-            400,
-            "Too many metadata items in request",
-        ));
+        return Err(ApiError::new(400, "Too many metadata items in request"));
     }
 
     // Validate the input metadata against the document type's rules,
