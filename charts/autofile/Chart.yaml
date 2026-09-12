@@ -2,8 +2,8 @@ apiVersion: v2
 name: autofile
 description: Self-hosted document management application
 type: application
-version: 0.5.4
-appVersion: v0.5.4
+version: 0.5.5
+appVersion: v0.5.5
 home: https://autofile.dev/
 sources:
   - https://github.com/joekhoobyar/autofile
