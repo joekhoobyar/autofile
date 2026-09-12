@@ -27,6 +27,9 @@ pub struct ApiError {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<&'static str>,
+    #[serde(skip)]
+    #[schema(ignore)]
+    source: Option<AnyhowError>,
 }
 
 pub type ApiResult<T> = Result<T, ApiError>;
@@ -101,6 +104,7 @@ impl ApiError {
             status,
             message: message.into(),
             code: None,
+            source: None,
         }
     }
 
@@ -109,6 +113,7 @@ impl ApiError {
             status,
             message: message.into(),
             code: Some(code),
+            source: None,
         }
     }
 
@@ -137,12 +142,34 @@ impl ApiError {
     }
 
     pub fn from_diesel(message: impl Into<String>, err: DieselError) -> Self {
-        Self::new(diesel_error_status(&err), message)
+        Self {
+            status: diesel_error_status(&err),
+            message: message.into(),
+            code: None,
+            source: Some(AnyhowError::new(err)),
+        }
     }
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
+        if self.status.is_server_error() {
+            if let Some(source) = &self.source {
+                tracing::error!(
+                    status = %self.status,
+                    message = %self.message,
+                    error = ?source,
+                    "server error response"
+                );
+            } else {
+                tracing::error!(
+                    status = %self.status,
+                    message = %self.message,
+                    "server error response"
+                );
+            }
+        }
+
         (self.status, Json(self)).into_response()
     }
 }
@@ -178,7 +205,12 @@ impl From<AppError> for ApiError {
             }
         };
 
-        ApiError::new(status, err.message)
+        ApiError {
+            status,
+            message: err.message,
+            code: None,
+            source: err.source,
+        }
     }
 }
 
@@ -314,6 +346,10 @@ impl fmt::Display for AnyhowJobError {
 
 impl std::error::Error for AnyhowJobError {}
 
+/**
+ * Write the contents of a multipart field to a temporary file,
+ * returning a `TempUpload` struct containing the file path, size, and SHA-256 checksum.
+ */
 pub async fn write_field_to_temp_file(
     field: &mut axum::extract::multipart::Field<'_>,
 ) -> Result<TempUpload, ApiError> {
@@ -352,17 +388,6 @@ pub async fn write_field_to_temp_file(
         checksum_sha256: format!("{:x}", hasher.finalize()),
     })
 }
-
-/*
- * Convert any error into a job error that can be returned from an Apalis job.
- */
-// pub fn to_job_error<E>(err: E) -> Error
-// where
-//     E: std::error::Error + Send + Sync + 'static,
-// {
-//     let boxed: BoxDynError = Box::new(err);
-//     Error::Failed(Arc::new(boxed))
-// }
 
 #[cfg(test)]
 mod tests {
