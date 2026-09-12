@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Migrate UI container to alpine from debian
+- Always upgrade base image software
+
 ## [0.5.2] - 2026-09-12
 
 ### Changed
