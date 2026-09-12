@@ -11,5 +11,8 @@ The interactive reference below is rendered from the `openapi.json` asset attach
     curl -s http://localhost:8000/api/v1/openapi.json -o openapi.json
     ```
 
+<div id="redoc-container"></div>
 <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
-<redoc spec-url="../../assets/openapi/openapi.json"></redoc>
+<script>
+  Redoc.init('../../assets/openapi/openapi.json', {}, document.getElementById('redoc-container'));
+</script>
