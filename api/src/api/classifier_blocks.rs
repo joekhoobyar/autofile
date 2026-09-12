@@ -17,14 +17,14 @@ use crate::shared::util::{ApiError, ResourceList, diesel_to_http};
 use serde::Deserialize;
 
 use axum::{
-    Json, Router,
+    Json,
     extract::{Path, Query},
-    routing::{get, post},
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use utoipa_axum::{router::OpenApiRouter, routes};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct NewClassifierBlock {
     name: String,
     description: Option<String>,
@@ -32,7 +32,7 @@ struct NewClassifierBlock {
     rules: ClassifierRules,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct ClassifierBlockChangeset {
     name: Option<String>,
     description: Option<String>,
@@ -40,12 +40,12 @@ struct ClassifierBlockChangeset {
     rules: Option<ClassifierRules>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct ReorderClassifierBlock {
     order: i32,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ClassifierBlockSortField {
     Id,
@@ -57,15 +57,34 @@ pub enum ClassifierBlockSortField {
     UpdatedAt,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListClassifierBlocksQuery {
+    /// 1-based page number.
     pub page: Option<i64>,
+    /// Items per page (1 through 1000).
     pub per_page: Option<i64>,
+    /// Case-insensitive search of name and description.
     pub q: Option<String>,
+    /// Sort field.
     pub sf: Option<ClassifierBlockSortField>,
+    /// Set to true for descending order.
     pub sd: Option<bool>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/{id}",
+    tag = "classifier-blocks",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Classifier Block ID")),
+    responses(
+        (status = 200, description = "Classifier Block", body = ClassifierBlock),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Classifier Block not found", body = ApiError),
+    )
+)]
 pub async fn get_by_id(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -81,6 +100,20 @@ pub async fn get_by_id(
     Ok(Json(row))
 }
 
+#[utoipa::path(
+    post,
+    path = "/",
+    tag = "classifier-blocks",
+    security(("bearer" = [])),
+    request_body = NewClassifierBlock,
+    responses(
+        (status = 200, description = "Created Classifier Block", body = ClassifierBlock),
+        (status = 400, description = "Invalid request", body = ApiError),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 422, description = "Invalid rules", body = ApiError),
+    )
+)]
 async fn create(
     user: AuthUser,
     DbConn(mut db): DbConn,
@@ -99,6 +132,22 @@ async fn create(
     Ok(Json(inserted))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/{id}",
+    tag = "classifier-blocks",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Classifier Block ID")),
+    request_body = ClassifierBlockChangeset,
+    responses(
+        (status = 200, description = "Updated Classifier Block", body = ClassifierBlock),
+        (status = 400, description = "Invalid request", body = ApiError),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Classifier Block not found", body = ApiError),
+        (status = 422, description = "Invalid rules", body = ApiError),
+    )
+)]
 async fn update(
     user: AuthUser,
     DbConn(mut db): DbConn,
@@ -121,6 +170,19 @@ async fn update(
     Ok(Json(updated))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/{id}",
+    tag = "classifier-blocks",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Classifier Block ID")),
+    responses(
+        (status = 200, description = "Classifier Block deleted"),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Classifier Block not found", body = ApiError),
+    )
+)]
 async fn delete(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -131,6 +193,21 @@ async fn delete(
     Ok(Json(()))
 }
 
+#[utoipa::path(
+    post,
+    path = "/{id}/reorder",
+    tag = "classifier-blocks",
+    security(("bearer" = [])),
+    params(("id" = i64, Path, description = "Classifier Block ID")),
+    request_body = ReorderClassifierBlock,
+    responses(
+        (status = 200, description = "Reordered Classifier Block", body = ClassifierBlock),
+        (status = 400, description = "Invalid request", body = ApiError),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Classifier Block not found", body = ApiError),
+    )
+)]
 async fn reorder(
     user: AuthUser,
     DbConn(mut db): DbConn,
@@ -142,6 +219,18 @@ async fn reorder(
     Ok(Json(reordered))
 }
 
+#[utoipa::path(
+    post,
+    path = "/validate",
+    tag = "classifier-blocks",
+    security(("bearer" = [])),
+    request_body = ClassifierRules,
+    responses(
+        (status = 200, description = "Validation result with issues and pattern capture counts", body = ClassifierRulesValidation),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+    )
+)]
 async fn validate_rules(
     _user: AuthUser,
     Json(rules): Json<ClassifierRules>,
@@ -149,6 +238,18 @@ async fn validate_rules(
     Json(validate_classifier_rules(&rules))
 }
 
+#[utoipa::path(
+    get,
+    path = "/",
+    tag = "classifier-blocks",
+    security(("bearer" = [])),
+    params(ListClassifierBlocksQuery),
+    responses(
+        (status = 200, description = "Paginated Classifier Block list", body = ResourceList<ClassifierBlock>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+    )
+)]
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -247,10 +348,13 @@ pub async fn list(
     }))
 }
 
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/", get(list).post(create))
-        .route("/validate", post(validate_rules))
-        .route("/{id}", get(get_by_id).patch(update).delete(delete))
-        .route("/{id}/reorder", post(reorder))
+pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(create))
+        .routes(routes!(validate_rules))
+        .routes(routes!(get_by_id))
+        .routes(routes!(update))
+        .routes(routes!(delete))
+        .routes(routes!(reorder))
 }

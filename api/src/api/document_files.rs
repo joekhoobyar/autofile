@@ -16,28 +16,42 @@ use crate::shared::s3::serve_s3_file;
 use crate::shared::util::{ApiError, diesel_to_http};
 
 use axum::{
-    Json, Router,
+    Json,
     extract::{DefaultBodyLimit, Multipart, Path, Query, State},
     http::{HeaderMap, StatusCode, header},
     response::Response,
-    routing::{get, post},
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use utoipa_axum::{router::OpenApiRouter, routes};
 
 use apalis::prelude::*;
 
 const DOWNLOAD_TTL_SECONDS: i64 = 120;
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct DownloadTicketResponse {
     pub url: String,
     pub expires_in: i64,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct DownloadQuery {
+    /// Short-lived download ticket from the download-ticket endpoint.
+    /// When omitted, a bearer access token is required instead.
     pub t: Option<String>,
+}
+
+/// Documented shape of the `multipart/form-data` body accepted by file upload.
+/// This type is never constructed; it only describes the wire format because
+/// the handler parses the multipart stream manually.
+#[derive(utoipa::ToSchema)]
+#[allow(dead_code)]
+struct UploadDocumentFileMultipart {
+    /// Uploaded file bytes (required).
+    #[schema(value_type = String, format = Binary)]
+    file: String,
 }
 
 async fn parse_create_multipart(
@@ -67,6 +81,19 @@ async fn parse_create_multipart(
     file_temp.ok_or_else(|| ApiError::bad_request("Missing required field: file"))
 }
 
+#[utoipa::path(
+    get,
+    path = "/{document_id}/files",
+    tag = "document-files",
+    security(("bearer" = [])),
+    params(("document_id" = i64, Path, description = "Document ID")),
+    responses(
+        (status = 200, description = "File list for the document", body = Vec<DocumentFileView>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document not found", body = ApiError),
+    )
+)]
 pub async fn list(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -83,6 +110,22 @@ pub async fn list(
     Ok(Json(rows))
 }
 
+#[utoipa::path(
+    get,
+    path = "/{document_id}/files/{id}",
+    tag = "document-files",
+    security(("bearer" = [])),
+    params(
+        ("document_id" = i64, Path, description = "Document ID"),
+        ("id" = i64, Path, description = "File ID"),
+    ),
+    responses(
+        (status = 200, description = "File metadata", body = DocumentFileView),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "File not found", body = ApiError),
+    )
+)]
 pub async fn get_by_ids(
     _user: AuthUser,
     DbConn(mut db): DbConn,
@@ -99,6 +142,26 @@ pub async fn get_by_ids(
     Ok(Json(row))
 }
 
+#[utoipa::path(
+    post,
+    path = "/{document_id}/files",
+    tag = "document-files",
+    security(("bearer" = [])),
+    params(("document_id" = i64, Path, description = "Document ID")),
+    request_body(
+        content = UploadDocumentFileMultipart,
+        content_type = "multipart/form-data",
+        description = "Single uploaded file"
+    ),
+    responses(
+        (status = 200, description = "Uploaded file metadata", body = DocumentFileView),
+        (status = 400, description = "Invalid upload, e.g. missing file", body = ApiError),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Document not found", body = ApiError),
+        (status = 500, description = "Storage or job enqueue failure", body = ApiError),
+    )
+)]
 pub async fn create(
     user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -208,6 +271,24 @@ pub async fn create(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/{document_id}/files/{id}",
+    tag = "document-files",
+    security(("bearer" = [])),
+    params(
+        ("document_id" = i64, Path, description = "Document ID"),
+        ("id" = i64, Path, description = "File ID"),
+    ),
+    responses(
+        (status = 200, description = "File and its pages deleted"),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "File not found", body = ApiError),
+        (status = 409, description = "Cannot delete the last file in a document", body = ApiError),
+        (status = 500, description = "Storage failure", body = ApiError),
+    )
+)]
 pub async fn delete(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -305,6 +386,22 @@ pub async fn delete(
     Ok(Json(()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/{document_id}/files/{id}/thumbnail",
+    tag = "document-files",
+    security(("bearer" = [])),
+    params(
+        ("document_id" = i64, Path, description = "Document ID"),
+        ("id" = i64, Path, description = "File ID"),
+    ),
+    responses(
+        (status = 200, description = "PNG thumbnail bytes", content_type = "image/png", body = Vec<u8>),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "Thumbnail not available", body = ApiError),
+    )
+)]
 pub async fn thumbnail_get(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -332,6 +429,22 @@ pub async fn thumbnail_get(
     .await
 }
 
+#[utoipa::path(
+    get,
+    path = "/{document_id}/files/{id}/download",
+    tag = "document-files",
+    security(("bearer" = [])),
+    params(
+        ("document_id" = i64, Path, description = "Document ID"),
+        ("id" = i64, Path, description = "File ID"),
+        DownloadQuery,
+    ),
+    responses(
+        (status = 200, description = "File bytes as an attachment; alternatively authorized with a download ticket query parameter", content_type = "application/octet-stream", body = Vec<u8>),
+        (status = 401, description = "Missing or invalid ticket/token", body = ApiError),
+        (status = 404, description = "File not available", body = ApiError),
+    )
+)]
 pub async fn download(
     State(state): State<Arc<AppState>>,
     DbConn(mut db): DbConn,
@@ -400,6 +513,23 @@ pub async fn download(
     Ok(response)
 }
 
+#[utoipa::path(
+    post,
+    path = "/{document_id}/files/{id}/download-ticket",
+    tag = "document-files",
+    security(("bearer" = [])),
+    params(
+        ("document_id" = i64, Path, description = "Document ID"),
+        ("id" = i64, Path, description = "File ID"),
+    ),
+    responses(
+        (status = 200, description = "Short-lived download URL usable without an Authorization header", body = DownloadTicketResponse),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "File not found", body = ApiError),
+        (status = 500, description = "Token error", body = ApiError),
+    )
+)]
 pub async fn create_download_ticket(
     user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -429,15 +559,14 @@ pub async fn create_download_ticket(
     }))
 }
 
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
+pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new()
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
-        .route("/{document_id}/files", get(list).post(create))
-        .route("/{document_id}/files/{id}", get(get_by_ids).delete(delete))
-        .route("/{document_id}/files/{id}/thumbnail", get(thumbnail_get))
-        .route(
-            "/{document_id}/files/{id}/download-ticket",
-            post(create_download_ticket),
-        )
-        .route("/{document_id}/files/{id}/download", get(download))
+        .routes(routes!(list))
+        .routes(routes!(create))
+        .routes(routes!(get_by_ids))
+        .routes(routes!(delete))
+        .routes(routes!(thumbnail_get))
+        .routes(routes!(create_download_ticket))
+        .routes(routes!(download))
 }

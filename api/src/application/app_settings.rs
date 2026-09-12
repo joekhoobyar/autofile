@@ -9,7 +9,7 @@ use crate::shared::util::{ApiError, diesel_to_http};
 
 const APP_SETTINGS_ID: i64 = 1;
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateAppSettingsInput {
     pub allow_user_registration: bool,

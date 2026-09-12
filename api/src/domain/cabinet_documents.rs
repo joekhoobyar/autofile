@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::schema::cabinet_documents;
 
-#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
+#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable, utoipa::ToSchema)]
 #[diesel(belongs_to(Cabinet))]
 #[diesel(belongs_to(Document))]
 #[diesel(table_name = cabinet_documents)]

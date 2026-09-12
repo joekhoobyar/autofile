@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::schema::document_metadatas;
 
-#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
+#[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable, utoipa::ToSchema)]
 #[diesel(belongs_to(Document))]
 #[diesel(belongs_to(MetadataType))]
 #[diesel(table_name = document_metadatas)]
