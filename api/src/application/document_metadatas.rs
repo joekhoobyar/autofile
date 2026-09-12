@@ -64,7 +64,8 @@ pub async fn document_metadatas_upsert(
     // Partition the input into blank optional values (to delete) and
     // non-blank values (to upsert).
     let mut delete_ids: Vec<i64> = Vec::new();
-    let mut upsert_input: Vec<&NewDocumentMetadata> = Vec::with_capacity(input.len());
+    let mut upsert_input: Vec<&NewDocumentMetadata> =
+        Vec::with_capacity(input.len().min(MAX_METADATA_UPSERT_ITEMS));
     for m in &input {
         if m.value.trim().is_empty() {
             if !delete_ids.contains(&m.metadata_type_id) {
