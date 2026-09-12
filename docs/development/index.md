@@ -16,10 +16,10 @@ cargo run
 
 The API expects PostgreSQL, Redis, S3 credentials, `S3_BUCKET`, and `JWT_SECRET` to be available in the environment.
 
-Run API tests:
+Run API tests (install with `cargo install cargo-nextest --locked` if needed):
 
 ```bash
-cargo test
+cargo nextest run --locked
 ```
 
 ## UI
@@ -29,6 +29,12 @@ From `ui/`:
 ```bash
 npm install
 npm run dev
+```
+
+Test the UI:
+
+```bash
+npm test
 ```
 
 Build the UI:

@@ -51,9 +51,62 @@ jobs:
         working-directory: api
         run: cargo clippy --locked --all-targets -- -D warnings
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
       - name: Test API
         working-directory: api
-        run: cargo test --locked
+        run: |
+          set -o pipefail
+          cargo nextest run --locked 2>&1 | tee /tmp/nextest.log
+
+      - name: Summarize API tests
+        if: always()
+        working-directory: api
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import re
+
+          try:
+              with open("/tmp/nextest.log") as f:
+                  log = f.read()
+          except OSError:
+              log = ""
+
+          binaries = None
+          for m in re.finditer(r"Starting (\d+) tests? across (\d+) binar", log):
+              binaries = int(m.group(2))
+
+          passed = failed = skipped = None
+          total = None
+          for m in re.finditer(
+              r"(\d+) tests? run:\s*(\d+) passed(?:,\s*(\d+) failed)?(?:,\s*(\d+) skipped)?",
+              log,
+          ):
+              total = int(m.group(1))
+              passed = int(m.group(2))
+              failed = int(m.group(3)) if m.group(3) is not None else 0
+              skipped = int(m.group(4)) if m.group(4) is not None else 0
+
+          print("## Rust Test Report")
+          print()
+          print("### Summary")
+          print()
+          if total is None or passed is None:
+              print("- ❌ **Results unavailable** · could not parse nextest output")
+          else:
+              if binaries is not None:
+                  print(f"- **Test Binaries**: {binaries} total")
+              results = f"✅ **{passed} {'pass' if passed == 1 else 'passes'}**"
+              if failed:
+                  results += f" · ❌ **{failed} {'failure' if failed == 1 else 'failures'}**"
+              if skipped:
+                  results += f" · ⏭️ **{skipped} skipped**"
+              results += f" · {total} total"
+              print(f"- **Test Results**: {results}")
+          EOF
 
   ui:
     name: Check UI

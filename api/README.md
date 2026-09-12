@@ -41,10 +41,10 @@ Image builds are managed from the repository root with Docker Buildx Bake. See t
 
 ## Testing
 
-Run the test suite:
+Run the test suite (install with `cargo install cargo-nextest` if needed):
 
 ```bash
-cargo test
+cargo nextest run --locked
 ```
 
 ## Tech Stack
