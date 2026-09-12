@@ -17,7 +17,7 @@ use crate::schema::{
     document_metadatas, document_types_metadata_types, documents, metadata_types, tag_documents,
 };
 use crate::shared::app_state::AppState;
-use crate::shared::util::{ApiError, ApiErrorContext};
+use crate::shared::util::{ApiError, ApiErrorContext, AppErrorContext, AppResult};
 
 use apalis::prelude::*;
 use axum::http::StatusCode;
@@ -345,13 +345,13 @@ pub async fn enqueue_document_classification(
 pub async fn get_document_view(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
     id: i64,
-) -> Result<DocumentView, ApiError> {
+) -> AppResult<DocumentView> {
     let document = documents::table
         .find(id)
         .select(Document::as_select())
         .first::<Document>(db)
         .await
-        .api_context("Failed to fetch document")?;
+        .app_context("Failed to fetch document")?;
 
     let metadata_rows: Vec<(String, String)> = document_metadatas::table
         .inner_join(metadata_types::table)
@@ -359,7 +359,7 @@ pub async fn get_document_view(
         .select((metadata_types::slug, document_metadatas::value))
         .load::<(String, String)>(db)
         .await
-        .api_context("Failed to list document metadata")?;
+        .app_context("Failed to list document metadata")?;
     let metadata: HashMap<String, String> = metadata_rows.into_iter().collect();
 
     let cabinet_rows: Vec<i64> = cabinet_documents::table
@@ -367,7 +367,7 @@ pub async fn get_document_view(
         .select(cabinet_documents::cabinet_id)
         .load::<i64>(db)
         .await
-        .api_context("Failed to list cabinets for document")?;
+        .app_context("Failed to list cabinets for document")?;
     let cabinet_ids: Vec<i64> = cabinet_rows.into_iter().collect();
 
     let tag_rows: Vec<i64> = tag_documents::table
@@ -375,7 +375,7 @@ pub async fn get_document_view(
         .select(tag_documents::tag_id)
         .load::<i64>(db)
         .await
-        .api_context("Failed to list tags for document")?;
+        .app_context("Failed to list tags for document")?;
     let tag_ids: Vec<i64> = tag_rows.into_iter().collect();
 
     let pages_sum: Option<i64> = document_files::table
@@ -383,7 +383,7 @@ pub async fn get_document_view(
         .select(sum(document_files::pages))
         .first::<Option<i64>>(db)
         .await
-        .api_context("Failed to fetch document pages")?;
+        .app_context("Failed to fetch document pages")?;
     let pages = pages_sum.unwrap_or(0) as i32;
 
     Ok(DocumentView {

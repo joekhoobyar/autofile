@@ -31,6 +31,70 @@ pub struct ApiError {
 
 pub type ApiResult<T> = Result<T, ApiError>;
 
+#[derive(Debug, Clone, Copy)]
+pub enum AppErrorKind {
+    InvalidInput,
+    MissingResource,
+    DuplicateResource,
+    ConstraintViolation,
+    DependencyFailure,
+    Unexpected,
+}
+
+#[derive(Debug)]
+pub struct AppError {
+    pub kind: AppErrorKind,
+    pub message: String,
+    source: Option<AnyhowError>,
+}
+
+pub type AppResult<T> = Result<T, AppError>;
+
+impl AppError {
+    pub fn new(kind: AppErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+            source: None,
+        }
+    }
+
+    pub fn internal(message: impl Into<String>) -> Self {
+        Self::new(AppErrorKind::Unexpected, message)
+    }
+
+    pub fn from_diesel(message: impl Into<String>, err: DieselError) -> Self {
+        Self {
+            kind: diesel_app_error_kind(&err),
+            message: message.into(),
+            source: Some(AnyhowError::new(err)),
+        }
+    }
+
+    pub fn with_source<E>(kind: AppErrorKind, message: impl Into<String>, err: E) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        Self {
+            kind,
+            message: message.into(),
+            source: Some(AnyhowError::new(err)),
+        }
+    }
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(source) = &self.source {
+            write!(f, "{}: {}", self.message, source)
+        } else {
+            write!(f, "{}", self.message)
+        }
+    }
+}
+
+impl std::error::Error for AppError {}
+
 impl ApiError {
     pub fn new(status: StatusCode, message: impl Into<String>) -> Self {
         Self {
@@ -102,6 +166,22 @@ impl From<DieselError> for ApiError {
     }
 }
 
+impl From<AppError> for ApiError {
+    fn from(err: AppError) -> Self {
+        let status = match err.kind {
+            AppErrorKind::InvalidInput => StatusCode::BAD_REQUEST,
+            AppErrorKind::MissingResource => StatusCode::NOT_FOUND,
+            AppErrorKind::DuplicateResource => StatusCode::CONFLICT,
+            AppErrorKind::ConstraintViolation => StatusCode::UNPROCESSABLE_ENTITY,
+            AppErrorKind::DependencyFailure | AppErrorKind::Unexpected => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+        };
+
+        ApiError::new(status, err.message)
+    }
+}
+
 pub trait ApiErrorContext<T> {
     fn api_context(self, message: &'static str) -> ApiResult<T>;
 }
@@ -109,6 +189,16 @@ pub trait ApiErrorContext<T> {
 impl<T> ApiErrorContext<T> for Result<T, DieselError> {
     fn api_context(self, message: &'static str) -> ApiResult<T> {
         self.map_err(|err| ApiError::from_diesel(message, err))
+    }
+}
+
+pub trait AppErrorContext<T> {
+    fn app_context(self, message: &'static str) -> AppResult<T>;
+}
+
+impl<T> AppErrorContext<T> for Result<T, DieselError> {
+    fn app_context(self, message: &'static str) -> AppResult<T> {
+        self.map_err(|err| AppError::from_diesel(message, err))
     }
 }
 
@@ -127,6 +217,25 @@ fn diesel_error_status(e: &DieselError) -> StatusCode {
             StatusCode::UNPROCESSABLE_ENTITY
         }
         _ => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+fn diesel_app_error_kind(e: &DieselError) -> AppErrorKind {
+    match e {
+        DieselError::NotFound => AppErrorKind::MissingResource,
+        DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => {
+            AppErrorKind::DuplicateResource
+        }
+        DieselError::DatabaseError(DatabaseErrorKind::NotNullViolation, _) => {
+            AppErrorKind::ConstraintViolation
+        }
+        DieselError::DatabaseError(DatabaseErrorKind::ForeignKeyViolation, _) => {
+            AppErrorKind::ConstraintViolation
+        }
+        DieselError::DatabaseError(DatabaseErrorKind::CheckViolation, _) => {
+            AppErrorKind::ConstraintViolation
+        }
+        _ => AppErrorKind::Unexpected,
     }
 }
 
