@@ -98,7 +98,7 @@ cargo clippy --locked --all-targets -- -D warnings
 cargo nextest run --locked
 ```
 
-`cargo nextest` is the canonical API test runner (install with `cargo install cargo-nextest`; CI installs it via `taiki-e/install-action`). It runs the same targets as `cargo test`, and CI appends a totals-only `## Rust Test Report` summary to the job summary.
+`cargo nextest` is the canonical API test runner (install with `cargo install cargo-nextest --locked`; CI installs it via `taiki-e/install-action`). It runs the same targets as `cargo test`, and CI uses the `ci` nextest profile's JUnit output to append a totals-only `## Rust Test Report` summary to the job summary.
 
 UI checks from `ui/`:
 

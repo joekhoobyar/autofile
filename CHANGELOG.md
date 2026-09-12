@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.2] - 2026-09-12
 
+### Changed
+
+- Migrate to cargo-nextest for Rust test execution
+
 ### Fixed
 
 - Fixed openapi job in release workflow
