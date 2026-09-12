@@ -24,7 +24,7 @@ services:
       retries: 20
 
   rustfs:
-    image: rustfs/rustfs:1.0.0-rc.3
+    image: rustfs/rustfs:1.0.0-rc.6
     restart: unless-stopped
     environment:
       RUSTFS_ACCESS_KEY: autofile-dev-access

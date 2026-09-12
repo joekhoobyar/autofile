@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- helm / docker compose: Update rustfs chart to 1.0.0-rc6
+- helm: Update valkey chart to 0.12.0
+
 ## [0.4.13] - 2026-09-12
 
 ### Added
