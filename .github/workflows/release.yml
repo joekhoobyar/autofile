@@ -125,7 +125,9 @@ jobs:
           # tini try to exec the flag itself.
           docker run --rm --entrypoint /usr/local/bin/autofile-api "$image" --dump-openapi > openapi.json
           python3 -c "import json; spec = json.load(open('openapi.json')); print(f\"paths: {len(spec.get('paths', {}))}\")"
-          gh release upload "${GITHUB_REF_NAME}" openapi.json --clobber
+          # No checkout in this job, so name the repo explicitly (-R) instead
+          # of letting gh infer it from a git remote.
+          gh release upload "${GITHUB_REF_NAME}" openapi.json --clobber -R "${{ github.repository }}"
 
   manifests:
     name: Push Multi-Arch Manifests
