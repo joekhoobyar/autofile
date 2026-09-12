@@ -1,6 +1,6 @@
 # OpenAPI Specification
 
-The interactive reference below is rendered from the `openapi.json` asset attached to the latest GitHub release. It describes every endpoint under `/api/v1` and is generated directly from the Rust API source, so it stays in sync without committing a large generated file to the repository.
+The interactive reference below is rendered from the `openapi.json` asset attached to the latest GitHub release, baked into this site when the docs were built. It describes every endpoint under `/api/v1` and is generated directly from the Rust API source, so it stays in sync without committing a large generated file to the repository.
 
 [Download the raw `openapi.json` for the latest release](https://github.com/joekhoobyar/autofile/releases/latest/download/openapi.json)
 
@@ -12,4 +12,4 @@ The interactive reference below is rendered from the `openapi.json` asset attach
     ```
 
 <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
-<redoc spec-url="https://github.com/joekhoobyar/autofile/releases/latest/download/openapi.json"></redoc>
+<redoc spec-url="../../assets/openapi/openapi.json"></redoc>

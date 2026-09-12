@@ -324,6 +324,7 @@ jobs:
     needs: [chart-attestation, openapi-asset]
     permissions:
       contents: write
+      actions: write
 
     steps:
       - name: Checkout
@@ -351,3 +352,12 @@ jobs:
             --title "${GITHUB_REF_NAME}" \
             --notes-file /tmp/release-notes.md \
             "${prerelease_args[@]}"
+
+      - name: Rebuild docs with fresh OpenAPI spec
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The docs bake openapi.json in at build time; rebuild them now that
+          # the release (and its spec asset) is published.
+          gh workflow run docs.yml --ref main -R "${{ github.repository }}"
