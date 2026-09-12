@@ -10,7 +10,7 @@ RUN npm ci
 COPY ui/ ./
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:stable
+FROM nginxinc/nginx-unprivileged:alpine
 
 COPY ui/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
