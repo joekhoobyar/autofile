@@ -8,6 +8,7 @@ use crate::application::document_files::{
 use crate::domain::document_files::DocumentFileView;
 use crate::shared::app_state::AppState;
 use crate::shared::auth::{AuthUser, sign_download, verify_download};
+use crate::shared::config::MAX_UPLOAD_MULTIPART_OVERHEAD_BYTES;
 use crate::shared::errors::ApiError;
 use crate::shared::extractors::DbConn;
 use crate::shared::s3::serve_s3_file;
@@ -49,6 +50,7 @@ struct UploadDocumentFileMultipart {
 
 async fn parse_create_multipart(
     multipart: &mut Multipart,
+    max_bytes: u64,
 ) -> Result<BufferedDocumentFileUpload, ApiError> {
     let mut file_temp: Option<BufferedDocumentFileUpload> = None;
 
@@ -67,7 +69,7 @@ async fn parse_create_multipart(
                 cleanup_buffered_document_file_upload(upload).await;
                 return Err(ApiError::bad_request("Only one file upload is supported"));
             }
-            file_temp = Some(buffer_document_file_field(&mut field).await?);
+            file_temp = Some(buffer_document_file_field(&mut field, max_bytes).await?);
         }
     }
 
@@ -148,7 +150,7 @@ pub async fn create(
     Path(document_id): Path<i64>,
     mut multipart: Multipart,
 ) -> Result<Json<DocumentFileView>, ApiError> {
-    let file_temp = parse_create_multipart(&mut multipart).await?;
+    let file_temp = parse_create_multipart(&mut multipart, state.max_upload_bytes as u64).await?;
     let document_file =
         create_document_file(state, &mut db, user.user_id, document_id, file_temp).await?;
     Ok(Json(document_file))
@@ -324,9 +326,11 @@ pub async fn create_download_ticket(
     }))
 }
 
-pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+pub fn routes(max_upload_bytes: usize) -> OpenApiRouter<Arc<AppState>> {
     OpenApiRouter::new()
-        .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
+        .layer(DefaultBodyLimit::max(
+            max_upload_bytes.saturating_add(MAX_UPLOAD_MULTIPART_OVERHEAD_BYTES),
+        ))
         .routes(routes!(list))
         .routes(routes!(create))
         .routes(routes!(get_by_ids))

@@ -54,6 +54,7 @@ api:
     RUST_LOG: info
     AWS_REGION: us-east-1
     ALLOWED_ORIGINS: ""
+    MAX_UPLOAD_SIZE_MB: "100"
   extraEnv: []
   startupProbe:
     initialDelaySeconds: 0

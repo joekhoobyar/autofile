@@ -15,4 +15,7 @@ pub struct AppState {
     pub fast_jobs: Arc<RedisStorage<FastJob>>,
     pub medium_jobs: Arc<RedisStorage<MediumJob>>,
     pub slow_jobs: Arc<RedisStorage<SlowJob>>,
+    /// Maximum size in bytes for a single uploaded file. Read once from
+    /// `MAX_UPLOAD_SIZE_MB` at startup and enforced while streaming uploads.
+    pub max_upload_bytes: usize,
 }

@@ -20,6 +20,7 @@ use tokio::time::{Duration, sleep};
 use autofile_api::infrastructure::queue::{build_monitor, create_storages};
 use autofile_api::run_migrations;
 use autofile_api::shared::app_state::AppState;
+use autofile_api::shared::config::max_upload_bytes_from_env;
 use autofile_api::shared::errors::ApiError;
 use autofile_api::shared::extractors::DbConn;
 use autofile_api::shared::openapi::build_openapi_router;
@@ -31,7 +32,7 @@ async fn main() {
     // built image for this (overriding the tini entrypoint):
     // `docker run --rm --entrypoint /usr/local/bin/autofile-api <image> --dump-openapi`.
     if std::env::args().any(|arg| arg == "--dump-openapi") {
-        let (_, openapi) = build_openapi_router();
+        let (_, openapi) = build_openapi_router(max_upload_bytes_from_env());
         let json = openapi
             .to_pretty_json()
             .expect("OpenAPI spec should serialize to JSON");
@@ -97,6 +98,9 @@ async fn main() {
         .filter(|origins| !origins.is_empty())
         .unwrap_or_else(|| vec!["http://localhost:5173".to_string()]);
 
+    // Maximum single-file upload size, shared by both upload endpoints.
+    let max_upload_bytes = max_upload_bytes_from_env();
+
     // Build shared application state
     let app_state = Arc::new(AppState {
         db_pool,
@@ -106,6 +110,7 @@ async fn main() {
         fast_jobs: Arc::new(storages.fast),
         medium_jobs: Arc::new(storages.medium),
         slow_jobs: Arc::new(storages.slow),
+        max_upload_bytes,
     });
 
     // Configure background worker monitor and shutdown signal.
@@ -156,7 +161,7 @@ async fn main() {
         .allow_credentials(true)
         .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT]);
 
-    let (api_v1_router, openapi) = build_openapi_router();
+    let (api_v1_router, openapi) = build_openapi_router(max_upload_bytes);
 
     // Build the router (wrap state in Arc for efficient sharing)
     let app = Router::new()

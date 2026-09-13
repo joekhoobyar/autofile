@@ -341,6 +341,7 @@ ingress:
 | `api.env.RUST_LOG` | `info` | Rust tracing filter. |
 | `api.env.AWS_REGION` | `us-east-1` | AWS/S3 region. |
 | `api.env.ALLOWED_ORIGINS` | `""` | Optional comma-separated CORS origins. Omitted when empty. |
+| `api.env.MAX_UPLOAD_SIZE_MB` | `"100"` | Maximum size in megabytes for a single uploaded file. |
 | `api.extraEnv` | `[]` | Additional Kubernetes env entries appended to the API container. |
 | `api.startupProbe.*` | see `values.yaml` | API startup probe timing values. |
 | `api.livenessProbe.*` | see `values.yaml` | API liveness probe timing values. |

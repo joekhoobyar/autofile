@@ -16,6 +16,7 @@ use crate::domain::document_indexes::DocumentIndexValue;
 use crate::domain::documents::{Document, DocumentChangeset, DocumentView};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
+use crate::shared::config::MAX_UPLOAD_MULTIPART_OVERHEAD_BYTES;
 use crate::shared::errors::ApiError;
 use crate::shared::extractors::DbConn;
 use crate::shared::responses::ResourceList;
@@ -63,7 +64,10 @@ struct TestTemplateInput {
     template: String,
 }
 
-async fn parse_create_multipart(multipart: &mut Multipart) -> Result<ParsedMultipart, ApiError> {
+async fn parse_create_multipart(
+    multipart: &mut Multipart,
+    max_bytes: u64,
+) -> Result<ParsedMultipart, ApiError> {
     let mut title: Option<String> = None;
     let mut document_type_id: Option<i64> = None;
     let mut file_temp: Option<BufferedDocumentFileUpload> = None;
@@ -101,7 +105,7 @@ async fn parse_create_multipart(multipart: &mut Multipart) -> Result<ParsedMulti
                     cleanup_buffered_document_file_upload(upload).await;
                     return Err(ApiError::bad_request("Only one file upload is supported"));
                 }
-                file_temp = Some(buffer_document_file_field(&mut field).await?);
+                file_temp = Some(buffer_document_file_field(&mut field, max_bytes).await?);
             }
             _ => {
                 // Ignore unknown fields
@@ -351,7 +355,7 @@ async fn create(
         title,
         document_type_id,
         file_temp,
-    } = parse_create_multipart(&mut multipart).await?;
+    } = parse_create_multipart(&mut multipart, state.max_upload_bytes as u64).await?;
 
     let document = create_document(
         state,
@@ -442,12 +446,16 @@ pub async fn list_index_values(
     Ok(Json(items))
 }
 
-pub fn routes() -> OpenApiRouter<Arc<AppState>> {
+pub fn routes(max_upload_bytes: usize) -> OpenApiRouter<Arc<AppState>> {
     OpenApiRouter::new()
         .routes(routes!(list))
         .routes(routes!(create))
-        // Allow up to 100MB uploads for document creation.
-        .layer(DefaultBodyLimit::max(100 * 1024 * 1024 * 1024))
+        // Coarse backstop: the precise per-file limit is enforced while
+        // streaming in the handler, so the layer allows multipart overhead
+        // on top of the configured file limit.
+        .layer(DefaultBodyLimit::max(
+            max_upload_bytes.saturating_add(MAX_UPLOAD_MULTIPART_OVERHEAD_BYTES),
+        ))
         .routes(routes!(get_by_id))
         .routes(routes!(update))
         .routes(routes!(delete))

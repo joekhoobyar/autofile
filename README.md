@@ -102,6 +102,7 @@ The API is configured with environment variables.
 | `S3_BUCKET` | Yes | none | Bucket for document files. |
 | `JWT_SECRET` | Yes | none | Secret used to sign JWTs. Use a strong value in production. |
 | `ALLOWED_ORIGINS` | No | `http://localhost:5173` | Comma-separated CORS origins. |
+| `MAX_UPLOAD_SIZE_MB` | No | `100` | Maximum size in megabytes for a single uploaded file. Applies to both document and document-file uploads. Requires a restart. Invalid values prevent startup. |
 | `RUST_LOG` | No | Rust tracing default | Logging filter, for example `info`. |
 
 ## 🛠️ Development

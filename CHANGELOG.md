@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added `MAX_UPLOAD_SIZE_MB` environment variable (default `100`) controlling the maximum single-file upload size for both `POST /api/v1/documents` and `POST /api/v1/documents/{document_id}/files`. Oversize uploads return `413 Payload Too Large` with the standard JSON error body. Invalid values prevent startup.
+
 ### Changed
 
 - Migrated from `cargo nextest` back to `cargo test`.

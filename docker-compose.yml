@@ -81,6 +81,7 @@ services:
       AWS_REGION: us-east-1
       S3_BUCKET: autofile-documents
       JWT_SECRET: dev-jwt-secret-change-me
+      MAX_UPLOAD_SIZE_MB: "100"
       RUST_LOG: info
     ports:
       - "8000:8000"

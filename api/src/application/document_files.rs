@@ -412,6 +412,7 @@ pub async fn delete_document_file(
 
 pub async fn buffer_document_file_field(
     field: &mut axum::extract::multipart::Field<'_>,
+    max_bytes: u64,
 ) -> Result<BufferedDocumentFileUpload, ApiError> {
     let mut filename = field
         .file_name()
@@ -423,7 +424,7 @@ pub async fn buffer_document_file_field(
         filename = "thumb.png".to_string();
     }
 
-    let temp_upload = write_field_to_temp_file(field).await?;
+    let temp_upload = write_field_to_temp_file(field, max_bytes).await?;
     Ok(BufferedDocumentFileUpload {
         temp_path: temp_upload.path,
         filename,

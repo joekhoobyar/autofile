@@ -1,7 +1,8 @@
+use autofile_api::shared::config::mb_to_bytes;
 use autofile_api::shared::openapi::build_openapi_router;
 
 fn pilot_spec() -> serde_json::Value {
-    let (_router, api) = build_openapi_router();
+    let (_router, api) = build_openapi_router(mb_to_bytes(100));
     let json = api.to_json().expect("spec should serialize to JSON");
     serde_json::from_str(&json).expect("spec should parse as JSON")
 }

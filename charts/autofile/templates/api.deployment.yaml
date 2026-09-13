@@ -68,6 +68,8 @@ spec:
               value: {{ .Values.api.env.BIND_ADDR | quote }}
             - name: RUST_LOG
               value: {{ .Values.api.env.RUST_LOG | quote }}
+            - name: MAX_UPLOAD_SIZE_MB
+              value: {{ .Values.api.env.MAX_UPLOAD_SIZE_MB | quote }}
             - name: S3_BUCKET
               value: {{ .Values.objectStorage.bucket | quote }}
             - name: AWS_REGION

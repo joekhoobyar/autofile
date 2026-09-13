@@ -11,7 +11,12 @@ use crate::{api, shared::app_state::AppState};
 ///
 /// Every resource module registers its documented handlers via
 /// `utoipa_axum::routes!`, so the full route surface is described here.
-pub fn build_openapi_router() -> (axum::Router<Arc<AppState>>, utoipa::openapi::OpenApi) {
+///
+/// `max_upload_bytes` (from `MAX_UPLOAD_SIZE_MB`) configures the body-limit
+/// layers on the two upload routers; all other routes are unaffected.
+pub fn build_openapi_router(
+    max_upload_bytes: usize,
+) -> (axum::Router<Arc<AppState>>, utoipa::openapi::OpenApi) {
     OpenApiRouter::with_openapi(ApiDoc::openapi())
         .nest("/about", api::about::routes())
         .nest("/settings", api::app_settings::routes())
@@ -27,9 +32,9 @@ pub fn build_openapi_router() -> (axum::Router<Arc<AppState>>, utoipa::openapi::
             "/document-types-metadata-types",
             api::document_types_metadata_types::routes(),
         )
-        .nest("/documents", api::documents::routes())
+        .nest("/documents", api::documents::routes(max_upload_bytes))
         .nest("/documents", api::document_file_pages::routes())
-        .nest("/documents", api::document_files::routes())
+        .nest("/documents", api::document_files::routes(max_upload_bytes))
         .nest("/documents", api::document_metadatas::routes())
         .nest("/metadata-types", api::metadata_types::routes())
         .nest("/ping", api::ping::routes())
