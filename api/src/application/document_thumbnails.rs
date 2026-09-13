@@ -57,6 +57,14 @@ async fn generate_thumbnail_inner(
         }
         Err(err) => return Err(err.into()),
     };
+    if let Some(message) = document_file.content_availability().unavailable_message() {
+        tracing::info!(
+            document_file_id,
+            message,
+            "skipping thumbnail generation for unavailable file"
+        );
+        return Ok(());
+    }
     persist_document_file_content_type_fallback(&mut db, &mut document_file).await?;
 
     // Download the file from S3 into a temp file.

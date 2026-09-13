@@ -23,12 +23,12 @@
 
 ## 4. Processing And Download Gates
 
-- [ ] Add a shared helper for determining whether document-file content is available for use and for producing blocked-file messages.
-- [ ] Block downloads and download tickets for pending, scanning, infected, or errored files.
-- [ ] Block previews, page images, extracted text, OCR text, thumbnail generation/retrieval, page processing, OCR, classification, and all other file-content operations until files have `content_available=true`.
-- [ ] Ensure deletion and explicit rescan/retry-scan operations are allowed for files with `content_available=false`.
-- [ ] Return clear conflict errors for manual processing endpoints blocked by scan status.
-- [ ] Add API tests that verify unsafe files are refused by download, page-image, text, OCR, thumbnail, processing, and classification paths.
+- [x] Add a shared helper for determining whether document-file content is available for use and for producing blocked-file messages.
+- [x] Block downloads and download tickets for pending, scanning, infected, or errored files.
+- [x] Block previews, page images, extracted text, OCR text, thumbnail generation/retrieval, page processing, OCR, classification, and all other file-content operations until files have `content_available=true`.
+- [x] Ensure deletion and explicit rescan/retry-scan operations are allowed for files with `content_available=false`.
+- [x] Return clear conflict errors for manual processing endpoints blocked by scan status.
+- [x] Add API tests that verify unsafe files are refused by download, page-image, text, OCR, thumbnail, processing, and classification paths.
 - [ ] Add API tests that verify unsafe files can still be deleted and can be submitted for explicit rescan/retry.
 
 ## 5. UI

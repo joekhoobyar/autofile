@@ -93,6 +93,14 @@ pub struct DocumentFileDownloadMetadata {
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
+fn unavailable_file_api_error(file: &DocumentFile) -> ApiError {
+    ApiError::conflict(
+        file.content_availability()
+            .unavailable_message()
+            .unwrap_or("File content is unavailable"),
+    )
+}
+
 fn document_file_view(file: DocumentFile) -> DocumentFileView {
     DocumentFileView {
         id: file.id,
@@ -149,15 +157,19 @@ pub async fn get_document_file_thumbnail_metadata(
     document_id: i64,
     id: i64,
 ) -> Result<(String, chrono::DateTime<chrono::Utc>), ApiError> {
-    let (s3_prefix, updated_at) = document_files::table
+    let file = document_files::table
         .filter(document_files::document_id.eq(document_id))
         .filter(document_files::id.eq(id))
-        .select((document_files::s3_prefix, document_files::updated_at))
-        .first::<(String, chrono::DateTime<chrono::Utc>)>(db)
+        .select(DocumentFile::as_select())
+        .first::<DocumentFile>(db)
         .await
         .map_err(|e| ApiError::from_diesel("Failed to fetch document file thumbnail", e))?;
 
-    Ok((format!("{}/_thumb.png", s3_prefix), updated_at))
+    if !file.content_available() {
+        return Err(unavailable_file_api_error(&file));
+    }
+
+    Ok((format!("{}/_thumb.png", file.s3_prefix), file.updated_at))
 }
 
 pub async fn get_document_file_download_metadata(
@@ -165,45 +177,44 @@ pub async fn get_document_file_download_metadata(
     document_id: i64,
     id: i64,
 ) -> Result<DocumentFileDownloadMetadata, ApiError> {
-    let (s3_prefix, filename, content_type, updated_at) = document_files::table
+    let file = document_files::table
         .filter(document_files::document_id.eq(document_id))
         .filter(document_files::id.eq(id))
-        .select((
-            document_files::s3_prefix,
-            document_files::filename,
-            document_files::content_type,
-            document_files::updated_at,
-        ))
-        .first::<(
-            String,
-            String,
-            Option<String>,
-            chrono::DateTime<chrono::Utc>,
-        )>(db)
+        .select(DocumentFile::as_select())
+        .first::<DocumentFile>(db)
         .await
         .map_err(|e| ApiError::from_diesel("Failed to fetch document file download", e))?;
 
+    if !file.content_available() {
+        return Err(unavailable_file_api_error(&file));
+    }
+
     Ok(DocumentFileDownloadMetadata {
-        s3_key: format!("{}/{}", s3_prefix, filename),
-        filename,
-        content_type,
-        updated_at,
+        s3_key: format!("{}/{}", file.s3_prefix, file.filename),
+        filename: file.filename,
+        content_type: file.content_type,
+        updated_at: file.updated_at,
     })
 }
 
-pub async fn ensure_document_file_exists(
+pub async fn ensure_document_file_available(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
     document_id: i64,
     id: i64,
 ) -> Result<(), ApiError> {
-    document_files::table
+    let file = document_files::table
         .filter(document_files::document_id.eq(document_id))
         .filter(document_files::id.eq(id))
-        .select(document_files::id)
-        .first::<i64>(db)
+        .select(DocumentFile::as_select())
+        .first::<DocumentFile>(db)
         .await
-        .map(|_| ())
-        .map_err(|e| ApiError::from_diesel("Failed to fetch document file", e))
+        .map_err(|e| ApiError::from_diesel("Failed to fetch document file", e))?;
+
+    if !file.content_available() {
+        return Err(unavailable_file_api_error(&file));
+    }
+
+    Ok(())
 }
 
 pub async fn list_document_file_pages(
@@ -211,6 +222,8 @@ pub async fn list_document_file_pages(
     document_id: i64,
     document_file_id: i64,
 ) -> Result<Vec<DocumentFilePage>, ApiError> {
+    ensure_document_file_available(db, document_id, document_file_id).await?;
+
     document_file_pages::table
         .inner_join(
             document_files::table.on(document_files::id.eq(document_file_pages::document_file_id)),
@@ -229,6 +242,8 @@ pub async fn list_document_file_ocr_pages(
     document_id: i64,
     document_file_id: i64,
 ) -> Result<Vec<DocumentFileOcrPage>, ApiError> {
+    ensure_document_file_available(db, document_id, document_file_id).await?;
+
     document_file_ocr_pages::table
         .inner_join(
             document_files::table
@@ -249,11 +264,11 @@ pub async fn get_document_file_page_image_key(
     document_file_id: i64,
     page_number: i32,
 ) -> Result<String, ApiError> {
-    let s3_prefix = document_files::table
+    let file = document_files::table
         .filter(document_files::document_id.eq(document_id))
         .filter(document_files::id.eq(document_file_id))
-        .select(document_files::s3_prefix)
-        .first::<String>(db)
+        .select(DocumentFile::as_select())
+        .first::<DocumentFile>(db)
         .await
         .map_err(|e| {
             if matches!(e, diesel::result::Error::NotFound) {
@@ -263,7 +278,11 @@ pub async fn get_document_file_page_image_key(
             }
         })?;
 
-    Ok(format!("{}/pages/{}.png", s3_prefix, page_number))
+    if !file.content_available() {
+        return Err(unavailable_file_api_error(&file));
+    }
+
+    Ok(format!("{}/pages/{}.png", file.s3_prefix, page_number))
 }
 
 pub async fn create_document_file(
@@ -452,6 +471,87 @@ pub async fn delete_document_file(
         })?;
 
     Ok(())
+}
+
+pub async fn rescan_document_file(
+    state: Arc<AppState>,
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    user_id: i64,
+    document_id: i64,
+    id: i64,
+) -> Result<DocumentFileView, ApiError> {
+    let settings = get_app_settings(db).await?;
+    if !settings.virus_scanning_enabled {
+        return Err(ApiError::conflict("Virus scanning is disabled"));
+    }
+
+    let medium_jobs = state.medium_jobs.as_ref().clone();
+    let enqueue_failed = Arc::new(AtomicBool::new(false));
+    let enqueue_failed_for_tx = Arc::clone(&enqueue_failed);
+
+    let result = db
+        .build_transaction()
+        .run::<_, diesel::result::Error, _>(async move |conn| {
+            let current = document_files::table
+                .filter(document_files::document_id.eq(document_id))
+                .filter(document_files::id.eq(id))
+                .select(DocumentFile::as_select())
+                .first::<DocumentFile>(conn)
+                .await?;
+
+            if matches!(
+                current.scan_status.as_str(),
+                SCAN_STATUS_PENDING | SCAN_STATUS_SCANNING
+            ) {
+                return Err(diesel::result::Error::RollbackTransaction);
+            }
+
+            let updated = diesel::update(document_files::table.filter(document_files::id.eq(id)))
+                .set((
+                    document_files::scan_status.eq(SCAN_STATUS_PENDING),
+                    document_files::scan_requested.eq(true),
+                    document_files::scan_requested_by.eq(Some(user_id)),
+                    document_files::scan_scanner.eq::<Option<String>>(None),
+                    document_files::scan_scanner_version.eq::<Option<String>>(None),
+                    document_files::scan_signature_version.eq::<Option<String>>(None),
+                    document_files::scan_threat_name.eq::<Option<String>>(None),
+                    document_files::scan_error.eq::<Option<String>>(None),
+                    document_files::scan_started_at.eq::<Option<chrono::DateTime<Utc>>>(None),
+                    document_files::scan_completed_at.eq::<Option<chrono::DateTime<Utc>>>(None),
+                    document_files::updated_by.eq(user_id),
+                    document_files::updated_at.eq(Utc::now()),
+                ))
+                .returning(DocumentFile::as_returning())
+                .get_result::<DocumentFile>(conn)
+                .await?;
+
+            let mut medium_jobs = medium_jobs;
+            if medium_jobs
+                .push(MediumJob::ScanDocumentFile {
+                    document_file_id: updated.id,
+                })
+                .await
+                .is_err()
+            {
+                enqueue_failed_for_tx.store(true, Ordering::Relaxed);
+                return Err(diesel::result::Error::RollbackTransaction);
+            }
+
+            Ok(document_file_view(updated))
+        })
+        .await;
+
+    result.map_err(|err| {
+        if matches!(err, diesel::result::Error::NotFound) {
+            ApiError::not_found("Document file not found")
+        } else if enqueue_failed.as_ref().load(Ordering::Relaxed) {
+            ApiError::internal_server_error("Failed to enqueue virus scan job")
+        } else if matches!(err, diesel::result::Error::RollbackTransaction) {
+            ApiError::conflict("File is already pending or actively scanning")
+        } else {
+            ApiError::from_diesel("Failed to rescan document file", err)
+        }
+    })
 }
 
 pub async fn buffer_document_file_field(
@@ -814,6 +914,14 @@ async fn process_file_pages_inner(
         }
         Err(err) => return Err(err.into()),
     };
+    if let Some(message) = document_file.content_availability().unavailable_message() {
+        tracing::info!(
+            document_file_id,
+            message,
+            "skipping page processing for unavailable file"
+        );
+        return Ok(());
+    }
     persist_document_file_content_type_fallback(&mut db, &mut document_file).await?;
 
     // Download the file from S3 into a temp file.

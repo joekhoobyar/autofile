@@ -26,6 +26,55 @@ pub fn is_content_available_scan_status(scan_status: &str) -> bool {
     matches!(scan_status, "clean" | "not_required")
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DocumentFileContentAvailability {
+    Available,
+    Unavailable { message: String },
+}
+
+impl DocumentFileContentAvailability {
+    pub fn is_available(&self) -> bool {
+        matches!(self, Self::Available)
+    }
+
+    pub fn unavailable_message(&self) -> Option<&str> {
+        match self {
+            Self::Available => None,
+            Self::Unavailable { message } => Some(message),
+        }
+    }
+}
+
+pub fn document_file_content_availability(
+    scan_status: &str,
+    threat_name: Option<&str>,
+) -> DocumentFileContentAvailability {
+    match scan_status {
+        SCAN_STATUS_NOT_REQUIRED | SCAN_STATUS_CLEAN => DocumentFileContentAvailability::Available,
+        SCAN_STATUS_PENDING => DocumentFileContentAvailability::Unavailable {
+            message: "This file is stored but is waiting for virus scanning. It will be available after a clean scan.".to_string(),
+        },
+        SCAN_STATUS_SCANNING => DocumentFileContentAvailability::Unavailable {
+            message: "This file is being scanned for viruses. It will be available after a clean scan.".to_string(),
+        },
+        SCAN_STATUS_INFECTED => {
+            let message = match threat_name.filter(|value| !value.is_empty()) {
+                Some(threat_name) => {
+                    format!("This file is blocked because virus scanning found a threat: {threat_name}.")
+                }
+                None => "This file is blocked because virus scanning found a threat.".to_string(),
+            };
+            DocumentFileContentAvailability::Unavailable { message }
+        }
+        SCAN_STATUS_ERROR => DocumentFileContentAvailability::Unavailable {
+            message: "This file is unavailable because virus scanning failed. An administrator can retry the scan or review scanner configuration.".to_string(),
+        },
+        _ => DocumentFileContentAvailability::Unavailable {
+            message: "This file is unavailable until virus scanning completes successfully.".to_string(),
+        },
+    }
+}
+
 #[derive(Debug, Serialize, Identifiable, PartialEq, Queryable, Selectable)]
 #[diesel(table_name = document_files)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -60,6 +109,10 @@ impl DocumentFile {
     /// preview, or document processing.
     pub fn content_available(&self) -> bool {
         is_content_available_scan_status(&self.scan_status)
+    }
+
+    pub fn content_availability(&self) -> DocumentFileContentAvailability {
+        document_file_content_availability(&self.scan_status, self.scan_threat_name.as_deref())
     }
 }
 
@@ -121,5 +174,21 @@ mod tests {
         assert!(!is_content_available_scan_status(SCAN_STATUS_INFECTED));
         assert!(!is_content_available_scan_status(SCAN_STATUS_ERROR));
         assert!(!is_content_available_scan_status("unexpected"));
+    }
+
+    #[test]
+    fn content_availability_returns_blocked_messages() {
+        assert!(document_file_content_availability(SCAN_STATUS_CLEAN, None).is_available());
+        assert_eq!(
+            document_file_content_availability(SCAN_STATUS_PENDING, None).unavailable_message(),
+            Some(
+                "This file is stored but is waiting for virus scanning. It will be available after a clean scan."
+            )
+        );
+        assert_eq!(
+            document_file_content_availability(SCAN_STATUS_INFECTED, Some("Eicar"))
+                .unavailable_message(),
+            Some("This file is blocked because virus scanning found a threat: Eicar.")
+        );
     }
 }

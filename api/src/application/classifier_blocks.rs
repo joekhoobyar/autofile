@@ -22,6 +22,7 @@ use crate::application::documents::get_document_view;
 use crate::application::documents::update_document;
 use crate::domain::classifier_blocks::ClassifierModifier;
 use crate::domain::classifier_blocks::{ClassifierBlock, ClassifierChildRule, ClassifierPattern};
+use crate::domain::document_files::DocumentFile;
 use crate::domain::documents::DocumentChangeset;
 use crate::domain::documents::DocumentView;
 use crate::schema::document_types;
@@ -233,6 +234,24 @@ pub async fn classify_document_inner_without_enqueue(
 
     // Load the document view from the database
     let document_view = get_document_view(&mut db, document_id).await?;
+
+    let unavailable_file = document_files::table
+        .filter(document_files::document_id.eq(document_id))
+        .select(DocumentFile::as_select())
+        .order(document_files::id.asc())
+        .load::<DocumentFile>(&mut db)
+        .await?
+        .into_iter()
+        .find(|file| !file.content_available());
+    if let Some(file) = unavailable_file {
+        tracing::info!(
+            document_id,
+            document_file_id = file.id,
+            message = file.content_availability().unavailable_message(),
+            "classification: skipping unavailable file"
+        );
+        return Ok(());
+    }
 
     // Load the document text, trying content text first, then falling back to OCR.
     // Join all of the pages together into a single string.
@@ -771,6 +790,7 @@ pub async fn load_document_text(
             document_files::table.on(document_files::id.eq(document_file_pages::document_file_id)),
         )
         .filter(document_files::document_id.eq(document_id))
+        .filter(document_files::content_available.eq(true))
         .order((
             document_files::id.asc(),
             document_file_pages::page_number.asc(),
@@ -790,6 +810,7 @@ pub async fn load_document_text(
                 .on(document_files::id.eq(document_file_ocr_pages::document_file_id)),
         )
         .filter(document_files::document_id.eq(document_id))
+        .filter(document_files::content_available.eq(true))
         .order((
             document_files::id.asc(),
             document_file_ocr_pages::page_number.asc(),

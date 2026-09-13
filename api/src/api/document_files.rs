@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use crate::application::document_files::{
     BufferedDocumentFileUpload, buffer_document_file_field, cleanup_buffered_document_file_upload,
-    create_document_file, delete_document_file, ensure_document_file_exists, get_document_file,
+    create_document_file, delete_document_file, ensure_document_file_available, get_document_file,
     get_document_file_download_metadata, get_document_file_thumbnail_metadata, list_document_files,
+    rescan_document_file,
 };
 use crate::domain::document_files::DocumentFileView;
 use crate::shared::app_state::AppState;
@@ -224,6 +225,35 @@ pub async fn delete(
 }
 
 #[utoipa::path(
+    post,
+    path = "/{document_id}/files/{id}/rescan",
+    tag = "document-files",
+    security(("bearer" = [])),
+    params(
+        ("document_id" = i64, Path, description = "Document ID"),
+        ("id" = i64, Path, description = "File ID"),
+    ),
+    responses(
+        (status = 200, description = "File submitted for virus rescan", body = DocumentFileView),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "File not found", body = ApiError),
+        (status = 409, description = "Virus scanning disabled or file already scanning", body = ApiError),
+        (status = 500, description = "Failed to enqueue virus scan job", body = ApiError),
+    )
+)]
+pub async fn rescan(
+    user: AuthUser,
+    State(state): State<Arc<AppState>>,
+    DbConn(mut db): DbConn,
+    Path((document_id, id)): Path<(i64, i64)>,
+) -> Result<Json<DocumentFileView>, ApiError> {
+    Ok(Json(
+        rescan_document_file(state, &mut db, user.user_id, document_id, id).await?,
+    ))
+}
+
+#[utoipa::path(
     get,
     path = "/{document_id}/files/{id}/thumbnail",
     tag = "document-files",
@@ -348,7 +378,7 @@ pub async fn create_download_ticket(
     DbConn(mut db): DbConn,
     Path((document_id, id)): Path<(i64, i64)>,
 ) -> Result<Json<DownloadTicketResponse>, ApiError> {
-    ensure_document_file_exists(&mut db, document_id, id).await?;
+    ensure_document_file_available(&mut db, document_id, id).await?;
 
     let token = sign_download(
         &state.jwt_secret,
@@ -374,6 +404,7 @@ pub fn routes(max_upload_bytes: usize) -> OpenApiRouter<Arc<AppState>> {
         .routes(routes!(create))
         .routes(routes!(get_by_ids))
         .routes(routes!(delete))
+        .routes(routes!(rescan))
         .routes(routes!(thumbnail_get))
         .routes(routes!(create_download_ticket))
         .routes(routes!(download))

@@ -13,6 +13,7 @@ use crate::application::document_index_documents::delete_document_index_document
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::jobs::{FastJob, MediumJob};
 use crate::domain::classifier_blocks::ClassifierBlock;
+use crate::domain::document_files::DocumentFile;
 use crate::domain::document_indexes::DocumentIndexValue;
 use crate::domain::documents::{Document, DocumentChangeset, DocumentView};
 use crate::infrastructure::s3::delete_prefix_from_s3;
@@ -365,16 +366,22 @@ pub async fn enqueue_document_file_page_processing(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
     document_id: i64,
 ) -> Result<(), ApiError> {
-    let file_ids: Vec<i64> = document_files::table
+    let files: Vec<DocumentFile> = document_files::table
         .filter(document_files::document_id.eq(document_id))
-        .select(document_files::id)
+        .select(DocumentFile::as_select())
         .order(document_files::id.asc())
-        .load::<i64>(db)
+        .load::<DocumentFile>(db)
         .await
         .api_context("Failed to list document files")?;
 
+    for file in &files {
+        if let Some(message) = file.content_availability().unavailable_message() {
+            return Err(ApiError::conflict(message));
+        }
+    }
+
     let mut medium_jobs = state.medium_jobs.as_ref().clone();
-    for document_file_id in file_ids {
+    for document_file_id in files.into_iter().map(|file| file.id) {
         medium_jobs
             .push(MediumJob::ProcessFilePages { document_file_id })
             .await
@@ -389,23 +396,27 @@ pub async fn enqueue_document_thumbnail_generation(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
     document_id: i64,
 ) -> Result<(), ApiError> {
-    let document_file_id = document_files::table
+    let document_file = document_files::table
         .filter(document_files::document_id.eq(document_id))
-        .select(document_files::id)
+        .select(DocumentFile::as_select())
         .order(document_files::id.asc())
-        .first::<i64>(db)
+        .first::<DocumentFile>(db)
         .await
         .optional()
         .api_context("Failed to fetch document file")?;
 
-    let Some(document_file_id) = document_file_id else {
+    let Some(document_file) = document_file else {
         return Ok(());
     };
+
+    if let Some(message) = document_file.content_availability().unavailable_message() {
+        return Err(ApiError::conflict(message));
+    }
 
     let mut fast_jobs = state.fast_jobs.as_ref().clone();
     fast_jobs
         .push(FastJob::GenerateThumbnail {
-            document_file_id,
+            document_file_id: document_file.id,
             page: 1,
             width: 800,
         })
@@ -433,6 +444,21 @@ pub async fn enqueue_document_classification(
                 ApiError::from_diesel("Failed to fetch document", e)
             }
         })?;
+
+    let unavailable_file = document_files::table
+        .filter(document_files::document_id.eq(document_id))
+        .select(DocumentFile::as_select())
+        .order(document_files::id.asc())
+        .load::<DocumentFile>(db)
+        .await
+        .api_context("Failed to list document files")?
+        .into_iter()
+        .find(|file| !file.content_available());
+    if let Some(file) = unavailable_file
+        && let Some(message) = file.content_availability().unavailable_message()
+    {
+        return Err(ApiError::conflict(message));
+    }
 
     let mut medium_jobs = state.medium_jobs.as_ref().clone();
     medium_jobs
@@ -761,6 +787,20 @@ pub async fn get_document_thumbnail_metadata(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
     id: i64,
 ) -> Result<(String, chrono::DateTime<Utc>), ApiError> {
+    let source_file = document_files::table
+        .filter(document_files::document_id.eq(id))
+        .select(DocumentFile::as_select())
+        .order(document_files::id.asc())
+        .first::<DocumentFile>(db)
+        .await
+        .optional()
+        .api_context("Failed to fetch document file")?;
+    if let Some(file) = source_file
+        && let Some(message) = file.content_availability().unavailable_message()
+    {
+        return Err(ApiError::conflict(message));
+    }
+
     let (s3_thumbnail, updated_at) = documents::table
         .find(id)
         .select((documents::s3_thumbnail, documents::updated_at))
