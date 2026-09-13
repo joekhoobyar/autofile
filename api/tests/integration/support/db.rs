@@ -110,7 +110,15 @@ impl TestDatabase {
         assert!(cloned, "test database should be cloned: {last_err}");
 
         let database_url = shared.template_db_url.replace(TEMPLATE_DB_NAME, &db_name);
+        // Bound per-test connections: most tests hold a single pooled
+        // connection, while the index-rebuild tests nest two pool checkouts
+        // (rebuild holds one while each per-document update takes another)
+        // on top of the test-held connection, for a peak of three. Capping
+        // at that depth avoids nested-checkout deadlocks while keeping the
+        // worst case (cap × parallel tests) under Postgres's default
+        // max_connections=100 on many-core runners.
         let pool = bb8::Pool::builder()
+            .max_size(3)
             .build(AsyncDieselConnectionManager::<AsyncPgConnection>::new(
                 database_url,
             ))
