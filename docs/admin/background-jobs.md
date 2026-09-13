@@ -20,5 +20,4 @@ If document processing appears stuck, check:
 
 - The API logs.
 - Redis connectivity.
-- Availability of processing tools in the API runtime image.
 - S3 bucket access.

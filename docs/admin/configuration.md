@@ -20,7 +20,8 @@ The API is configured with environment variables.
 
 ## Production Notes
 
+- Set `ALLOWED_ORIGINS` to the public UI origin, such as: `https://autofile.example.com`
 - Use a strong, unique `JWT_SECRET`.
-- Set `ALLOWED_ORIGINS` to the public UI origin.
-- Use persistent PostgreSQL and object storage volumes or managed services.
+- Use persistent PostgreSQL.
+- Use a self-hosted S3 object store (such as [RustFS](https://rustfs.com/) or [Garage](https://garagehq.deuxfleurs.fr/)), or use Amazon S3.
 - Back up PostgreSQL and the S3 bucket together so file metadata and file objects remain consistent.

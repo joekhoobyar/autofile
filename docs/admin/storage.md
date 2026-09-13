@@ -1,14 +1,14 @@
 # Storage
 
-Autofile stores document file bytes in S3-compatible object storage and stores document metadata in PostgreSQL.
+Autofile stores document files and preview images in S3-compatible object storage and stores document metadata in PostgreSQL.
 
 ## S3-Compatible Storage
 
-Autofile uses an S3-compatible API to store documents. For local development, Docker Compose runs RustFS and configures the API with `AWS_ENDPOINT_URL_S3`.
+Autofile uses an S3-compatible API to store documents. For local development, Docker Compose runs RustFS and configures the API with `AWS_ENDPOINT_URL_S3`.  You can use any self-hosted S3 object store (such as [RustFS](https://rustfs.com/) or [Garage](https://garagehq.deuxfleurs.fr/)), or you can use Amazon S3.
 
 ## Local Bucket
 
-The Docker Compose stack creates this bucket automatically:
+By default, the Docker Compose stack creates this bucket automatically:
 
 ```text
 autofile-documents
