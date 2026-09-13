@@ -17,10 +17,11 @@ use tokio::signal;
 use tokio::sync::watch;
 use tokio::time::{Duration, sleep};
 
+use autofile_api::application::malware_scanning::build_malware_scanner;
 use autofile_api::infrastructure::queue::{build_monitor, create_storages};
 use autofile_api::run_migrations;
 use autofile_api::shared::app_state::AppState;
-use autofile_api::shared::config::max_upload_bytes_from_env;
+use autofile_api::shared::config::{malware_scanner_config_from_env, max_upload_bytes_from_env};
 use autofile_api::shared::errors::ApiError;
 use autofile_api::shared::extractors::DbConn;
 use autofile_api::shared::openapi::build_openapi_router;
@@ -100,6 +101,8 @@ async fn main() {
 
     // Maximum single-file upload size, shared by both upload endpoints.
     let max_upload_bytes = max_upload_bytes_from_env();
+    let malware_scanner_config = malware_scanner_config_from_env();
+    let malware_scanner = build_malware_scanner(&malware_scanner_config);
 
     // Build shared application state
     let app_state = Arc::new(AppState {
@@ -110,6 +113,8 @@ async fn main() {
         fast_jobs: Arc::new(storages.fast),
         medium_jobs: Arc::new(storages.medium),
         slow_jobs: Arc::new(storages.slow),
+        malware_scanner_config,
+        malware_scanner,
         max_upload_bytes,
     });
 

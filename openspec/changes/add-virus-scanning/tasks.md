@@ -7,10 +7,10 @@
 
 ## 2. Scanner Infrastructure
 
-- [ ] Add scanner configuration parsing and startup validation.
-- [ ] Add a `MalwareScanner` abstraction and scanner outcome types.
-- [ ] Implement the ClamAV `clamd` TCP `INSTREAM` provider.
-- [ ] Add fake scanner support for unit/integration tests.
+- [x] Add scanner configuration parsing and startup validation.
+- [x] Add a `MalwareScanner` abstraction and scanner outcome types.
+- [x] Implement the ClamAV `clamd` TCP `INSTREAM` provider.
+- [x] Add fake scanner support for unit/integration tests.
 
 ## 3. Upload And Job Flow
 
