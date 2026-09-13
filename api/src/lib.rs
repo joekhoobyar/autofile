@@ -38,6 +38,7 @@ pub mod application {
     pub mod document_index_values;
     pub mod document_metadatas;
     pub mod document_thumbnails;
+    pub mod document_types;
     pub mod documents;
     pub mod jobs;
     pub mod tags;
