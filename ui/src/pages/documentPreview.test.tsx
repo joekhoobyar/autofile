@@ -271,4 +271,48 @@ describe('DocumentFilePagePreview', () => {
     });
     expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
   });
+
+  it('scrolls to the top when selecting page 1', () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <div className="app-main">
+          <MemoryRouter initialEntries={['/documents/10/preview?file_id=1&page=3']}>
+            <Routes>
+              <Route path="/documents/:id/preview" element={<DocumentFilePagePreview />} />
+            </Routes>
+          </MemoryRouter>,
+        </div>,
+      );
+
+      const scroller = document.querySelector('.app-main') as HTMLElement & {
+        scrollTo?: unknown;
+      };
+      const scrollToMock = vi.fn();
+      scroller.scrollTo = scrollToMock;
+
+      expect(screen.getByText('Page 3 of 3')).toBeInTheDocument();
+
+      // Ignore the initial restore to page 3; the page-1 jump below must go to the top.
+      scrollToMock.mockClear();
+      mockScrollToIndex.mockClear();
+
+      const jumpInput = document.querySelector('.aut-document-preview-page-input') as HTMLInputElement;
+      fireEvent.input(jumpInput, { target: { value: '1' } });
+      fireEvent.blur(jumpInput);
+      fireEvent.click(screen.getByRole('button', { name: 'Go' }));
+
+      expect(screen.getByText('Page 1 of 3')).toBeInTheDocument();
+      expect(scrollToMock).toHaveBeenCalledWith(expect.objectContaining({ top: 0 }));
+      expect(mockScrollToIndex).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1000);
+      expect(scrollToMock.mock.calls.length).toBeGreaterThan(0);
+      for (const call of scrollToMock.mock.calls) {
+        expect(call[0]).toEqual(expect.objectContaining({ top: 0 }));
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -1125,7 +1125,21 @@ function VirtualizedPagePreview({
     };
   }, [scrollElement, virtualizer]);
 
+  const scrollPreviewToTop = () => {
+    if (scrollElement) {
+      scrollElement.scrollTo({ top: 0, behavior: 'auto' });
+      return;
+    }
+
+    virtualizer.scrollToIndex(0, { align: 'start', behavior: 'auto' });
+  };
+
   const alignPageToStart = (page: number) => {
+    if (clampPage(page, pageCount) === 1) {
+      scrollPreviewToTop();
+      return;
+    }
+
     const index = clampPage(page, pageCount) - 1;
     const virtualPage = virtualizer.getVirtualItems().find((item) => item.index === index);
 
@@ -1148,7 +1162,11 @@ function VirtualizedPagePreview({
     onSettledPageChange(nextPage);
 
     clearJumpRealignments();
-    virtualizer.scrollToIndex(nextPage - 1, { align: 'start', behavior: 'auto' });
+    if (nextPage === 1) {
+      scrollPreviewToTop();
+    } else {
+      virtualizer.scrollToIndex(nextPage - 1, { align: 'start', behavior: 'auto' });
+    }
 
     jumpTimeoutsRef.current = PREVIEW_JUMP_REALIGN_DELAYS_MS.map((delay) => (
       window.setTimeout(() => alignPageToStart(nextPage), delay)
