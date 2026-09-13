@@ -1,7 +1,11 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
+use crate::application::document_index_documents::enqueue_document_index_document_updates;
+use crate::domain::document_metadatas::DocumentMetadata;
 use crate::domain::metadata_types::DataType;
 use crate::schema::{document_metadatas, document_types_metadata_types, documents, metadata_types};
+use crate::shared::app_state::AppState;
 use crate::shared::errors::{ApiError, ApiErrorContext};
 
 use chrono::NaiveDate;
@@ -33,6 +37,95 @@ pub struct InsertableDocumentMetadata {
     value: String,
     created_by: i64,
     updated_by: i64,
+}
+
+pub async fn get_document_metadata(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    metadata_type_id: i64,
+) -> Result<DocumentMetadata, ApiError> {
+    document_metadatas::table
+        .find((document_id, metadata_type_id))
+        .select(DocumentMetadata::as_select())
+        .first::<DocumentMetadata>(db)
+        .await
+        .api_context("Failed to fetch document_metadata")
+}
+
+pub async fn list_document_metadatas(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+) -> Result<Vec<DocumentMetadata>, ApiError> {
+    document_metadatas::table
+        .filter(document_metadatas::document_id.eq(document_id))
+        .select(DocumentMetadata::as_select())
+        .order(document_metadatas::metadata_type_id.asc())
+        .load::<DocumentMetadata>(db)
+        .await
+        .api_context("Failed to list document_metadatas")
+}
+
+pub async fn upsert_document_metadatas(
+    state: Arc<AppState>,
+    user_id: i64,
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    input: Vec<NewDocumentMetadata>,
+) -> Result<Vec<DocumentMetadata>, ApiError> {
+    document_metadatas_upsert(user_id, db, document_id, input).await?;
+    enqueue_document_index_document_updates(document_id, state).await?;
+    list_document_metadatas(db, document_id).await
+}
+
+pub async fn delete_document_metadata(
+    state: Arc<AppState>,
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    metadata_type_id: i64,
+) -> Result<(), ApiError> {
+    match documents::table
+        .filter(documents::id.eq(document_id))
+        .inner_join(
+            document_types_metadata_types::table.on(
+                document_types_metadata_types::document_type_id.eq(documents::document_type_id),
+            ),
+        )
+        .filter(document_types_metadata_types::metadata_type_id.eq(metadata_type_id))
+        .filter(document_types_metadata_types::required.eq(true))
+        .select(documents::id)
+        .first::<i64>(db)
+        .await
+    {
+        Ok(_) => {
+            return Err(ApiError::conflict(
+                "Metadata field is required for this document type and cannot be deleted",
+            ));
+        }
+        Err(diesel::result::Error::NotFound) => {}
+        Err(e) => {
+            return Err(ApiError::from_diesel(
+                "Failed to validate document_metadata deletion",
+                e,
+            ));
+        }
+    }
+
+    let affected = diesel::delete(
+        document_metadatas::table
+            .filter(document_metadatas::document_id.eq(document_id))
+            .filter(document_metadatas::metadata_type_id.eq(metadata_type_id)),
+    )
+    .execute(db)
+    .await
+    .api_context("Failed to delete document_metadatas")?;
+
+    if affected == 0 {
+        return Err(ApiError::not_found("document_metadatas not found"));
+    }
+
+    enqueue_document_index_document_updates(document_id, state).await?;
+
+    Ok(())
 }
 
 #[derive(Debug)]
