@@ -292,6 +292,7 @@ body {
 
   .aut-document-view-menu-mobile {
     width: auto;
+    display: flex;
   }
 
   .aut-document-view-menu {
@@ -300,10 +301,6 @@ body {
 
   .aut-document-view-menu-desktop {
     display: none;
-  }
-
-  .aut-document-view-menu-mobile {
-    display: flex;
   }
 
   .aut-document-preview-toolbar {
@@ -1198,7 +1195,7 @@ section.aut-document {
 }
 
 .aut-document-file-name {
-  word-break: break-word;
+  word-break: break-all;
   overflow-wrap: anywhere;
 }
 
