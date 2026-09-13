@@ -31,6 +31,34 @@ use crate::schema::{
 };
 use crate::shared::app_state::AppState;
 use crate::shared::errors::{ApiError, ApiErrorContext, JobResult};
+use crate::shared::responses::ResourceList;
+
+#[derive(Debug, Clone, Copy, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ClassifierBlockSortField {
+    Id,
+    Name,
+    Description,
+    Enabled,
+    Order,
+    CreatedAt,
+    UpdatedAt,
+}
+
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct ListClassifierBlocksQuery {
+    /// 1-based page number.
+    pub page: Option<i64>,
+    /// Items per page (1 through 1000).
+    pub per_page: Option<i64>,
+    /// Case-insensitive search of name and description.
+    pub q: Option<String>,
+    /// Sort field.
+    pub sf: Option<ClassifierBlockSortField>,
+    /// Set to true for descending order.
+    pub sd: Option<bool>,
+}
 
 #[derive(Debug)]
 pub struct UpdateClassifierBlockInput {
@@ -38,6 +66,115 @@ pub struct UpdateClassifierBlockInput {
     pub description: Option<String>,
     pub enabled: Option<bool>,
     pub rules: Option<crate::domain::classifier_blocks::ClassifierRules>,
+}
+
+pub async fn get_classifier_block(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    id: i64,
+) -> Result<ClassifierBlock, ApiError> {
+    classifier_blocks::table
+        .find(id)
+        .select(ClassifierBlock::as_select())
+        .first::<ClassifierBlock>(db)
+        .await
+        .api_context("Failed to fetch classifier_block")
+}
+
+pub async fn list_classifier_blocks(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    params: ListClassifierBlocksQuery,
+) -> Result<ResourceList<ClassifierBlock>, ApiError> {
+    let page = params.page.unwrap_or(1).max(1);
+    let per_page = params.per_page.unwrap_or(1000).clamp(1, 1000);
+    let offset = (page - 1) * per_page;
+
+    let base_filter = || -> classifier_blocks::BoxedQuery<'_, diesel::pg::Pg> {
+        let mut query = classifier_blocks::table.into_boxed();
+
+        if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
+            let pattern = format!("%{}%", q);
+            query = query.filter(
+                classifier_blocks::name
+                    .ilike(pattern.clone())
+                    .or(classifier_blocks::description.ilike(pattern)),
+            );
+        }
+
+        query
+    };
+
+    let total = base_filter()
+        .count()
+        .get_result::<i64>(db)
+        .await
+        .api_context("Failed to count classifier_blocks")?;
+
+    let mut query: classifier_blocks::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
+    query = match (params.sf, params.sd) {
+        (Some(ClassifierBlockSortField::Name), Some(true)) => {
+            query.order((classifier_blocks::name.desc(), classifier_blocks::id.asc()))
+        }
+        (Some(ClassifierBlockSortField::Name), _) => {
+            query.order((classifier_blocks::name.asc(), classifier_blocks::id.asc()))
+        }
+        (Some(ClassifierBlockSortField::Description), Some(true)) => query.order((
+            classifier_blocks::description.desc(),
+            classifier_blocks::id.asc(),
+        )),
+        (Some(ClassifierBlockSortField::Description), _) => query.order((
+            classifier_blocks::description.asc(),
+            classifier_blocks::id.asc(),
+        )),
+        (Some(ClassifierBlockSortField::Enabled), Some(true)) => query.order((
+            classifier_blocks::enabled.desc(),
+            classifier_blocks::id.asc(),
+        )),
+        (Some(ClassifierBlockSortField::Enabled), _) => query.order((
+            classifier_blocks::enabled.asc(),
+            classifier_blocks::id.asc(),
+        )),
+        (Some(ClassifierBlockSortField::Order), Some(true)) => {
+            query.order((classifier_blocks::order.desc(), classifier_blocks::id.asc()))
+        }
+        (Some(ClassifierBlockSortField::Order), _) => {
+            query.order((classifier_blocks::order.asc(), classifier_blocks::id.asc()))
+        }
+        (Some(ClassifierBlockSortField::CreatedAt), Some(true)) => query.order((
+            classifier_blocks::created_at.desc(),
+            classifier_blocks::id.asc(),
+        )),
+        (Some(ClassifierBlockSortField::CreatedAt), _) => query.order((
+            classifier_blocks::created_at.asc(),
+            classifier_blocks::id.asc(),
+        )),
+        (Some(ClassifierBlockSortField::UpdatedAt), Some(true)) => query.order((
+            classifier_blocks::updated_at.desc(),
+            classifier_blocks::id.asc(),
+        )),
+        (Some(ClassifierBlockSortField::UpdatedAt), _) => query.order((
+            classifier_blocks::updated_at.asc(),
+            classifier_blocks::id.asc(),
+        )),
+        (Some(ClassifierBlockSortField::Id), Some(true)) => {
+            query.order(classifier_blocks::id.desc())
+        }
+        _ => query.order(classifier_blocks::id.asc()),
+    };
+
+    let items = query
+        .limit(per_page)
+        .offset(offset)
+        .select(ClassifierBlock::as_select())
+        .load::<ClassifierBlock>(db)
+        .await
+        .api_context("Failed to list classifier_blocks")?;
+
+    Ok(ResourceList {
+        total,
+        page,
+        per_page,
+        items,
+    })
 }
 
 #[derive(Insertable)]

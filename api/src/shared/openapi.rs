@@ -67,7 +67,7 @@ pub fn build_openapi_router() -> (axum::Router<Arc<AppState>>, utoipa::openapi::
         // because the query structs derive IntoParams.
         crate::api::cabinets::CabinetSortField,
         crate::api::cabinet_documents::CabinetDocumentSortField,
-        crate::api::classifier_blocks::ClassifierBlockSortField,
+        crate::application::classifier_blocks::ClassifierBlockSortField,
         crate::api::document_indexes::DocumentIndexSortField,
         crate::api::document_index_templates::DocumentIndexTemplateSortField,
         crate::application::document_index_values::DocumentIndexValueSortField,
