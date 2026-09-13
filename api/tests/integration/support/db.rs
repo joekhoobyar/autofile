@@ -1,4 +1,5 @@
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Weak};
 
 use autofile_api::run_migrations;
 use diesel::sql_query;
@@ -10,16 +11,16 @@ use testcontainers::ContainerAsync;
 use testcontainers::ImageExt;
 use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::postgres::Postgres;
-use tokio::sync::OnceCell;
+use tokio::sync::Mutex;
 
 const TEMPLATE_DB_NAME: &str = "autofile_test_template";
 const MAINTENANCE_DB_NAME: &str = "postgres";
 
-/// One Postgres container per test binary, shared by all tests in the binary
-/// via `cargo test`'s in-process threads. Each test still gets an isolated
-/// database cloned from a migrated template, so fixture IDs can overlap
-/// across tests without interference.
-static SHARED_SERVER: OnceCell<SharedTestServer> = OnceCell::const_new();
+/// Share one Postgres container across concurrently-running tests while at
+/// least one `TestDatabase` keeps it alive. Each test still gets an isolated
+/// database cloned from a migrated template, so fixture IDs can overlap across
+/// tests without interference.
+static SHARED_SERVER: Mutex<Option<Weak<SharedTestServer>>> = Mutex::const_new(None);
 static DB_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 struct SharedTestServer {
@@ -30,12 +31,16 @@ struct SharedTestServer {
 
 pub struct TestDatabase {
     pub pool: bb8::Pool<AsyncPgConnection>,
+    _server: Arc<SharedTestServer>,
 }
 
 impl TestDatabase {
     pub async fn new() -> Self {
-        let shared = SHARED_SERVER
-            .get_or_init(|| async {
+        let shared = {
+            let mut shared_server = SHARED_SERVER.lock().await;
+            if let Some(shared) = shared_server.as_ref().and_then(Weak::upgrade) {
+                shared
+            } else {
                 let container = Postgres::default()
                     .with_tag("17-alpine")
                     .start()
@@ -64,13 +69,15 @@ impl TestDatabase {
                     .await
                     .expect("migrations should run");
 
-                SharedTestServer {
+                let shared = Arc::new(SharedTestServer {
                     _container: container,
                     base_url,
                     template_db_url,
-                }
-            })
-            .await;
+                });
+                *shared_server = Some(Arc::downgrade(&shared));
+                shared
+            }
+        };
 
         // Clone the migrated template: milliseconds, versus seconds for a
         // fresh container plus a full migration run. Each clone uses a fresh
@@ -125,6 +132,9 @@ impl TestDatabase {
             .await
             .expect("pool should build");
 
-        Self { pool }
+        Self {
+            pool,
+            _server: shared,
+        }
     }
 }
