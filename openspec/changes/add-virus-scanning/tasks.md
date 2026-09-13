@@ -33,12 +33,12 @@
 
 ## 5. UI
 
-- [ ] Update settings page controls for virus scanning and scan-by-default.
-- [ ] Update upload pages with a `Virus scan this upload` checkbox shown only when scanning is enabled.
-- [ ] Update document properties/file metadata views to display scan status per file.
-- [ ] Add a document properties/file metadata action for submitting eligible files for rescan/retry-scan when virus scanning is enabled.
-- [ ] Update file preview/page/text/OCR/download surfaces to display unavailable-file messages when `content_available=false`.
-- [ ] Add UI tests for settings visibility, upload checkbox defaults, status display, rescan/retry-scan action visibility/state, blocked-file messages, and normal rendering when `content_available=true`.
+- [x] Update settings page controls for virus scanning and scan-by-default.
+- [x] Update upload pages with a `Virus scan this upload` checkbox shown only when scanning is enabled.
+- [x] Update document properties/file metadata views to display scan status per file.
+- [x] Add a document properties/file metadata action for submitting eligible files for rescan/retry-scan when virus scanning is enabled.
+- [x] Update file preview/page/text/OCR/download surfaces to display unavailable-file messages when `content_available=false`.
+- [x] Add UI tests for settings visibility, upload checkbox defaults, status display, rescan/retry-scan action visibility/state, blocked-file messages, and normal rendering when `content_available=true`.
 
 ## 6. Deployment And Documentation
 

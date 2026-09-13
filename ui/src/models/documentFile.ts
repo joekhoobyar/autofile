@@ -32,3 +32,43 @@ export interface DocumentFileOcrPage {
   page_number: number;
   ocr_content?: string;
 }
+
+export function documentFileScanStatusLabel(file: Pick<DocumentFile, 'scan_status' | 'scan_threat_name'>): string {
+  switch (file.scan_status) {
+    case 'not_required':
+      return 'Not scanned';
+    case 'pending':
+      return 'Pending scan';
+    case 'scanning':
+      return 'Scanning';
+    case 'clean':
+      return 'Clean';
+    case 'infected':
+      return file.scan_threat_name ? `Infected: ${file.scan_threat_name}` : 'Infected';
+    case 'scan_error':
+      return 'Scan error';
+    default:
+      return file.scan_status;
+  }
+}
+
+export function unavailableDocumentFileMessage(file: Pick<DocumentFile, 'scan_status' | 'scan_threat_name'>): string {
+  switch (file.scan_status) {
+    case 'pending':
+      return 'This file is stored but is waiting for virus scanning. It will be available after a clean scan.';
+    case 'scanning':
+      return 'This file is being scanned for viruses. It will be available after a clean scan.';
+    case 'infected':
+      return file.scan_threat_name
+        ? `This file is blocked because virus scanning found a threat: ${file.scan_threat_name}.`
+        : 'This file is blocked because virus scanning found a threat.';
+    case 'scan_error':
+      return 'This file is unavailable because virus scanning failed. An administrator can retry the scan or review scanner configuration.';
+    default:
+      return 'This file is unavailable until virus scanning is complete.';
+  }
+}
+
+export function canSubmitDocumentFileRescan(file: Pick<DocumentFile, 'scan_status'>): boolean {
+  return file.scan_status !== 'pending' && file.scan_status !== 'scanning';
+}

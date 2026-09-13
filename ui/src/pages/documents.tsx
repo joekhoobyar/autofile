@@ -18,6 +18,7 @@ import { type Document, type DocumentListParams } from '../models/document';
 import type { DocumentType } from '../models/documentType';
 import { useMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { useDocumentTypes, useDocumentTypesMap } from '../queries/useDocumentTypes';
+import { usePublicSettings } from '../queries/useAppSettings';
 import { Menu } from 'primereact/menu';
 import type { MenuItem } from 'primereact/menuitem';
 import { Button } from 'primereact/button';
@@ -1279,9 +1280,13 @@ export default function UploadDocument() {
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [uploadStatus, setUploadStatus] = useState('');
+    const { data: publicSettings } = usePublicSettings();
+    const [virusScanUploadOverride, setVirusScanUploadOverride] = useState<boolean | null>(null);
     const { data: documentTypes, isPending: isDocumentTypesPending, isFetching: isDocumentTypesFetching } = useDocumentTypes({ page: 1, per_page: 200, sf: 'name' });
     const defaultDocumentTypeId = documentTypes?.items?.find((item) => item.name === 'Unspecified' || item.slug === 'unspecified')?.id ?? null;
     const effectiveDocumentTypeId = documentTypeId ?? defaultDocumentTypeId;
+    const showVirusScanUpload = publicSettings?.virus_scanning_enabled ?? false;
+    const virusScanUpload = virusScanUploadOverride ?? publicSettings?.virus_scan_by_default ?? true;
     
     const onTemplateSelect = (e:FileUploadSelectEvent) => {
         let _totalSize = totalSize;
@@ -1428,6 +1433,9 @@ export default function UploadDocument() {
             formData.append('title', resolvedTitle);
             formData.append('document_type_id', String(effectiveDocumentTypeId));
             formData.append('file', file);
+            if (showVirusScanUpload) {
+                formData.append('virus_scan', String(virusScanUpload));
+            }
 
             await uploadFile(
                 formData,
@@ -1470,6 +1478,7 @@ export default function UploadDocument() {
         setTotalSize(0);
         setTitle('');
         setDocumentTypeId(null);
+        setVirusScanUploadOverride(null);
         setIsUploading(false);
         setUploadProgress(null);
         setUploadStatus('');
@@ -1523,6 +1532,19 @@ export default function UploadDocument() {
                         disabled={isUploading}
                     />
                 </div>
+                {showVirusScanUpload && (
+                    <div className="col-12">
+                        <div className="flex align-items-center gap-2">
+                            <Checkbox
+                                inputId="virus_scan_upload"
+                                checked={virusScanUpload}
+                                onChange={(event) => setVirusScanUploadOverride(event.checked ?? false)}
+                                disabled={isUploading}
+                            />
+                            <label htmlFor="virus_scan_upload">Virus scan this upload</label>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <Tooltip target=".custom-choose-btn" content="Choose" position="bottom" />

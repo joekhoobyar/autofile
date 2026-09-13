@@ -8,6 +8,11 @@ export interface DeleteDocumentFileInput {
   fileId: number;
 }
 
+export interface RescanDocumentFileInput {
+  documentId: number;
+  fileId: number;
+}
+
 export function useDocumentFiles(documentId: string | number): UseQueryResult<DocumentFile[], HttpError> {
   return useQuery({
     queryKey: ['documentFile', 'list', documentId],
@@ -62,6 +67,24 @@ export function useDeleteDocumentFile(): UseMutationResult<void, HttpError, Dele
   });
 }
 
+export function useRescanDocumentFile(): UseMutationResult<DocumentFile, HttpError, RescanDocumentFileInput> {
+  const queryClient = useQueryClient();
+
+  return useMutation<DocumentFile, HttpError, RescanDocumentFileInput>({
+    mutationFn: async ({ documentId, fileId }) => {
+      return apiMutate<DocumentFile, void>(`api/v1/documents/${documentId}/files/${fileId}/rescan`, {
+        method: 'POST',
+      });
+    },
+
+    onSuccess: (_data, { documentId, fileId }) => {
+      queryClient.removeQueries({ queryKey: ['documentFile', 'get', documentId, fileId, 'thumbnail'], exact: true });
+      queryClient.invalidateQueries({ queryKey: ['documentFile', 'list', documentId] });
+      queryClient.invalidateQueries({ queryKey: ['document'] });
+    },
+  });
+}
+
 export function useDocumentFileThumbnail(
   documentId: string | number,
   documentFileId: string | number,
@@ -93,22 +116,28 @@ export function useDocumentFileThumbnail(
 
 export function useDocumentFilePages(
   documentId: string | number,
-  documentFileId: string | number
+  documentFileId: string | number,
+  options: Omit<UseQueryOptions<DocumentFilePage[], HttpError>, 'queryKey' | 'queryFn'> = {}
 ): UseQueryResult<DocumentFilePage[], HttpError> {
+  const { enabled = true, ...queryOptions } = options;
   return useQuery({
     queryKey: ['documentFilePage', 'list', documentId, documentFileId],
-    enabled: !!documentId && !!documentFileId,
+    enabled: !!documentId && !!documentFileId && enabled,
+    ...queryOptions,
     queryFn: () => apiFetch<DocumentFilePage[]>(`api/v1/documents/${documentId}/files/${documentFileId}/pages`),
   });
 }
 
 export function useDocumentFileOcrPages(
   documentId: string | number,
-  documentFileId: string | number
+  documentFileId: string | number,
+  options: Omit<UseQueryOptions<DocumentFileOcrPage[], HttpError>, 'queryKey' | 'queryFn'> = {}
 ): UseQueryResult<DocumentFileOcrPage[], HttpError> {
+  const { enabled = true, ...queryOptions } = options;
   return useQuery({
     queryKey: ['documentFileOcrPage', 'list', documentId, documentFileId],
-    enabled: !!documentId && !!documentFileId,
+    enabled: !!documentId && !!documentFileId && enabled,
+    ...queryOptions,
     queryFn: () => apiFetch<DocumentFileOcrPage[]>(`api/v1/documents/${documentId}/files/${documentFileId}/ocr-pages`),
   });
 }

@@ -166,6 +166,19 @@ describe('DocumentFilePagePreview', () => {
     expect(screen.getByText('No pages available for this file.')).toBeInTheDocument();
   });
 
+  it('shows an unavailable-file message instead of loading page images', () => {
+    mockUseDocumentFiles.mockReturnValue({
+      data: [{ ...fileFixture(1, 'pending.pdf'), scan_status: 'pending', scan_requested: true, content_available: false }],
+      isLoading: false,
+      isError: false,
+    });
+
+    renderPreview('/documents/10/preview?file_id=1');
+
+    expect(screen.getByText('This file is stored but is waiting for virus scanning. It will be available after a clean scan.')).toBeInTheDocument();
+    expect(mockUsePageImage).not.toHaveBeenCalled();
+  });
+
   it('uses file_id from the URL and falls back to the first file for unknown ids', () => {
     renderPreview('/documents/10/preview?file_id=2');
     expect(screen.getByText('Page 1 of 3')).toBeInTheDocument();

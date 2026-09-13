@@ -5,6 +5,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { Button } from 'primereact/button';
 import { Card } from 'primereact/card';
+import { Checkbox } from 'primereact/checkbox';
 import { confirmDialog } from 'primereact/confirmdialog';
 import { DataView, DataViewLayoutOptions } from 'primereact/dataview';
 import { Divider } from 'primereact/divider';
@@ -24,7 +25,9 @@ import { AppToast } from '../components/AppToast';
 import { DateTimeText } from '../components/DateTimeText';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { type DocumentFile } from '../models/documentFile';
+import { canSubmitDocumentFileRescan, documentFileScanStatusLabel, unavailableDocumentFileMessage } from '../models/documentFile';
 import { useDocument } from '../queries/useDocuments';
+import { usePublicSettings } from '../queries/useAppSettings';
 import {
   downloadDocumentFile,
   useDocumentFiles,
@@ -32,6 +35,7 @@ import {
   useDocumentFilePageImage,
   useDocumentFilePages,
   useDocumentFileThumbnail,
+  useRescanDocumentFile,
   useDeleteDocumentFile,
 } from '../queries/useDocumentFiles';
 import { useId } from '../util';
@@ -58,7 +62,10 @@ type DocumentFileListItemProps = {
   onDelete: (event: React.MouseEvent, file: DocumentFile) => void;
   isDownloading: boolean;
   isDeleting: boolean;
+  isRescanning: boolean;
   canDelete: boolean;
+  virusScanningEnabled: boolean;
+  onRescan: (event: React.MouseEvent, file: DocumentFile) => void;
 };
 
 type DocumentFileGridItemProps = {
@@ -69,7 +76,10 @@ type DocumentFileGridItemProps = {
   onDelete: (event: React.MouseEvent, file: DocumentFile) => void;
   isDownloading: boolean;
   isDeleting: boolean;
+  isRescanning: boolean;
   canDelete: boolean;
+  virusScanningEnabled: boolean;
+  onRescan: (event: React.MouseEvent, file: DocumentFile) => void;
 };
 
 function formatBytes(size: number) {
@@ -121,7 +131,9 @@ function useSelectedFileId(files: DocumentFile[] | undefined, initialFileId?: nu
 }
 
 function DocumentFileThumbnail({ documentId, file }: Readonly<DocumentFileThumbnailProps>) {
-  const { data: thumbnailUrl } = useDocumentFileThumbnail(documentId, file.id);
+  const { data: thumbnailUrl } = useDocumentFileThumbnail(documentId, file.id, {
+    enabled: file.content_available,
+  });
   const [loadedSrc, setLoadedSrc] = useState<string | undefined>(undefined);
   const [errorSrc, setErrorSrc] = useState<string | undefined>(undefined);
 
@@ -160,6 +172,7 @@ function FileMetadata({ file }: Readonly<{ file: DocumentFile }>) {
       <li><span>Content Type</span>: {file.content_type ?? 'Unknown'}</li>
       <li><span>Size</span>: {formatBytes(file.size)}</li>
       <li><span>Pages</span>: {file.pages ?? 0}</li>
+      <li><span>Virus Scan</span>: {documentFileScanStatusLabel(file)}</li>
       <li><span>Created</span>: <DateTimeText value={file.created_at} /></li>
     </ul>
   );
@@ -181,7 +194,27 @@ function DownloadButton({ file, onDownload, isDownloading }: Readonly<{
       className="aut-document-file-download-button"
       aria-label={`Download ${file.filename}`}
       onClick={(event) => onDownload(event, file)}
-      disabled={isDownloading}
+      disabled={isDownloading || !file.content_available}
+    />
+  );
+}
+
+function RescanButton({ file, onRescan, isRescanning }: Readonly<{
+  file: DocumentFile;
+  onRescan: (event: React.MouseEvent, file: DocumentFile) => void;
+  isRescanning: boolean;
+}>) {
+  return (
+    <Button
+      type="button"
+      label={isRescanning ? 'Submitting' : 'Rescan'}
+      icon={isRescanning ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'}
+      severity="secondary"
+      outlined
+      size="small"
+      aria-label={`Rescan ${file.filename}`}
+      onClick={(event) => onRescan(event, file)}
+      disabled={isRescanning || !canSubmitDocumentFileRescan(file)}
     />
   );
 }
@@ -207,23 +240,36 @@ function DeleteButton({ file, onDelete, isDeleting, canDelete }: Readonly<{
   );
 }
 
-function DocumentFileActions({ file, onDownload, onDelete, isDownloading, isDeleting, canDelete }: Readonly<{
+function DocumentFileActions({ file, onDownload, onDelete, onRescan, isDownloading, isDeleting, isRescanning, canDelete, virusScanningEnabled }: Readonly<{
   file: DocumentFile;
   onDownload: (event: React.MouseEvent, file: DocumentFile) => void;
   onDelete: (event: React.MouseEvent, file: DocumentFile) => void;
+  onRescan: (event: React.MouseEvent, file: DocumentFile) => void;
   isDownloading: boolean;
   isDeleting: boolean;
+  isRescanning: boolean;
   canDelete: boolean;
+  virusScanningEnabled: boolean;
 }>) {
   return (
-    <div className="flex align-items-center gap-2 aut-document-file-actions">
+    <div
+      className="flex align-items-center gap-2 aut-document-file-actions"
+      onClick={(event) => {
+        // Disabled PrimeReact buttons do not fire their own onClick, so their
+        // stopPropagation never runs. Stop action-area clicks here so they do
+        // not bubble to the file card and navigate to preview.
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+    >
       <DownloadButton file={file} onDownload={onDownload} isDownloading={isDownloading} />
+      {virusScanningEnabled && <RescanButton file={file} onRescan={onRescan} isRescanning={isRescanning} />}
       <DeleteButton file={file} onDelete={onDelete} isDeleting={isDeleting} canDelete={canDelete} />
     </div>
   );
 }
 
-function DocumentFileListItem({ documentId, file, index, onOpenPreview, onDownload, onDelete, isDownloading, isDeleting, canDelete }: Readonly<DocumentFileListItemProps>) {
+function DocumentFileListItem({ documentId, file, index, onOpenPreview, onDownload, onDelete, onRescan, isDownloading, isDeleting, isRescanning, canDelete, virusScanningEnabled }: Readonly<DocumentFileListItemProps>) {
   return (
     <div className="col-12 aut-document-list aut-document-file-list" key={file.id}>
       <div
@@ -245,8 +291,11 @@ function DocumentFileListItem({ documentId, file, index, onOpenPreview, onDownlo
           <div className="flex flex-column align-items-center sm:align-items-start gap-3 aut-document-header">
             <header className="flex align-items-center justify-content-between gap-2 aut-document-header-row aut-document-file-header-row">
               <span className="aut-document-file-name">{file.filename}</span>
-              <DocumentFileActions file={file} onDownload={onDownload} onDelete={onDelete} isDownloading={isDownloading} isDeleting={isDeleting} canDelete={canDelete} />
+              <DocumentFileActions file={file} onDownload={onDownload} onDelete={onDelete} onRescan={onRescan} isDownloading={isDownloading} isDeleting={isDeleting} isRescanning={isRescanning} canDelete={canDelete} virusScanningEnabled={virusScanningEnabled} />
             </header>
+            {virusScanningEnabled && !file.content_available && (
+              <Message severity="warn" text={unavailableDocumentFileMessage(file)} />
+            )}
           </div>
           <aside className="flex flex-column align-items-center sm:align-items-start">
             <FileMetadata file={file} />
@@ -257,7 +306,7 @@ function DocumentFileListItem({ documentId, file, index, onOpenPreview, onDownlo
   );
 }
 
-function DocumentFileGridItem({ documentId, file, onOpenPreview, onDownload, onDelete, isDownloading, isDeleting, canDelete }: Readonly<DocumentFileGridItemProps>) {
+function DocumentFileGridItem({ documentId, file, onOpenPreview, onDownload, onDelete, onRescan, isDownloading, isDeleting, isRescanning, canDelete, virusScanningEnabled }: Readonly<DocumentFileGridItemProps>) {
   return (
     <div className="col-12 sm:col-6 lg:col-4 xl:col-3 p-2 aut-document-grid aut-document-file-grid" key={file.id}>
       <div
@@ -279,8 +328,11 @@ function DocumentFileGridItem({ documentId, file, onOpenPreview, onDownload, onD
           <aside>
             <DocumentFileThumbnail documentId={documentId} file={file} />
             <FileMetadata file={file} />
+            {virusScanningEnabled && !file.content_available && (
+              <Message className="m-2" severity="warn" text={unavailableDocumentFileMessage(file)} />
+            )}
             <div className="aut-document-file-grid-actions">
-              <DocumentFileActions file={file} onDownload={onDownload} onDelete={onDelete} isDownloading={isDownloading} isDeleting={isDeleting} canDelete={canDelete} />
+              <DocumentFileActions file={file} onDownload={onDownload} onDelete={onDelete} onRescan={onRescan} isDownloading={isDownloading} isDeleting={isDeleting} isRescanning={isRescanning} canDelete={canDelete} virusScanningEnabled={virusScanningEnabled} />
             </div>
           </aside>
         </section>
@@ -299,7 +351,11 @@ export function UploadDocumentFile() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadStatus, setUploadStatus] = useState('');
+  const { data: publicSettings } = usePublicSettings();
+  const [virusScanUploadOverride, setVirusScanUploadOverride] = useState<boolean | null>(null);
   const { data: document, isLoading: isDocumentLoading, isError: isDocumentError, error: documentError } = useDocument(documentId);
+  const showVirusScanUpload = publicSettings?.virus_scanning_enabled ?? false;
+  const virusScanUpload = virusScanUploadOverride ?? publicSettings?.virus_scan_by_default ?? true;
 
   const onTemplateSelect = (event: FileUploadSelectEvent) => {
     const nextTotalSize = event.files.reduce((sum, file) => sum + (file.size || 0), 0);
@@ -432,6 +488,9 @@ export function UploadDocumentFile() {
     const uploadOne = async (file: File) => {
       const formData = new FormData();
       formData.append('file', file);
+      if (showVirusScanUpload) {
+        formData.append('virus_scan', String(virusScanUpload));
+      }
 
       await uploadFile(
         formData,
@@ -472,6 +531,7 @@ export function UploadDocumentFile() {
 
     event.options.clear();
     setTotalSize(0);
+    setVirusScanUploadOverride(null);
     setIsUploading(false);
     setUploadProgress(null);
     setUploadStatus('');
@@ -548,6 +608,18 @@ export function UploadDocumentFile() {
           disabled={isUploading}
         />
 
+        {showVirusScanUpload && (
+          <div className="flex align-items-center gap-2 mt-3">
+            <Checkbox
+              inputId="document_file_virus_scan_upload"
+              checked={virusScanUpload}
+              onChange={(event) => setVirusScanUploadOverride(event.checked ?? false)}
+              disabled={isUploading}
+            />
+            <label htmlFor="document_file_virus_scan_upload">Virus scan this upload</label>
+          </div>
+        )}
+
         {isUploading && (
           <div className="aut-upload-progress-panel mt-4" role="status" aria-live="polite">
             <div className="aut-upload-progress-status">
@@ -573,11 +645,15 @@ export function ListDocumentFiles() {
   const toast = useRef<Toast>(null);
   const { data: document, isLoading: isDocumentLoading, isError: isDocumentError, error: documentError } = useDocument(documentId);
   const { data: files, isLoading: isFilesLoading, isError: isFilesError, error: filesError } = useDocumentFiles(documentId);
+  const { data: publicSettings } = usePublicSettings();
   const deleteDocumentFile = useDeleteDocumentFile();
+  const rescanDocumentFile = useRescanDocumentFile();
   const [layout, setLayout] = useState<'list' | 'grid'>('grid');
   const [downloadingIds, setDownloadingIds] = useState<Set<number>>(new Set());
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [rescanningId, setRescanningId] = useState<number | null>(null);
+  const virusScanningEnabled = publicSettings?.virus_scanning_enabled ?? false;
 
   const openPreview = (fileId: number) => {
     navigate(`/documents/${documentId}/preview?file_id=${fileId}`);
@@ -586,6 +662,10 @@ export function ListDocumentFiles() {
   const handleDownload = async (event: React.MouseEvent, file: DocumentFile) => {
     event.preventDefault();
     event.stopPropagation();
+    if (!file.content_available) {
+      setDownloadError(unavailableDocumentFileMessage(file));
+      return;
+    }
     setDownloadError(null);
     setDownloadingIds((current) => new Set(current).add(file.id));
 
@@ -628,6 +708,21 @@ export function ListDocumentFiles() {
     });
   };
 
+  const handleRescan = async (event: React.MouseEvent, file: DocumentFile) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setRescanningId(file.id);
+    try {
+      await rescanDocumentFile.mutateAsync({ documentId, fileId: file.id });
+      toast.current?.show({ severity: 'success', summary: 'Scan queued', detail: `Submitted ${file.filename} for virus scanning.` });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Something went wrong';
+      toast.current?.show({ severity: 'error', summary: 'Rescan failed', detail });
+    } finally {
+      setRescanningId(null);
+    }
+  };
+
   const itemTemplate = (file: DocumentFile, currentLayout: 'list' | 'grid', index: number) => {
     if (!file) return null;
     if (currentLayout === 'list') {
@@ -640,9 +735,12 @@ export function ListDocumentFiles() {
           onOpenPreview={openPreview}
           onDownload={handleDownload}
           onDelete={confirmDeleteFile}
+          onRescan={handleRescan}
           isDownloading={downloadingIds.has(file.id)}
           isDeleting={deletingId === file.id}
+          isRescanning={rescanningId === file.id}
           canDelete={(files?.length ?? 0) > 1}
+          virusScanningEnabled={virusScanningEnabled}
         />
       );
     }
@@ -655,9 +753,12 @@ export function ListDocumentFiles() {
         onOpenPreview={openPreview}
         onDownload={handleDownload}
         onDelete={confirmDeleteFile}
+        onRescan={handleRescan}
         isDownloading={downloadingIds.has(file.id)}
         isDeleting={deletingId === file.id}
+        isRescanning={rescanningId === file.id}
         canDelete={(files?.length ?? 0) > 1}
+        virusScanningEnabled={virusScanningEnabled}
       />
     );
   };
@@ -712,11 +813,12 @@ export function ListDocumentFilePageTextContent() {
   const documentId = useId('id');
   const { data: document, isLoading: isDocumentLoading, isError: isDocumentError, error: documentError } = useDocument(documentId);
   const { data: files, isLoading: isFilesLoading, isError: isFilesError, error: filesError } = useDocumentFiles(documentId);
-  const { effectiveFileId, setSelectedFileId } = useSelectedFileId(files);
+  const { effectiveFileId, effectiveFile, setSelectedFileId } = useSelectedFileId(files);
 
   const { data: pages, isLoading: isPagesLoading, isError: isPagesError, error: pagesError } = useDocumentFilePages(
     documentId,
-    effectiveFileId ?? 0
+    effectiveFileId ?? 0,
+    { enabled: effectiveFile?.content_available ?? true }
   );
 
   const fileOptions = useMemo(
@@ -755,7 +857,11 @@ export function ListDocumentFilePageTextContent() {
             <Message severity="info" text="No files available for this document." />
           )}
 
-          {effectiveFileId && (
+          {effectiveFile && !effectiveFile.content_available && (
+            <Message severity="warn" text={unavailableDocumentFileMessage(effectiveFile)} />
+          )}
+
+          {effectiveFileId && effectiveFile?.content_available && (
             <div className="flex flex-column gap-3">
               {isPagesLoading && <div>Loading</div>}
               {!isPagesLoading && (pages ?? []).length === 0 && (
@@ -781,11 +887,12 @@ export function ListDocumentFilePageOcrContent() {
   const documentId = useId('id');
   const { data: document, isLoading: isDocumentLoading, isError: isDocumentError, error: documentError } = useDocument(documentId);
   const { data: files, isLoading: isFilesLoading, isError: isFilesError, error: filesError } = useDocumentFiles(documentId);
-  const { effectiveFileId, setSelectedFileId } = useSelectedFileId(files);
+  const { effectiveFileId, effectiveFile, setSelectedFileId } = useSelectedFileId(files);
 
   const { data: pages, isLoading: isPagesLoading, isError: isPagesError, error: pagesError } = useDocumentFileOcrPages(
     documentId,
-    effectiveFileId ?? 0
+    effectiveFileId ?? 0,
+    { enabled: effectiveFile?.content_available ?? true }
   );
 
   const fileOptions = useMemo(
@@ -824,7 +931,11 @@ export function ListDocumentFilePageOcrContent() {
             <Message severity="info" text="No files available for this document." />
           )}
 
-          {effectiveFileId && (
+          {effectiveFile && !effectiveFile.content_available && (
+            <Message severity="warn" text={unavailableDocumentFileMessage(effectiveFile)} />
+          )}
+
+          {effectiveFileId && effectiveFile?.content_available && (
             <div className="flex flex-column gap-3">
               {isPagesLoading && <div>Loading</div>}
               {!isPagesLoading && (pages ?? []).length === 0 && (
@@ -1338,7 +1449,11 @@ export function DocumentFilePagePreview() {
             <Message severity="info" text="No files available for this document." />
           )}
 
-          {effectiveFileId && (
+          {effectiveFile && !effectiveFile.content_available && (
+            <Message severity="warn" text={unavailableDocumentFileMessage(effectiveFile)} />
+          )}
+
+          {effectiveFileId && effectiveFile?.content_available && (
             <VirtualizedPagePreview
               documentId={documentId}
               documentFileId={effectiveFileId}
