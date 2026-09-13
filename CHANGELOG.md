@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Child document-processing commands now also inherit non-secret path overrides (`TMPDIR`, `TEMP`, `TMP`, `XDG_CACHE_HOME`, `MAGICK_TMPDIR`, `FONTCONFIG_PATH`, `FONTCONFIG_FILE`) from the API process, so temp/cache locations configured on the container actually reach `pandoc`, `soffice`, `weasyprint`, `pdftocairo`, `pdftotext`, `pdfinfo`, `magick`, and `tesseract`. Secret-bearing variables remain stripped. The Helm chart now sets `TMPDIR=/tmp`, `XDG_CACHE_HOME=/tmp/.cache`, and `MAGICK_TMPDIR=/tmp` on the API container so tool caches stay inside the size-limited `/tmp` `emptyDir`.
+
 ## [0.5.7] - 2026-09-13
 
 ### Added

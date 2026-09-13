@@ -70,6 +70,13 @@ spec:
               value: {{ .Values.api.env.RUST_LOG | quote }}
             - name: MAX_UPLOAD_SIZE_MB
               value: {{ .Values.api.env.MAX_UPLOAD_SIZE_MB | quote }}
+            # Tool scratch stays inside the /tmp emptyDir (see api.tmpDir).
+            - name: TMPDIR
+              value: /tmp
+            - name: XDG_CACHE_HOME
+              value: /tmp/.cache
+            - name: MAGICK_TMPDIR
+              value: /tmp
             - name: S3_BUCKET
               value: {{ .Values.objectStorage.bucket | quote }}
             - name: AWS_REGION

@@ -83,6 +83,9 @@ services:
       JWT_SECRET: dev-jwt-secret-change-me
       MAX_UPLOAD_SIZE_MB: "100"
       RUST_LOG: info
+      TMPDIR: /tmp
+      XDG_CACHE_HOME: /tmp/.cache
+      MAGICK_TMPDIR: /tmp
     ports:
       - "8000:8000"
 

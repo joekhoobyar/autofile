@@ -7,7 +7,8 @@
 //! `REDIS_URL`, `JWT_SECRET`, `AWS_*`, `S3_BUCKET`, ...) to those children.
 //!
 //! Always build child commands with [`sanitized_command`], which clears the
-//! environment and re-applies only the safe allowlist (`PATH` and `HOME`,
+//! environment and re-applies only the safe allowlist (`PATH`, `HOME`, temp-dir
+//! overrides, `XDG_CACHE_HOME`, `MAGICK_TMPDIR`, and fontconfig path vars,
 //! taken from the main process). Everything else — including secret-bearing
 //! vars (`DATABASE_URL`, `JWT_SECRET`, `AWS_*`, ...) — is dropped.
 
@@ -15,13 +16,30 @@ use tokio::process::Command;
 
 /// Environment variables propagated from the main process to child commands.
 /// Everything else is dropped.
-const INHERITED_ENV_VARS: &[&str] = &["PATH", "HOME"];
+///
+/// Besides `PATH` and `HOME`, this includes only non-secret path overrides:
+/// temp-dir selection (`TMPDIR`, `TEMP`, `TMP`; honored by Python `tempfile`,
+/// ImageMagick, and friends), the XDG cache location (`XDG_CACHE_HOME`, so
+/// fontconfig/Pango caches can be redirected e.g. under `/tmp`), the
+/// ImageMagick pixel-cache location (`MAGICK_TMPDIR`), and fontconfig config
+/// locations (`FONTCONFIG_PATH`, `FONTCONFIG_FILE`).
+const INHERITED_ENV_VARS: &[&str] = &[
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+    "XDG_CACHE_HOME",
+    "MAGICK_TMPDIR",
+    "FONTCONFIG_PATH",
+    "FONTCONFIG_FILE",
+];
 
 /// Build a child command with a sanitized environment.
 ///
 /// Clears every inherited variable (including secrets) via `env_clear()`,
-/// then re-applies only [`INHERITED_ENV_VARS`] (`PATH` and `HOME`) with the
-/// values from the main process. Callers add program arguments as usual.
+/// then re-applies only [`INHERITED_ENV_VARS`] with the values from the main
+/// process. Callers add program arguments as usual.
 pub fn sanitized_command(program: &str) -> Command {
     let mut command = Command::new(program);
     command.env_clear();
@@ -38,6 +56,41 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::collections::HashSet;
+
+    #[test]
+    fn allowlist_contains_expected_path_overrides() {
+        for key in [
+            "PATH",
+            "HOME",
+            "TMPDIR",
+            "TEMP",
+            "TMP",
+            "XDG_CACHE_HOME",
+            "MAGICK_TMPDIR",
+            "FONTCONFIG_PATH",
+            "FONTCONFIG_FILE",
+        ] {
+            assert!(
+                INHERITED_ENV_VARS.contains(&key),
+                "{key} must be propagated to child processes"
+            );
+        }
+        // No secret-bearing vars may ever be added to the allowlist.
+        for key in [
+            "DATABASE_URL",
+            "REDIS_URL",
+            "JWT_SECRET",
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "AWS_ENDPOINT_URL_S3",
+            "S3_BUCKET",
+        ] {
+            assert!(
+                !INHERITED_ENV_VARS.contains(&key),
+                "{key} must never be propagated to child processes"
+            );
+        }
+    }
 
     #[tokio::test]
     async fn child_env_contains_only_inherited_allowlist() {

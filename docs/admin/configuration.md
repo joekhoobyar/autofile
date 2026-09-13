@@ -16,6 +16,9 @@ The API is configured with environment variables.
 | `JWT_SECRET` | Yes | none | Secret used to sign JWTs. Use a strong value in production. |
 | `ALLOWED_ORIGINS` | No | `http://localhost:5173` | Comma-separated CORS origins. |
 | `MAX_UPLOAD_SIZE_MB` | No | `100` | Maximum size in megabytes for a single uploaded file. |
+| `TMPDIR` | No | OS default (`/tmp`) | Scratch directory for uploads and document processing. Docker Compose and the Helm chart set `/tmp`. |
+| `XDG_CACHE_HOME` | No | `~/.cache` | Cache directory for tool caches (fontconfig/Pango). Docker Compose and the Helm chart set `/tmp/.cache` so caches stay on ephemeral scratch. |
+| `MAGICK_TMPDIR` | No | `TMPDIR` | ImageMagick pixel-cache directory. Docker Compose and the Helm chart set `/tmp`. |
 | `RUST_LOG` | No | Rust tracing default: `error` | Logging filter. Possible values: `error`, `warn`, `info`, `debug`, `trace`, `off` |
 
 ## Production Notes

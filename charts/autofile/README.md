@@ -274,6 +274,8 @@ api:
     sizeLimit: 4Gi
 ```
 
+The API container sets `TMPDIR=/tmp`, `XDG_CACHE_HOME=/tmp/.cache`, and `MAGICK_TMPDIR=/tmp` so upload buffering, document-processing scratch, and tool caches (fontconfig/Pango, ImageMagick) all stay inside that `emptyDir` and count against its `sizeLimit`. Override them with `api.extraEnv` if needed.
+
 ### Enable Ingress
 
 The chart creates separate Ingress resources for the API and UI. The API is served at `/api`; the UI is served at `/`.
