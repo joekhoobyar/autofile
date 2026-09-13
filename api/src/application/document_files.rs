@@ -3,7 +3,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use apalis::prelude::*;
+use apalis_redis::RedisStorage;
 use bb8::PooledConnection;
+use chrono::Utc;
 use diesel::dsl::select;
 use diesel::prelude::*;
 use diesel::result::{DatabaseErrorKind, Error as DieselError};
@@ -12,9 +14,13 @@ use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use tokio::io::AsyncRead;
 use uuid::Uuid;
 
+use crate::application::app_settings::get_app_settings;
 use crate::application::jobs::{FastJob, MediumJob};
+use crate::application::malware_scanning::{ScanMetadata, ScanOutcome};
 use crate::domain::document_files::{
-    DocumentFile, DocumentFileOcrPage, DocumentFilePage, DocumentFileView,
+    DocumentFile, DocumentFileOcrPage, DocumentFilePage, DocumentFileView, SCAN_STATUS_CLEAN,
+    SCAN_STATUS_ERROR, SCAN_STATUS_INFECTED, SCAN_STATUS_NOT_REQUIRED, SCAN_STATUS_PENDING,
+    SCAN_STATUS_SCANNING,
 };
 use crate::domain::document_types::UNSPECIFIED_DOCUMENT_TYPE_ID;
 use crate::domain::users::SYSTEM_USER_ID;
@@ -23,6 +29,7 @@ use crate::infrastructure::s3::delete_prefix_from_s3;
 use crate::infrastructure::s3::upload_file_to_s3;
 use crate::schema::{document_file_ocr_pages, document_file_pages, document_files, documents};
 use crate::shared::app_state::AppState;
+use crate::shared::config::MalwareScannerFailurePolicy;
 use crate::shared::errors::{ApiError, JobResult};
 use crate::shared::process::sanitized_command;
 use crate::shared::uploads::write_field_to_temp_file;
@@ -39,6 +46,9 @@ pub struct NewDocumentFile {
     pub content_type: Option<String>,
     pub size: i64,
     pub checksum_sha256: String,
+    pub scan_status: String,
+    pub scan_requested: bool,
+    pub scan_requested_by: Option<i64>,
     pub created_by: i64,
     pub updated_by: i64,
 }
@@ -59,6 +69,21 @@ pub struct UploadedDocumentFile {
     pub content_type: Option<String>,
     pub size: i64,
     pub checksum_sha256: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct UploadScanDecision {
+    pub requested: bool,
+}
+
+impl UploadScanDecision {
+    fn scan_status(self) -> &'static str {
+        if self.requested {
+            SCAN_STATUS_PENDING
+        } else {
+            SCAN_STATUS_NOT_REQUIRED
+        }
+    }
 }
 
 pub struct DocumentFileDownloadMetadata {
@@ -247,12 +272,16 @@ pub async fn create_document_file(
     user_id: i64,
     document_id: i64,
     file_upload: BufferedDocumentFileUpload,
+    virus_scan: Option<bool>,
 ) -> Result<DocumentFileView, ApiError> {
+    let scan_decision = resolve_upload_scan_decision(db, virus_scan).await?;
     let file_info = upload_document_file_to_s3(&state, file_upload).await?;
     let file_info_for_cleanup = file_info.clone();
 
     let fast_jobs = state.fast_jobs.as_ref().clone();
     let medium_jobs = state.medium_jobs.as_ref().clone();
+    let scan_enqueue_failed = Arc::new(AtomicBool::new(false));
+    let scan_enqueue_failed_for_tx = Arc::clone(&scan_enqueue_failed);
     let thumbnail_enqueue_failed = Arc::new(AtomicBool::new(false));
     let thumbnail_enqueue_failed_for_tx = Arc::clone(&thumbnail_enqueue_failed);
     let pages_enqueue_failed = Arc::new(AtomicBool::new(false));
@@ -270,28 +299,29 @@ pub async fn create_document_file(
                 .first::<i64>(conn)
                 .await?;
 
-            let inserted_file = insert_document_file(conn, document_id, file_info, user_id).await?;
+            let inserted_file =
+                insert_document_file(conn, document_id, file_info, user_id, scan_decision).await?;
 
-            if medium_jobs
-                .push(MediumJob::ProcessFilePages {
-                    document_file_id: inserted_file.id,
-                })
-                .await
-                .is_err()
+            if scan_decision.requested {
+                if medium_jobs
+                    .push(MediumJob::ScanDocumentFile {
+                        document_file_id: inserted_file.id,
+                    })
+                    .await
+                    .is_err()
+                {
+                    scan_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
+                    return Err(diesel::result::Error::RollbackTransaction);
+                }
+            } else if enqueue_post_upload_processing_jobs(
+                &mut fast_jobs,
+                &mut medium_jobs,
+                inserted_file.id,
+            )
+            .await
+            .is_err()
             {
                 pages_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
-                return Err(diesel::result::Error::RollbackTransaction);
-            }
-
-            if fast_jobs
-                .push(FastJob::GenerateThumbnail {
-                    document_file_id: inserted_file.id,
-                    page: 1,
-                    width: 800,
-                })
-                .await
-                .is_err()
-            {
                 thumbnail_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
                 return Err(diesel::result::Error::RollbackTransaction);
             }
@@ -305,9 +335,14 @@ pub async fn create_document_file(
         Err(e) => {
             delete_uploaded_document_file_from_s3(&state, &file_info_for_cleanup).await;
             if matches!(e, diesel::result::Error::RollbackTransaction) {
+                let scan_failed = scan_enqueue_failed.as_ref().load(Ordering::Relaxed);
                 let pages_failed = pages_enqueue_failed.as_ref().load(Ordering::Relaxed);
                 let thumbnail_failed = thumbnail_enqueue_failed.as_ref().load(Ordering::Relaxed);
-                if pages_failed {
+                if scan_failed {
+                    Err(ApiError::internal_server_error(
+                        "Failed to enqueue virus scan job",
+                    ))
+                } else if pages_failed {
                     Err(ApiError::internal_server_error(
                         "Failed to enqueue file pages job",
                     ))
@@ -488,6 +523,7 @@ pub async fn insert_document_file(
     document_id: i64,
     upload: UploadedDocumentFile,
     user_id: i64,
+    scan_decision: UploadScanDecision,
 ) -> Result<DocumentFile, diesel::result::Error> {
     diesel::insert_into(document_files::table)
         .values(&NewDocumentFile {
@@ -497,12 +533,182 @@ pub async fn insert_document_file(
             content_type: upload.content_type,
             size: upload.size,
             checksum_sha256: upload.checksum_sha256,
+            scan_status: scan_decision.scan_status().to_string(),
+            scan_requested: scan_decision.requested,
+            scan_requested_by: scan_decision.requested.then_some(user_id),
             created_by: user_id,
             updated_by: user_id,
         })
         .returning(DocumentFile::as_returning())
         .get_result(db)
         .await
+}
+
+pub async fn resolve_upload_scan_decision(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    virus_scan: Option<bool>,
+) -> Result<UploadScanDecision, ApiError> {
+    let settings = get_app_settings(db).await?;
+    Ok(UploadScanDecision {
+        requested: settings.virus_scanning_enabled
+            && virus_scan.unwrap_or(settings.virus_scan_by_default),
+    })
+}
+
+async fn enqueue_post_upload_processing_jobs(
+    fast_jobs: &mut RedisStorage<FastJob>,
+    medium_jobs: &mut RedisStorage<MediumJob>,
+    document_file_id: i64,
+) -> Result<(), ()> {
+    medium_jobs
+        .push(MediumJob::ProcessFilePages { document_file_id })
+        .await
+        .map_err(|_| ())?;
+    fast_jobs
+        .push(FastJob::GenerateThumbnail {
+            document_file_id,
+            page: 1,
+            width: 800,
+        })
+        .await
+        .map_err(|_| ())?;
+    Ok(())
+}
+
+pub async fn scan_document_file(
+    document_file_id: i64,
+    state: Data<Arc<AppState>>,
+) -> JobResult<()> {
+    let mut db = state.db_pool.get().await?;
+    let document_file = diesel::update(
+        document_files::table
+            .filter(document_files::id.eq(document_file_id))
+            .filter(document_files::scan_status.eq_any([SCAN_STATUS_PENDING, SCAN_STATUS_ERROR])),
+    )
+    .set((
+        document_files::scan_status.eq(SCAN_STATUS_SCANNING),
+        document_files::scan_scanner.eq::<Option<String>>(None),
+        document_files::scan_scanner_version.eq::<Option<String>>(None),
+        document_files::scan_signature_version.eq::<Option<String>>(None),
+        document_files::scan_threat_name.eq::<Option<String>>(None),
+        document_files::scan_error.eq::<Option<String>>(None),
+        document_files::scan_started_at.eq(Some(Utc::now())),
+        document_files::scan_completed_at.eq::<Option<chrono::DateTime<Utc>>>(None),
+        document_files::updated_at.eq(Utc::now()),
+    ))
+    .returning(DocumentFile::as_returning())
+    .get_result::<DocumentFile>(&mut db)
+    .await
+    .optional()?;
+
+    let Some(document_file) = document_file else {
+        return Ok(());
+    };
+
+    let s3_key = format!("{}/{}", document_file.s3_prefix, document_file.filename);
+    let object = state
+        .s3_client
+        .get_object()
+        .bucket(state.s3_bucket.as_str())
+        .key(&s3_key)
+        .send()
+        .await?;
+    let mut reader = object.body.into_async_read();
+    let metadata = ScanMetadata {
+        filename: Some(document_file.filename.clone()),
+        content_type: document_file.content_type.clone(),
+        size_bytes: Some(document_file.size),
+    };
+
+    match state.malware_scanner.scan(&mut reader, metadata).await {
+        Ok(ScanOutcome::Clean {
+            scanner,
+            scanner_version,
+            signature_version,
+        }) => {
+            let mut fast_jobs = state.fast_jobs.as_ref().clone();
+            let mut medium_jobs = state.medium_jobs.as_ref().clone();
+            db.build_transaction()
+                .run::<_, diesel::result::Error, _>(async move |conn| {
+                    diesel::update(
+                        document_files::table.filter(document_files::id.eq(document_file_id)),
+                    )
+                    .set((
+                        document_files::scan_status.eq(SCAN_STATUS_CLEAN),
+                        document_files::scan_scanner.eq(Some(scanner)),
+                        document_files::scan_scanner_version.eq(scanner_version),
+                        document_files::scan_signature_version.eq(signature_version),
+                        document_files::scan_threat_name.eq::<Option<String>>(None),
+                        document_files::scan_error.eq::<Option<String>>(None),
+                        document_files::scan_completed_at.eq(Some(Utc::now())),
+                        document_files::updated_at.eq(Utc::now()),
+                    ))
+                    .execute(conn)
+                    .await?;
+                    enqueue_post_upload_processing_jobs(
+                        &mut fast_jobs,
+                        &mut medium_jobs,
+                        document_file_id,
+                    )
+                    .await
+                    .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    Ok(())
+                })
+                .await?;
+        }
+        Ok(ScanOutcome::Infected {
+            scanner,
+            scanner_version,
+            signature_version,
+            threat_name,
+        }) => {
+            diesel::update(document_files::table.filter(document_files::id.eq(document_file_id)))
+                .set((
+                    document_files::scan_status.eq(SCAN_STATUS_INFECTED),
+                    document_files::scan_scanner.eq(Some(scanner)),
+                    document_files::scan_scanner_version.eq(scanner_version),
+                    document_files::scan_signature_version.eq(signature_version),
+                    document_files::scan_threat_name.eq(threat_name),
+                    document_files::scan_error.eq::<Option<String>>(None),
+                    document_files::scan_completed_at.eq(Some(Utc::now())),
+                    document_files::updated_at.eq(Utc::now()),
+                ))
+                .execute(&mut db)
+                .await?;
+        }
+        Err(err) if state.malware_scanner.failure_policy() == MalwareScannerFailurePolicy::Open => {
+            diesel::update(document_files::table.filter(document_files::id.eq(document_file_id)))
+                .set((
+                    document_files::scan_status.eq(SCAN_STATUS_NOT_REQUIRED),
+                    document_files::scan_scanner.eq(Some(err.scanner)),
+                    document_files::scan_error.eq(Some(err.reason)),
+                    document_files::scan_completed_at.eq(Some(Utc::now())),
+                    document_files::updated_at.eq(Utc::now()),
+                ))
+                .execute(&mut db)
+                .await?;
+
+            let mut fast_jobs = state.fast_jobs.as_ref().clone();
+            let mut medium_jobs = state.medium_jobs.as_ref().clone();
+            enqueue_post_upload_processing_jobs(&mut fast_jobs, &mut medium_jobs, document_file_id)
+                .await
+                .map_err(|_| std::io::Error::other("Failed to enqueue document processing jobs"))?;
+        }
+        Err(err) => {
+            diesel::update(document_files::table.filter(document_files::id.eq(document_file_id)))
+                .set((
+                    document_files::scan_status.eq(SCAN_STATUS_ERROR),
+                    document_files::scan_scanner.eq(Some(err.scanner)),
+                    document_files::scan_error.eq(Some(err.reason)),
+                    document_files::scan_completed_at.eq(Some(Utc::now())),
+                    document_files::updated_at.eq(Utc::now()),
+                ))
+                .execute(&mut db)
+                .await?;
+        }
+    }
+
+    Ok(())
 }
 
 #[derive(Clone, Debug)]

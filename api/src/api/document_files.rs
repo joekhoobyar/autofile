@@ -46,13 +46,21 @@ struct UploadDocumentFileMultipart {
     /// Uploaded file bytes (required).
     #[schema(value_type = String, format = Binary)]
     file: String,
+    /// Optional per-upload virus scan selection. Ignored when virus scanning is disabled.
+    virus_scan: Option<bool>,
+}
+
+struct ParsedCreateMultipart {
+    file_temp: BufferedDocumentFileUpload,
+    virus_scan: Option<bool>,
 }
 
 async fn parse_create_multipart(
     multipart: &mut Multipart,
     max_bytes: u64,
-) -> Result<BufferedDocumentFileUpload, ApiError> {
+) -> Result<ParsedCreateMultipart, ApiError> {
     let mut file_temp: Option<BufferedDocumentFileUpload> = None;
+    let mut virus_scan: Option<bool> = None;
 
     while let Some(mut field) = multipart
         .next_field()
@@ -64,16 +72,37 @@ async fn parse_create_multipart(
             .ok_or_else(|| ApiError::bad_request("Field missing name"))?
             .to_string();
 
-        if field_name.as_str() == "file" {
-            if let Some(upload) = &file_temp {
-                cleanup_buffered_document_file_upload(upload).await;
-                return Err(ApiError::bad_request("Only one file upload is supported"));
+        match field_name.as_str() {
+            "file" => {
+                if let Some(upload) = &file_temp {
+                    cleanup_buffered_document_file_upload(upload).await;
+                    return Err(ApiError::bad_request("Only one file upload is supported"));
+                }
+                file_temp = Some(buffer_document_file_field(&mut field, max_bytes).await?);
             }
-            file_temp = Some(buffer_document_file_field(&mut field, max_bytes).await?);
+            "virus_scan" | "scan_for_viruses" => {
+                let value = field.text().await.map_err(|e| {
+                    ApiError::bad_request(&format!("Failed to read virus_scan: {}", e))
+                })?;
+                virus_scan = Some(parse_multipart_bool(&value, "virus_scan")?);
+            }
+            _ => {}
         }
     }
 
-    file_temp.ok_or_else(|| ApiError::bad_request("Missing required field: file"))
+    Ok(ParsedCreateMultipart {
+        file_temp: file_temp
+            .ok_or_else(|| ApiError::bad_request("Missing required field: file"))?,
+        virus_scan,
+    })
+}
+
+fn parse_multipart_bool(value: &str, field_name: &str) -> Result<bool, ApiError> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "true" | "1" | "yes" | "on" => Ok(true),
+        "false" | "0" | "no" | "off" => Ok(false),
+        _ => Err(ApiError::bad_request(&format!("Invalid {field_name}"))),
+    }
 }
 
 #[utoipa::path(
@@ -150,9 +179,19 @@ pub async fn create(
     Path(document_id): Path<i64>,
     mut multipart: Multipart,
 ) -> Result<Json<DocumentFileView>, ApiError> {
-    let file_temp = parse_create_multipart(&mut multipart, state.max_upload_bytes as u64).await?;
-    let document_file =
-        create_document_file(state, &mut db, user.user_id, document_id, file_temp).await?;
+    let ParsedCreateMultipart {
+        file_temp,
+        virus_scan,
+    } = parse_create_multipart(&mut multipart, state.max_upload_bytes as u64).await?;
+    let document_file = create_document_file(
+        state,
+        &mut db,
+        user.user_id,
+        document_id,
+        file_temp,
+        virus_scan,
+    )
+    .await?;
     Ok(Json(document_file))
 }
 

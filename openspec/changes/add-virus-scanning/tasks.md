@@ -14,12 +14,12 @@
 
 ## 3. Upload And Job Flow
 
-- [ ] Update document and document-file upload endpoints to accept a per-upload virus-scan field.
-- [ ] Resolve per-upload scan intent from app settings and multipart input.
-- [ ] Insert uploaded files with `pending` or `not_required` scan status.
-- [ ] Add a scan background job that streams the S3 object to the scanner.
-- [ ] Enqueue normal post-upload processing only after files are clean or not required.
-- [ ] Preserve existing S3 cleanup behavior on transaction/job-enqueue failure.
+- [x] Update document and document-file upload endpoints to accept a per-upload virus-scan field.
+- [x] Resolve per-upload scan intent from app settings and multipart input.
+- [x] Insert uploaded files with `pending` or `not_required` scan status.
+- [x] Add a scan background job that streams the S3 object to the scanner.
+- [x] Enqueue normal post-upload processing only after files are clean or not required.
+- [x] Preserve existing S3 cleanup behavior on transaction/job-enqueue failure.
 
 ## 4. Processing And Download Gates
 
