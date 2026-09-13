@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Migrated from `cargo nextest` back to `cargo test`.
+- Optimized integration tests by sharing a DB server with TestContainers, and by merging test binaries.
 - Refactored API layer to move database calls and business logic into the application layer.
 
 ## [0.5.5] - 2026-09-13
