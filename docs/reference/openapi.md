@@ -29,7 +29,50 @@ The interactive reference below is rendered from the `openapi.json` asset attach
 <script>
   Redoc.init(
     '../../assets/openapi/openapi.json',
-    { scrollYOffset: 64 },
+    {
+      scrollYOffset: 64,
+
+      theme: {
+        colors: {
+          primary: {
+            main: '#6f85ff'
+          },
+
+          text: {
+            primary: '#f3f4f6',
+            secondary: '#b8bbc5'
+          }
+        },
+
+        typography: {
+          fontFamily: 'inherit',
+          headings: {
+            fontFamily: 'inherit',
+            fontWeight: '600'
+          },
+
+          links: {
+            color: '#7d91ff'
+          },
+
+          code: {
+            color: '#d6d9e0',
+            backgroundColor: '#171820'
+          }
+        },
+
+        sidebar: {
+          backgroundColor: '#090a0d',
+          textColor: '#b8bbc5',
+          activeTextColor: '#7d91ff'
+        },
+
+        rightPanel: {
+          backgroundColor: '#11131a',
+          textColor: '#e8eaf0'
+        }
+      }
+    },
     document.getElementById('redoc-container')
   );
 </script>
