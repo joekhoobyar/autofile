@@ -73,7 +73,7 @@ pub fn build_openapi_router() -> (axum::Router<Arc<AppState>>, utoipa::openapi::
         crate::application::document_index_values::DocumentIndexValueSortField,
         crate::application::document_types::DocumentTypeSortField,
         crate::application::documents::DocumentSortField,
-        crate::api::metadata_types::MetadataTypeSortField,
+        crate::application::metadata_types::MetadataTypeSortField,
         crate::api::tag_documents::TagDocumentSortField,
         crate::application::tags::TagSortField,
         crate::application::users::UserSortField,

@@ -41,6 +41,7 @@ pub mod application {
     pub mod document_types;
     pub mod documents;
     pub mod jobs;
+    pub mod metadata_types;
     pub mod tags;
     pub mod users;
 }
