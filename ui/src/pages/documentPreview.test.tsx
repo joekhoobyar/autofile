@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentFilePagePreview } from './documentFiles';
@@ -312,6 +312,67 @@ describe('DocumentFilePagePreview', () => {
         expect(call[0]).toEqual(expect.objectContaining({ top: 0 }));
       }
     } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('scrolls to the top of the viewport on initial load with an explicit page=1 param', () => {
+    vi.useFakeTimers();
+    const scrollToMock = vi.fn();
+    const scrollToDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTo');
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      value: scrollToMock,
+      configurable: true,
+      writable: true,
+    });
+    try {
+      mockScrollToIndex.mockClear();
+
+      function LocationProbe() {
+        const location = useLocation();
+        return <div data-testid="preview-location-search">{location.search}</div>;
+      }
+
+      render(
+        <div className="app-main">
+          <MemoryRouter initialEntries={['/documents/10/preview?file_id=1&page=1']}>
+            <Routes>
+              <Route
+                path="/documents/:id/preview"
+                element={
+                  <>
+                    <DocumentFilePagePreview />
+                    <LocationProbe />
+                  </>
+                }
+              />
+            </Routes>
+          </MemoryRouter>,
+        </div>,
+      );
+
+      expect(screen.getByText('Page 1 of 3')).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      // Initial restore must go to the viewport top (breadcrumb/card visible),
+      // never to the start of the first page via the virtualizer.
+      expect(scrollToMock).toHaveBeenCalledWith(expect.objectContaining({ top: 0 }));
+      for (const call of scrollToMock.mock.calls) {
+        expect(call[0]).toEqual(expect.objectContaining({ top: 0 }));
+      }
+      expect(mockScrollToIndex).not.toHaveBeenCalled();
+
+      // The default page is omitted from the URL, mirroring document list hashes.
+      expect(screen.getByTestId('preview-location-search').textContent).not.toContain('page=');
+    } finally {
+      if (scrollToDescriptor) {
+        Object.defineProperty(HTMLElement.prototype, 'scrollTo', scrollToDescriptor);
+      } else {
+        delete (HTMLElement.prototype as unknown as Record<string, unknown>).scrollTo;
+      }
       vi.useRealTimers();
     }
   });

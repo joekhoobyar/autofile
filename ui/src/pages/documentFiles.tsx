@@ -1126,8 +1126,9 @@ function VirtualizedPagePreview({
   }, [scrollElement, virtualizer]);
 
   const scrollPreviewToTop = () => {
-    if (scrollElement) {
-      scrollElement.scrollTo({ top: 0, behavior: 'auto' });
+    const scroller = scrollElement ?? document.querySelector<HTMLElement>('.app-main');
+    if (scroller) {
+      scroller.scrollTo({ top: 0, behavior: 'auto' });
       return;
     }
 
@@ -1290,7 +1291,12 @@ export function DocumentFilePagePreview() {
   const updatePreviewParams = (fileId: number, page: number) => {
     const next = new URLSearchParams(searchParams);
     next.set('file_id', String(fileId));
-    next.set('page', String(clampPage(page, effectiveFile?.pages ?? Number.MAX_SAFE_INTEGER)));
+    const settledPage = clampPage(page, effectiveFile?.pages ?? Number.MAX_SAFE_INTEGER);
+    if (settledPage <= 1) {
+      next.delete('page');
+    } else {
+      next.set('page', String(settledPage));
+    }
     setSearchParams(next, { replace: true });
   };
 
@@ -1298,7 +1304,7 @@ export function DocumentFilePagePreview() {
     setSelectedFileId(fileId);
     const next = new URLSearchParams(searchParams);
     next.set('file_id', String(fileId));
-    next.set('page', '1');
+    next.delete('page');
     setSearchParams(next, { replace: true });
   };
 
