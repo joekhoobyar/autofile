@@ -581,7 +581,7 @@ pub async fn list_documents(
         .count()
         .get_result::<i64>(db)
         .await
-        .api_context("Failed to count document_types")?;
+        .api_context("Failed to count documents")?;
 
     let mut query: documents::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
     query = match (params.sf, params.sd) {
