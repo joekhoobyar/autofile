@@ -18,6 +18,24 @@ cargo run
 
 The API expects PostgreSQL, Redis, S3 credentials, `S3_BUCKET`, and `JWT_SECRET` to be available in the environment. For most development, running the full Compose stack is simpler.
 
+Here is a sample set of environment variables:
+
+```shell
+# Autofile
+export DATABASE_URL='postgres://autofile:@localhost:5432/autofile'
+export JWT_SECRET='asuperduperupersecret'
+export APP_MODE='development'
+export BIND_ADDR=0.0.0.0:8000
+export RUST_LOG=info
+
+# RustFS / Minio Configuration
+export AWS_ENDPOINT_URL_S3='http://localhost:9000'
+export S3_BUCKET='autofile-documents'
+export AWS_ACCESS_KEY_ID='admin'
+export AWS_SECRET_ACCESS_KEY='admin'
+export AWS_REGION='us-east-1'
+```
+
 Run API tests (install with `cargo install cargo-nextest --locked` if needed):
 
 ```bash
@@ -30,7 +48,7 @@ From `ui/`:
 
 ```bash
 npm install
-npm run dev
+VITE_API_HOST=http://localhost:8000 npm run dev
 ```
 
 Test the UI:
