@@ -15,7 +15,7 @@ The API is configured with environment variables.
 | `S3_BUCKET` | Yes | none | Bucket for document files. |
 | `JWT_SECRET` | Yes | none | Secret used to sign JWTs. Use a strong value in production. |
 | `ALLOWED_ORIGINS` | No | `http://localhost:5173` | Comma-separated CORS origins. |
-| `MAX_UPLOAD_SIZE_MB` | No | `100` | Maximum size in megabytes for a single uploaded file. Applies to both `POST /api/v1/documents` and `POST /api/v1/documents/{document_id}/files`. Requires a restart to take effect. Invalid values prevent startup. Oversize uploads return `413 Payload Too Large`. |
+| `MAX_UPLOAD_SIZE_MB` | No | `100` | Maximum size in megabytes for a single uploaded file. |
 | `RUST_LOG` | No | Rust tracing default | Logging filter, for example `info`. |
 
 ## Production Notes
