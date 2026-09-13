@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Refactored API layer to move database calls and business logic into the application layer.
+
 ## [0.5.5] - 2026-09-13
 
 ### Added
