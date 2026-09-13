@@ -37,6 +37,7 @@ import { Chip } from 'primereact/chip';
 import { DocumentActions } from '../components/DocumentActions';
 import { AppToast } from '../components/AppToast';
 import { DateText } from '../components/DateText';
+import { DateTimeText } from '../components/DateTimeText';
 import { DocumentTagBadge } from '../components/DocumentTagBadge';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { Message } from 'primereact/message';
@@ -85,6 +86,10 @@ type DocumentThumbnailProps = {
   placeholderClassName: string;
   buttonStyle?: React.CSSProperties;
 };
+
+function MetadataValueText({ dataType, value }: Readonly<{ dataType: string | undefined; value: string }>) {
+  return dataType === 'date' ? <DateText value={value} fallback={value} /> : <>{value}</>;
+}
 
 function tagSearchOptionTemplate(tag: TagModel) {
   return (
@@ -258,7 +263,7 @@ function DocumentListItem({ doc, index, onImageClick, selected, onSelectionChang
               <ul className="aut-document-metadata">
                 <li><span>Type</span>: {ddt?.[doc.document_type_id]?.name}</li>
                 <li><span>Pages</span>: {doc.pages ?? 0}</li>
-                <li><span>Created</span>: <DateText value={doc.created_at} /></li>
+                <li><span>Created</span>: <DateTimeText value={doc.created_at} /></li>
                 {Object.entries(doc.metadata)
                   .sort(([keyA], [keyB]) => {
                     const nameA = mdt?.[keyA]?.name ?? keyA;
@@ -266,7 +271,9 @@ function DocumentListItem({ doc, index, onImageClick, selected, onSelectionChang
                     return nameA.localeCompare(nameB);
                   })
                   .map(([key, value]) => (
-                    <li key={key}><span>{mdt?.[key].name ?? key}</span>: {value}</li>
+                    <li key={key}>
+                      <span>{mdt?.[key]?.name ?? key}</span>: <MetadataValueText dataType={mdt?.[key]?.data_type} value={value} />
+                    </li>
                   ))}
               </ul>
             </aside>
@@ -357,7 +364,7 @@ function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange, cabi
               <ul className="aut-document-metadata">
                 <li><span>Type</span>: {ddt?.[doc.document_type_id]?.name}</li>
                 <li><span>Pages</span>: {doc.pages ?? 0}</li>
-                <li><span>Created</span>: <DateText value={doc.created_at} /></li>
+                <li><span>Created</span>: <DateTimeText value={doc.created_at} /></li>
                 {Object.entries(doc.metadata)
                   .sort(([keyA], [keyB]) => {
                     const nameA = mdt?.[keyA]?.name ?? keyA;
@@ -365,7 +372,9 @@ function DocumentGridItem({ doc, onImageClick, selected, onSelectionChange, cabi
                     return nameA.localeCompare(nameB);
                   })
                   .map(([key, value]) => (
-                    <li key={key}><span>{mdt?.[key].name ?? key}</span>: {value}</li>
+                    <li key={key}>
+                      <span>{mdt?.[key]?.name ?? key}</span>: <MetadataValueText dataType={mdt?.[key]?.data_type} value={value} />
+                    </li>
                   ))}
               </ul>
               {tagItems.length > 0 && (

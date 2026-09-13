@@ -40,6 +40,11 @@ export function useSaveAppSettings(): UseMutationResult<
 
     onSuccess: (settings) => {
       qc.setQueryData(["app-settings"], settings);
+      qc.setQueryData(["public-settings"], {
+        allow_user_registration: settings.allow_user_registration,
+        date_format: settings.date_format,
+        datetime_format: settings.datetime_format,
+      });
     },
   });
 }

@@ -177,21 +177,27 @@ Settings endpoints require an admin access token.
 
 ```json
 {
-  "allow_user_registration": false
+  "allow_user_registration": false,
+  "date_format": "yyyy-MM-dd",
+  "datetime_format": "MM/dd/yyyy HH:mm"
 }
 ```
 
 When `allow_user_registration` is `false`, `POST /api/v1/auth/register` returns `403 Forbidden` and no user is created.
 
+`date_format` and `datetime_format` control frontend display only. They must be one of the supported UI format values. API date metadata values remain `YYYY-MM-DD`, and API timestamps remain serialized as timestamp strings.
+
 ## Public Settings
 
 Base path: `/api/v1/public`
 
-Public settings endpoints require no authentication. They expose an explicit allowlist of settings that are safe for anonymous clients, currently only the user-registration flag:
+Public settings endpoints require no authentication. They expose an explicit allowlist of settings that are safe for anonymous clients:
 
 ```json
 {
-  "allow_user_registration": true
+  "allow_user_registration": true,
+  "date_format": "yyyy-MM-dd",
+  "datetime_format": "MM/dd/yyyy HH:mm"
 }
 ```
 
@@ -582,6 +588,8 @@ Every submitted field must be associated with the document's current Document Ty
 | `lookup` | Non-empty values must match a configured choice after surrounding whitespace is trimmed for validation. |
 
 A submitted required value cannot be empty. A blank (empty or whitespace-only) optional value deletes the stored row if one exists, and is otherwise a no-op. Date and Lookup values are trimmed for validation, but the original submitted string is stored.
+
+The UI can display and edit Date metadata with a configured frontend date format. That display setting does not change this API contract: clients must send Date metadata as `YYYY-MM-DD`.
 
 Required completeness is not checked across omitted fields. A document can therefore lack a required value if that field was never submitted. Deleting a currently required value returns `409 Conflict`.
 

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added configurable frontend date and date/time display formats, including date metadata editing/display and timestamp display.
 - Added basic password strength measurement
 
 ### Fixed

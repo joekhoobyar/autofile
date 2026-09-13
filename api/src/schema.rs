@@ -4,6 +4,8 @@ diesel::table! {
     app_settings (id) {
         id -> Int8,
         allow_user_registration -> Bool,
+        date_format -> Text,
+        datetime_format -> Text,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
     }

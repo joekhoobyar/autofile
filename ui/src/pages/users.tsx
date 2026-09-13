@@ -24,7 +24,7 @@ import { canManageUsers, type AuthState, useAuth } from "../auth";
 import { useHashListParams } from "../util/listParamsHash";
 import { AppToast } from "../components/AppToast";
 import { DescriptionList } from "../components/DescriptionList";
-import { DateText } from "../components/DateText";
+import { DateTimeText } from "../components/DateTimeText";
 
 const SYSTEM_USER_ID = 1;
 const USER_LIST_DEFAULT_PARAMS: ListParams = { sf: "username" };
@@ -52,7 +52,7 @@ function userDeleteDisabledReason(user: User, auth: AuthState): string | null {
 }
 
 function passwordChangedTemplate(user: User): ReactNode {
-  return isSystemUser(user.id) ? "" : <DateText value={user.password_changed_at} />;
+  return isSystemUser(user.id) ? "" : <DateTimeText value={user.password_changed_at} />;
 }
 
 export function ListUsers() {
@@ -377,11 +377,11 @@ export function ViewUser() {
                 </span>
               ),
             },
-            { label: "Created", value: <DateText value={data.created_at} /> },
-            { label: "Updated", value: <DateText value={data.updated_at} /> },
-            ...(data.deleted_at ? [{ label: "Deleted", value: <DateText value={data.deleted_at} /> }] : []),
+            { label: "Created", value: <DateTimeText value={data.created_at} /> },
+            { label: "Updated", value: <DateTimeText value={data.updated_at} /> },
+            ...(data.deleted_at ? [{ label: "Deleted", value: <DateTimeText value={data.deleted_at} /> }] : []),
             ...(!isSystemUser(data.id)
-              ? [{ label: "Password Changed", value: <DateText value={data.password_changed_at} /> }]
+              ? [{ label: "Password Changed", value: <DateTimeText value={data.password_changed_at} /> }]
               : []),
           ]}
         />

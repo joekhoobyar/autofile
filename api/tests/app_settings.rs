@@ -29,6 +29,8 @@ async fn settings_default_to_allowing_user_registration() {
         .expect("settings should load");
 
     assert!(settings.allow_user_registration);
+    assert_eq!(settings.date_format, "yyyy-MM-dd");
+    assert_eq!(settings.datetime_format, "MM/dd/yyyy HH:mm");
 }
 
 #[tokio::test]
@@ -46,6 +48,8 @@ async fn public_settings_expose_registration_flag() {
         .0;
 
     assert!(public.allow_user_registration);
+    assert_eq!(public.date_format, "yyyy-MM-dd");
+    assert_eq!(public.datetime_format, "MM/dd/yyyy HH:mm");
 
     let mut db = test_db
         .pool
@@ -56,6 +60,8 @@ async fn public_settings_expose_registration_flag() {
         &mut db,
         UpdateAppSettingsInput {
             allow_user_registration: false,
+            date_format: "dd/MM/yyyy".to_string(),
+            datetime_format: "dd/MM/yyyy HH:mm".to_string(),
         },
     )
     .await
@@ -73,6 +79,46 @@ async fn public_settings_expose_registration_flag() {
         .0;
 
     assert!(!public.allow_user_registration);
+    assert_eq!(public.date_format, "dd/MM/yyyy");
+    assert_eq!(public.datetime_format, "dd/MM/yyyy HH:mm");
+}
+
+#[tokio::test]
+async fn settings_reject_invalid_display_date_formats() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+
+    let err = update_app_settings(
+        &mut db,
+        UpdateAppSettingsInput {
+            allow_user_registration: true,
+            date_format: "yyyy/MMMM/dddd".to_string(),
+            datetime_format: "MM/dd/yyyy HH:mm".to_string(),
+        },
+    )
+    .await
+    .expect_err("invalid date format should fail");
+
+    assert_eq!(err.status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(err.message, "Invalid date format");
+
+    let err = update_app_settings(
+        &mut db,
+        UpdateAppSettingsInput {
+            allow_user_registration: true,
+            date_format: "yyyy-MM-dd".to_string(),
+            datetime_format: "EEEE, MMMM do yyyy h:mm:ss a".to_string(),
+        },
+    )
+    .await
+    .expect_err("invalid datetime format should fail");
+
+    assert_eq!(err.status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(err.message, "Invalid datetime format");
 }
 
 #[tokio::test]
@@ -225,6 +271,8 @@ async fn disabled_registration_rejects_register_request() {
         &mut db,
         UpdateAppSettingsInput {
             allow_user_registration: false,
+            date_format: "yyyy-MM-dd".to_string(),
+            datetime_format: "MM/dd/yyyy HH:mm".to_string(),
         },
     )
     .await

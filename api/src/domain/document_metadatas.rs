@@ -13,6 +13,8 @@ use crate::schema::document_metadatas;
 pub struct DocumentMetadata {
     pub document_id: i64,
     pub metadata_type_id: i64,
+    /// Stored metadata value. For Date metadata, clients must send and receive values in YYYY-MM-DD format regardless of the configured frontend display format.
+    #[schema(example = "2026-08-25")]
     pub value: String,
     pub created_at: DateTime<Utc>,
     pub created_by: i64,

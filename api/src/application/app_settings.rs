@@ -9,10 +9,33 @@ use crate::shared::errors::{ApiError, ApiErrorContext};
 
 const APP_SETTINGS_ID: i64 = 1;
 
+const ALLOWED_DATE_FORMATS: &[&str] = &[
+    "yyyy-MM-dd",
+    "MM/dd/yyyy",
+    "dd/MM/yyyy",
+    "dd.MM.yyyy",
+    "MMM d, yyyy",
+];
+
+const ALLOWED_DATETIME_FORMATS: &[&str] = &[
+    "MM/dd/yyyy HH:mm",
+    "MM/dd/yyyy h:mm a",
+    "yyyy-MM-dd HH:mm",
+    "dd/MM/yyyy HH:mm",
+    "dd.MM.yyyy HH:mm",
+    "MMM d, yyyy h:mm a",
+];
+
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateAppSettingsInput {
     pub allow_user_registration: bool,
+    /// Frontend-only date display and date-picker format. Must be one of the supported UI date formats. Date metadata API values remain YYYY-MM-DD.
+    #[schema(example = "yyyy-MM-dd")]
+    pub date_format: String,
+    /// Frontend-only date/time display format for timestamps. Must be one of the supported UI date/time formats. API timestamps remain serialized as timestamp strings.
+    #[schema(example = "MM/dd/yyyy HH:mm")]
+    pub datetime_format: String,
 }
 
 pub async fn get_app_settings(
@@ -30,9 +53,19 @@ pub async fn update_app_settings(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
     input: UpdateAppSettingsInput,
 ) -> Result<AppSettings, ApiError> {
+    if !ALLOWED_DATE_FORMATS.contains(&input.date_format.as_str()) {
+        return Err(ApiError::unprocessable_entity("Invalid date format"));
+    }
+
+    if !ALLOWED_DATETIME_FORMATS.contains(&input.datetime_format.as_str()) {
+        return Err(ApiError::unprocessable_entity("Invalid datetime format"));
+    }
+
     diesel::update(app_settings::table.filter(app_settings::id.eq(APP_SETTINGS_ID)))
         .set((
             app_settings::allow_user_registration.eq(input.allow_user_registration),
+            app_settings::date_format.eq(input.date_format),
+            app_settings::datetime_format.eq(input.datetime_format),
             app_settings::updated_at.eq(diesel::dsl::now),
         ))
         .returning(AppSettings::as_returning())
