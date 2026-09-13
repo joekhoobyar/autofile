@@ -290,6 +290,8 @@ async fn test_template(
 }
 
 /**
+ * thumbnail_get
+ * 
  * This handler serves the thumbnail image for a document, streaming it directly from S3.
  * It supports conditional GET with If-Modified-Since header to optimize caching.
  */
