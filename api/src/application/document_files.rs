@@ -728,7 +728,10 @@ pub async fn scan_document_file(
         }) => {
             let mut fast_jobs = state.fast_jobs.as_ref().clone();
             let mut medium_jobs = state.medium_jobs.as_ref().clone();
-            db.build_transaction()
+            let enqueue_failed = Arc::new(AtomicBool::new(false));
+            let enqueue_failed_for_tx = Arc::clone(&enqueue_failed);
+            let result = db
+                .build_transaction()
                 .run::<_, diesel::result::Error, _>(async move |conn| {
                     diesel::update(
                         document_files::table.filter(document_files::id.eq(document_file_id)),
@@ -751,10 +754,30 @@ pub async fn scan_document_file(
                         document_file_id,
                     )
                     .await
-                    .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    .map_err(|_| {
+                        enqueue_failed_for_tx.store(true, Ordering::Relaxed);
+                        diesel::result::Error::RollbackTransaction
+                    })?;
                     Ok(())
                 })
-                .await?;
+                .await;
+
+            if let Err(err) = result {
+                if enqueue_failed.as_ref().load(Ordering::Relaxed) {
+                    mark_scan_error(
+                        &mut db,
+                        document_file_id,
+                        "autofile",
+                        "Failed to enqueue document processing jobs",
+                    )
+                    .await?;
+                    return Err(std::io::Error::other(
+                        "Failed to enqueue document processing jobs",
+                    )
+                    .into());
+                }
+                return Err(err.into());
+            }
         }
         Ok(ScanOutcome::Infected {
             scanner,
@@ -790,9 +813,25 @@ pub async fn scan_document_file(
 
             let mut fast_jobs = state.fast_jobs.as_ref().clone();
             let mut medium_jobs = state.medium_jobs.as_ref().clone();
-            enqueue_post_upload_processing_jobs(&mut fast_jobs, &mut medium_jobs, document_file_id)
-                .await
-                .map_err(|_| std::io::Error::other("Failed to enqueue document processing jobs"))?;
+            if enqueue_post_upload_processing_jobs(
+                &mut fast_jobs,
+                &mut medium_jobs,
+                document_file_id,
+            )
+            .await
+            .is_err()
+            {
+                mark_scan_error(
+                    &mut db,
+                    document_file_id,
+                    "autofile",
+                    "Failed to enqueue document processing jobs",
+                )
+                .await?;
+                return Err(
+                    std::io::Error::other("Failed to enqueue document processing jobs").into(),
+                );
+            }
         }
         Err(err) => {
             diesel::update(document_files::table.filter(document_files::id.eq(document_file_id)))
@@ -808,6 +847,25 @@ pub async fn scan_document_file(
         }
     }
 
+    Ok(())
+}
+
+async fn mark_scan_error(
+    db: &mut AsyncPgConnection,
+    document_file_id: i64,
+    scanner: &str,
+    reason: &str,
+) -> JobResult<()> {
+    diesel::update(document_files::table.filter(document_files::id.eq(document_file_id)))
+        .set((
+            document_files::scan_status.eq(SCAN_STATUS_ERROR),
+            document_files::scan_scanner.eq(Some(scanner.to_string())),
+            document_files::scan_error.eq(Some(reason.to_string())),
+            document_files::scan_completed_at.eq(Some(Utc::now())),
+            document_files::updated_at.eq(Utc::now()),
+        ))
+        .execute(db)
+        .await?;
     Ok(())
 }
 
