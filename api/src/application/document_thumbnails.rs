@@ -3,19 +3,20 @@ use std::sync::Arc;
 use apalis::prelude::*;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use tokio::process::Command;
 
 use crate::application::document_files::{
     DocumentFileContentType, convert_csv_to_pdf, convert_html_to_pdf, convert_image_to_png,
     convert_markdown_to_pdf, convert_office_document_to_pdf, convert_plaintext_to_pdf,
     convert_tsv_to_pdf, document_file_exists, parse_document_file_content_type,
-    persist_document_file_content_type_fallback, stage_document_file_from_s3, upload_png_to_s3,
+    persist_document_file_content_type_fallback, stage_document_file_from_s3,
+    truncate_process_stream, upload_png_to_s3,
 };
 use crate::domain::document_files::DocumentFile;
 use crate::schema::document_files;
 use crate::schema::documents;
 use crate::shared::app_state::AppState;
 use crate::shared::errors::JobResult;
+use crate::shared::process::sanitized_command;
 
 /**
  * This job generates a thumbnail for a given document file and page number,
@@ -222,7 +223,7 @@ async fn generate_pdf_thumbnail(
     temp_dir: &std::path::Path,
 ) -> JobResult<()> {
     let output_prefix = temp_dir.join("_thumb");
-    let status = Command::new("pdftocairo")
+    let output = sanitized_command("pdftocairo")
         .arg("-png")
         .arg("-singlefile")
         .arg("-f")
@@ -235,10 +236,14 @@ async fn generate_pdf_thumbnail(
         .arg("-1")
         .arg(temp_file)
         .arg(&output_prefix)
-        .status()
+        .output()
         .await?;
-    if !status.success() {
-        let error = std::io::Error::other(format!("pdftocairo failed with status {status}"));
+    if !output.status.success() {
+        let error = std::io::Error::other(format!(
+            "pdftocairo failed with status {}: {}",
+            output.status,
+            truncate_process_stream(&String::from_utf8_lossy(&output.stderr)),
+        ));
         return Err(error.into());
     }
 
@@ -254,7 +259,7 @@ async fn generate_image_thumbnail(
     let normalized_path = output_path.with_file_name("_thumb-source.png");
     convert_image_to_png(temp_file.to_owned(), &normalized_path, state).await?;
 
-    let output = Command::new("magick")
+    let output = sanitized_command("magick")
         .arg(&normalized_path)
         .arg("-thumbnail")
         .arg(format!("{}x", width))

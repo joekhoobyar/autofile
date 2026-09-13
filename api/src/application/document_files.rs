@@ -10,7 +10,6 @@ use diesel::result::{DatabaseErrorKind, Error as DieselError};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use tokio::io::AsyncRead;
-use tokio::process::Command;
 use uuid::Uuid;
 
 use crate::application::jobs::{FastJob, MediumJob};
@@ -25,6 +24,7 @@ use crate::infrastructure::s3::upload_file_to_s3;
 use crate::schema::{document_file_ocr_pages, document_file_pages, document_files, documents};
 use crate::shared::app_state::AppState;
 use crate::shared::errors::{ApiError, JobResult};
+use crate::shared::process::sanitized_command;
 use crate::shared::uploads::write_field_to_temp_file;
 
 const PANDOC_PDF_ENGINE: &str = "--pdf-engine=weasyprint";
@@ -500,7 +500,22 @@ pub async fn insert_document_file(
 struct ProcessCommandOutput {
     success: bool,
     status: String,
+    stdout: String,
     stderr: String,
+}
+
+/// Maximum characters kept per captured stream when reporting a failed
+/// process. External tools log to files rather than stdio, so failures are
+/// short; this bound keeps error payloads (and retried-job payloads) sane.
+const MAX_PROCESS_STREAM_CHARS: usize = 4000;
+
+pub(crate) fn truncate_process_stream(stream: &str) -> String {
+    let trimmed = stream.trim();
+    if trimmed.chars().count() <= MAX_PROCESS_STREAM_CHARS {
+        return trimmed.to_string();
+    }
+    let truncated: String = trimmed.chars().take(MAX_PROCESS_STREAM_CHARS).collect();
+    format!("{truncated}… (truncated)")
 }
 
 #[async_trait::async_trait]
@@ -513,11 +528,12 @@ struct TokioProcessRunner;
 #[async_trait::async_trait]
 impl ProcessRunner for TokioProcessRunner {
     async fn run(&self, program: &str, args: &[String]) -> std::io::Result<ProcessCommandOutput> {
-        let output = Command::new(program).args(args).output().await?;
+        let output = sanitized_command(program).args(args).output().await?;
 
         Ok(ProcessCommandOutput {
             success: output.status.success(),
             status: output.status.to_string(),
+            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
             stderr: String::from_utf8_lossy(&output.stderr).to_string(),
         })
     }
@@ -531,9 +547,13 @@ async fn run_process<R: ProcessRunner + ?Sized>(
 ) -> JobResult<()> {
     let output = runner.run(program, args).await?;
     if !output.success {
+        // NB: several tools (notably `soffice`) report conversion progress and
+        // errors on stdout rather than stderr, so both streams are included.
         let error = std::io::Error::other(format!(
-            "{tool_name} failed with status {}: {}",
-            output.status, output.stderr
+            "{tool_name} failed with status {}: stdout: {} stderr: {}",
+            output.status,
+            truncate_process_stream(&output.stdout),
+            truncate_process_stream(&output.stderr),
         ));
         return Err(error.into());
     }
@@ -1129,6 +1149,15 @@ async fn convert_office_document_to_pdf_with_runner<R: ProcessRunner + ?Sized>(
     let convert_dir = source_dir.join(format!("soffice-out-{}", Uuid::new_v4()));
     tokio::fs::create_dir_all(&convert_dir).await?;
 
+    // Each conversion gets its own LibreOffice user profile. Concurrent
+    // `soffice` processes (e.g. the pages job and the thumbnail job for the
+    // same upload) otherwise share `~/.config/libreoffice` and can fail with
+    // an bare exit status 1 while fighting over the profile lock — with no
+    // output on either stream. Nesting the profile inside `convert_dir` keeps
+    // the existing cleanup below covering it.
+    let profile_dir = convert_dir.join("lo-profile");
+    tokio::fs::create_dir_all(&profile_dir).await?;
+
     let conversion_result = async {
         let soffice_input = if copied_input {
             office_input.as_path()
@@ -1137,6 +1166,10 @@ async fn convert_office_document_to_pdf_with_runner<R: ProcessRunner + ?Sized>(
         };
 
         let args = vec![
+            format!(
+                "-env:UserInstallation=file://{}",
+                profile_dir.to_string_lossy()
+            ),
             "--headless".to_string(),
             "--convert-to".to_string(),
             "pdf".to_string(),
@@ -1663,7 +1696,7 @@ async fn extract_pdf_page_image(
     state: Data<Arc<AppState>>,
 ) -> JobResult<PathBuf> {
     let output_prefix = temp_dir.join(format!("page-{}", page));
-    let status = Command::new("pdftocairo")
+    let output = sanitized_command("pdftocairo")
         .arg("-png")
         .arg("-singlefile")
         .arg("-f")
@@ -1676,10 +1709,14 @@ async fn extract_pdf_page_image(
         .arg("-1")
         .arg(file)
         .arg(&output_prefix)
-        .status()
+        .output()
         .await?;
-    if !status.success() {
-        let error = std::io::Error::other(format!("pdftocairo failed with status {status}"));
+    if !output.status.success() {
+        let error = std::io::Error::other(format!(
+            "pdftocairo failed with status {}: {}",
+            output.status,
+            truncate_process_stream(&String::from_utf8_lossy(&output.stderr)),
+        ));
         return Err(error.into());
     }
 
@@ -1696,7 +1733,7 @@ pub(crate) async fn convert_image_to_png(
     _state: Data<Arc<AppState>>,
 ) -> JobResult<()> {
     let input_path = format!("{}[0]", file);
-    let output = Command::new("magick")
+    let output = sanitized_command("magick")
         .arg(&input_path)
         .arg("-auto-orient")
         .arg("-strip")
@@ -1783,7 +1820,7 @@ async fn remove_temp_file_best_effort(path: &Path, artifact_name: &str) {
  */
 async fn count_pages(file: String, _state: Data<Arc<AppState>>) -> JobResult<u32> {
     // 2) run `pdfinfo input.pdf` and parse the output to get the page count
-    let output = Command::new("pdfinfo").arg(file).output().await?;
+    let output = sanitized_command("pdfinfo").arg(file).output().await?;
 
     if !output.status.success() {
         let error = std::io::Error::other(format!(
@@ -1856,7 +1893,11 @@ mod tests {
         SuccessCreatesOutput,
         SuccessCreatesTextOutput(String),
         SuccessNoOutput,
-        Failure { status: String, stderr: String },
+        Failure {
+            status: String,
+            stdout: String,
+            stderr: String,
+        },
     }
 
     struct FakeProcessRunner {
@@ -1903,6 +1944,7 @@ mod tests {
                     Ok(ProcessCommandOutput {
                         success: true,
                         status: "0".to_string(),
+                        stdout: String::new(),
                         stderr: String::new(),
                     })
                 }
@@ -1918,17 +1960,24 @@ mod tests {
                     Ok(ProcessCommandOutput {
                         success: true,
                         status: "0".to_string(),
+                        stdout: String::new(),
                         stderr: String::new(),
                     })
                 }
                 FakeRunnerMode::SuccessNoOutput => Ok(ProcessCommandOutput {
                     success: true,
                     status: "0".to_string(),
+                    stdout: String::new(),
                     stderr: String::new(),
                 }),
-                FakeRunnerMode::Failure { status, stderr } => Ok(ProcessCommandOutput {
+                FakeRunnerMode::Failure {
+                    status,
+                    stdout,
+                    stderr,
+                } => Ok(ProcessCommandOutput {
                     success: false,
                     status: status.clone(),
+                    stdout: stdout.clone(),
                     stderr: stderr.clone(),
                 }),
             }
@@ -2285,6 +2334,7 @@ mod tests {
     async fn pandoc_and_weasyprint_conversion_include_stderr_on_failure() {
         let pandoc_runner = FakeProcessRunner::new(FakeRunnerMode::Failure {
             status: "2".to_string(),
+            stdout: String::new(),
             stderr: "pandoc broke".to_string(),
         });
         let pandoc_err = convert_csv_to_pdf_with_runner("/tmp/input.csv", &pandoc_runner)
@@ -2299,6 +2349,7 @@ mod tests {
 
         let weasy_runner = FakeProcessRunner::new(FakeRunnerMode::Failure {
             status: "3".to_string(),
+            stdout: String::new(),
             stderr: "weasy broke".to_string(),
         });
         let weasy_err = convert_html_to_pdf_with_runner("/tmp/input.html", &weasy_runner)
@@ -2336,14 +2387,19 @@ mod tests {
         assert_eq!(calls.len(), 1);
         let (program, args) = &calls[0];
         assert_eq!(program, "soffice");
-        assert_eq!(args[0], "--headless");
-        assert_eq!(args[1], "--convert-to");
-        assert_eq!(args[2], "pdf");
-        assert_eq!(args[3], "--outdir");
-        assert!(args[4].contains("soffice-out-"));
-        assert!(args[5].ends_with("invoice.docx"));
+        assert!(
+            args[0].starts_with("-env:UserInstallation=file://"),
+            "first arg should isolate the LibreOffice profile, got {}",
+            args[0]
+        );
+        assert_eq!(args[1], "--headless");
+        assert_eq!(args[2], "--convert-to");
+        assert_eq!(args[3], "pdf");
+        assert_eq!(args[4], "--outdir");
+        assert!(args[5].contains("soffice-out-"));
+        assert!(args[6].ends_with("invoice.docx"));
 
-        let temp_outdir = Path::new(&args[4]);
+        let temp_outdir = Path::new(&args[5]);
         assert!(
             !tokio::fs::try_exists(temp_outdir)
                 .await
@@ -2365,6 +2421,7 @@ mod tests {
         let (test_dir, source_path) = create_test_source_file().await;
         let runner = FakeProcessRunner::new(FakeRunnerMode::Failure {
             status: "1".to_string(),
+            stdout: "Error: source file could not be loaded".to_string(),
             stderr: "conversion failed".to_string(),
         });
 
@@ -2379,6 +2436,7 @@ mod tests {
 
         assert!(err_text.contains("soffice failed with status 1"));
         assert!(err_text.contains("conversion failed"));
+        assert!(err_text.contains("Error: source file could not be loaded"));
 
         let calls = runner.calls();
         let outdir = arg_value(&calls[0].1, "--outdir").expect("missing --outdir value");

@@ -78,6 +78,7 @@ pub mod shared {
     pub mod errors;
     pub mod extractors;
     pub mod openapi;
+    pub mod process;
     pub mod responses;
     pub mod s3;
     pub mod serde;
