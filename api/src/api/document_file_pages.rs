@@ -70,7 +70,7 @@ pub async fn list_ocr(
 
 /**
  * page_image_get
- * 
+ *
  * Streams a rendered page image directly from S3.
  */
 #[utoipa::path(
