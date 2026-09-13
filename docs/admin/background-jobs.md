@@ -1,10 +1,10 @@
 # Background Jobs
 
-Autofile uses Redis-backed background jobs for document processing work.
+Autofile uses Valkey-backed background jobs for document processing work.
 
-## Redis
+## Valkey
 
-The API connects to Redis through `REDIS_URL`. The Docker Compose stack provides a Redis service automatically.
+The API connects to Valkey through `REDIS_URL`. The Docker Compose stack provides a Valkey service automatically.
 
 ## Job Queues
 
@@ -19,5 +19,5 @@ Background jobs handle work such as preview generation, text extraction, OCR, th
 If document processing appears stuck, check:
 
 - The API logs.
-- Redis connectivity.
+- Valkey connectivity.
 - S3 bucket access.

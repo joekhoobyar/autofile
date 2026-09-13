@@ -1,15 +1,19 @@
 services:
-  redis:
-    image: redis:7-bookworm
+  valkey:
+    image: valkey/valkey:8-bookworm
+    pull_policy: always
     restart: unless-stopped
+    volumes:
+      - valkey-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
 
   postgres:
     image: postgres:17-bookworm
+    pull_policy: always
     restart: unless-stopped
     environment:
       POSTGRES_DB: autofile
@@ -25,6 +29,7 @@ services:
 
   rustfs:
     image: rustfs/rustfs:1.0.0-rc.6
+    pull_policy: always
     restart: unless-stopped
     environment:
       RUSTFS_ACCESS_KEY: autofile-dev-access
@@ -41,6 +46,7 @@ services:
 
   rustfs-init:
     image: amazon/aws-cli:latest
+    pull_policy: always
     depends_on:
       rustfs:
         condition: service_started
@@ -62,8 +68,9 @@ services:
       context: .
       dockerfile: api/Dockerfile
     image: ghcr.io/joekhoobyar/autofile-api:latest
+    pull_policy: always
     depends_on:
-      redis:
+      valkey:
         condition: service_healthy
       postgres:
         condition: service_healthy
@@ -74,7 +81,7 @@ services:
       APP_MODE: development
       BIND_ADDR: 0.0.0.0:8000
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/autofile
-      REDIS_URL: redis://redis:6379/?connect_timeout=2&timeout=2
+      REDIS_URL: redis://valkey:6379/?connect_timeout=2&timeout=2
       AWS_ENDPOINT_URL_S3: http://rustfs:9000
       AWS_ACCESS_KEY_ID: autofile-dev-access
       AWS_SECRET_ACCESS_KEY: autofile-dev-secret
@@ -94,6 +101,7 @@ services:
       context: .
       dockerfile: ui/Dockerfile
     image: ghcr.io/joekhoobyar/autofile-ui:latest
+    pull_policy: always
     depends_on:
       api:
         condition: service_started
@@ -104,3 +112,4 @@ services:
 volumes:
   pgdata:
   rustfs-data:
+  valkey-data:

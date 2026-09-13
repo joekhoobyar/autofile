@@ -13,15 +13,21 @@ cargo run
 From the repository root:
 
 ```bash
-docker compose up --build
+docker compose up
 ```
 
-This starts:
+This pulls the latest release images and starts:
 
 - `api` (this service)
-- `redis`
+- `valkey`
 - `postgres`
 - `rustfs` (plus a one-shot `rustfs-init` job to create bucket `autofile-documents`)
+
+To run your local code changes instead of the release images:
+
+```bash
+docker compose up --build
+```
 
 ### Default Admin User
 
