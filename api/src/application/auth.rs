@@ -145,3 +145,55 @@ pub fn validate_refresh_user(user: &User) -> Result<(), ApiError> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_login_user, validate_refresh_user};
+    use crate::domain::users::{User, UserRole};
+    use crate::shared::auth::hash_password;
+    use axum::http::StatusCode;
+    use chrono::Utc;
+
+    fn test_user(enabled: bool) -> User {
+        User {
+            id: 42,
+            username: "test-user".to_string(),
+            email: "test-user@example.com".to_string(),
+            display_name: "Test User".to_string(),
+            password_hash: hash_password("long-enough-password").expect("hash should succeed"),
+            password_changed_at: Utc::now(),
+            role: UserRole::User,
+            force_password_change: false,
+            enabled,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            deleted_at: None,
+        }
+    }
+
+    #[test]
+    fn disabled_user_cannot_login() {
+        let err = validate_login_user(&test_user(false), "long-enough-password")
+            .expect_err("disabled user should not login");
+
+        assert_eq!(err.status, StatusCode::UNAUTHORIZED);
+        assert_eq!(err.message, "Invalid credentials");
+    }
+
+    #[test]
+    fn disabled_user_cannot_refresh() {
+        let err =
+            validate_refresh_user(&test_user(false)).expect_err("disabled user should not refresh");
+
+        assert_eq!(err.status, StatusCode::UNAUTHORIZED);
+        assert_eq!(err.message, "Invalid refresh token");
+    }
+
+    #[test]
+    fn enabled_user_can_login_and_refresh() {
+        let user = test_user(true);
+
+        validate_login_user(&user, "long-enough-password").expect("enabled user should login");
+        validate_refresh_user(&user).expect("enabled user should refresh");
+    }
+}
