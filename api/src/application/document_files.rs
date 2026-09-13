@@ -541,17 +541,43 @@ pub async fn rescan_document_file(
         })
         .await;
 
-    result.map_err(|err| {
-        if matches!(err, diesel::result::Error::NotFound) {
-            ApiError::not_found("Document file not found")
-        } else if enqueue_failed.as_ref().load(Ordering::Relaxed) {
-            ApiError::internal_server_error("Failed to enqueue virus scan job")
-        } else if matches!(err, diesel::result::Error::RollbackTransaction) {
-            ApiError::conflict("File is already pending or actively scanning")
-        } else {
-            ApiError::from_diesel("Failed to rescan document file", err)
+    match result {
+        Ok(view) => {
+            tracing::info!(
+                document_file_id = id,
+                document_id,
+                user_id,
+                "virus rescan requested; scan job enqueued"
+            );
+            Ok(view)
         }
-    })
+        Err(err) => {
+            if matches!(err, diesel::result::Error::NotFound) {
+                Err(ApiError::not_found("Document file not found"))
+            } else if enqueue_failed.as_ref().load(Ordering::Relaxed) {
+                tracing::error!(
+                    document_file_id = id,
+                    document_id,
+                    "virus rescan failed to enqueue scan job"
+                );
+                Err(ApiError::internal_server_error(
+                    "Failed to enqueue virus scan job",
+                ))
+            } else if matches!(err, diesel::result::Error::RollbackTransaction) {
+                Err(ApiError::conflict(
+                    "File is already pending or actively scanning",
+                ))
+            } else {
+                tracing::error!(
+                    document_file_id = id,
+                    document_id,
+                    error = %err,
+                    "virus rescan failed"
+                );
+                Err(ApiError::from_diesel("Failed to rescan document file", err))
+            }
+        }
+    }
 }
 
 pub async fn buffer_document_file_field(
@@ -702,8 +728,18 @@ pub async fn scan_document_file(
     .optional()?;
 
     let Some(document_file) = document_file else {
+        tracing::debug!(
+            document_file_id,
+            "skipping virus scan; file is not pending or retryable"
+        );
         return Ok(());
     };
+
+    tracing::info!(
+        document_file_id,
+        filename = %document_file.filename,
+        "starting virus scan"
+    );
 
     let s3_key = format!("{}/{}", document_file.s3_prefix, document_file.filename);
     let object = state
@@ -712,7 +748,16 @@ pub async fn scan_document_file(
         .bucket(state.s3_bucket.as_str())
         .key(&s3_key)
         .send()
-        .await?;
+        .await
+        .map_err(|err| {
+            tracing::error!(
+                document_file_id,
+                s3_key = %s3_key,
+                error = %err,
+                "virus scan failed to fetch file from object storage"
+            );
+            err
+        })?;
     let mut reader = object.body.into_async_read();
     let metadata = ScanMetadata {
         filename: Some(document_file.filename.clone()),
@@ -726,6 +771,9 @@ pub async fn scan_document_file(
             scanner_version,
             signature_version,
         }) => {
+            let log_scanner = scanner.clone();
+            let log_scanner_version = scanner_version.clone();
+            let log_signature_version = signature_version.clone();
             let mut fast_jobs = state.fast_jobs.as_ref().clone();
             let mut medium_jobs = state.medium_jobs.as_ref().clone();
             let enqueue_failed = Arc::new(AtomicBool::new(false));
@@ -764,6 +812,10 @@ pub async fn scan_document_file(
 
             if let Err(err) = result {
                 if enqueue_failed.as_ref().load(Ordering::Relaxed) {
+                    tracing::error!(
+                        document_file_id,
+                        "virus scan was clean but failed to enqueue post-upload processing jobs; marked scan_error for retry"
+                    );
                     mark_scan_error(
                         &mut db,
                         document_file_id,
@@ -778,6 +830,14 @@ pub async fn scan_document_file(
                 }
                 return Err(err.into());
             }
+
+            tracing::info!(
+                document_file_id,
+                scanner = %log_scanner,
+                scanner_version = ?log_scanner_version,
+                signature_version = ?log_signature_version,
+                "virus scan clean; post-upload processing enqueued"
+            );
         }
         Ok(ScanOutcome::Infected {
             scanner,
@@ -785,6 +845,12 @@ pub async fn scan_document_file(
             signature_version,
             threat_name,
         }) => {
+            tracing::warn!(
+                document_file_id,
+                scanner = %scanner,
+                threat_name = ?threat_name,
+                "virus scan found a threat; file blocked"
+            );
             diesel::update(document_files::table.filter(document_files::id.eq(document_file_id)))
                 .set((
                     document_files::scan_status.eq(SCAN_STATUS_INFECTED),
@@ -800,6 +866,12 @@ pub async fn scan_document_file(
                 .await?;
         }
         Err(err) if state.malware_scanner.failure_policy() == MalwareScannerFailurePolicy::Open => {
+            tracing::warn!(
+                document_file_id,
+                scanner = %err.scanner,
+                reason = %err.reason,
+                "virus scan failed but failure policy is open; marking file not_required"
+            );
             diesel::update(document_files::table.filter(document_files::id.eq(document_file_id)))
                 .set((
                     document_files::scan_status.eq(SCAN_STATUS_NOT_REQUIRED),
@@ -821,6 +893,10 @@ pub async fn scan_document_file(
             .await
             .is_err()
             {
+                tracing::error!(
+                    document_file_id,
+                    "fail-open virus scan could not enqueue post-upload processing jobs; marked scan_error for retry"
+                );
                 mark_scan_error(
                     &mut db,
                     document_file_id,
@@ -834,6 +910,12 @@ pub async fn scan_document_file(
             }
         }
         Err(err) => {
+            tracing::error!(
+                document_file_id,
+                scanner = %err.scanner,
+                reason = %err.reason,
+                "virus scan failed; file marked scan_error"
+            );
             diesel::update(document_files::table.filter(document_files::id.eq(document_file_id)))
                 .set((
                     document_files::scan_status.eq(SCAN_STATUS_ERROR),
