@@ -67,7 +67,7 @@ pub fn document_file_content_availability(
             DocumentFileContentAvailability::Unavailable { message }
         }
         SCAN_STATUS_ERROR => DocumentFileContentAvailability::Unavailable {
-            message: "This file is unavailable because virus scanning failed. An administrator can retry the scan or review scanner configuration.".to_string(),
+            message: "This file is unavailable because virus scanning failed. You can retry the scan or an administrator can review the scanner configuration.".to_string(),
         },
         _ => DocumentFileContentAvailability::Unavailable {
             message: "This file is unavailable until virus scanning completes successfully.".to_string(),

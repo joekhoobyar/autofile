@@ -206,7 +206,7 @@ Suggested unavailable messages:
 - `pending`: `This file is stored but is waiting for virus scanning. It will be available after a clean scan.`
 - `scanning`: `This file is being scanned for viruses. It will be available after a clean scan.`
 - `infected`: `This file is blocked because virus scanning found a threat.` Include the threat name when available.
-- `scan_error`: `This file is unavailable because virus scanning failed. An administrator can retry the scan or review scanner configuration.`
+- `scan_error`: `This file is unavailable because virus scanning failed. You can retry the scan or an administrator can review the scanner configuration.`
 
 Affected UI surfaces include the document properties/file metadata page, file download actions, thumbnail or preview panels, file-page/text/OCR display pages, and any manual processing buttons. Actions that cannot work until the file is available should be disabled with explanatory helper text or replaced by the same blocked-file message.
 

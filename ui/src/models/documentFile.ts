@@ -63,7 +63,7 @@ export function unavailableDocumentFileMessage(file: Pick<DocumentFile, 'scan_st
         ? `This file is blocked because virus scanning found a threat: ${file.scan_threat_name}.`
         : 'This file is blocked because virus scanning found a threat.';
     case 'scan_error':
-      return 'This file is unavailable because virus scanning failed. An administrator can retry the scan or review scanner configuration.';
+      return 'This file is unavailable because virus scanning failed. You can retry the scan or an administrator can review the scanner configuration.';
     default:
       return 'This file is unavailable until virus scanning is complete.';
   }
