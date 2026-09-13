@@ -79,6 +79,7 @@ Global styles live in `ui/src/App.scss`. Preserve the established `aut-`, `app-`
 - Add or move documentation pages in both `docs/` and the `nav` section of `mkdocs.yml`.
 - Update `docs/reference/api.md` when endpoint paths, payloads, responses, authentication, or error behavior changes.
 - Update concept, administration, or classifier YAML docs when changing user-visible semantics or configuration.
+- Keep `docs/development/index.md` synchronized with the Development, Container Images, and Releases sections of the root `README.md`.
 - Keep `charts/autofile/README.md` synchronized with chart values, credentials, requirements, and behavior.
 - Validate both major Helm database modes conceptually. Offline rendering of the default CNPG mode needs `--api-versions postgresql.cnpg.io/v1/Cluster`.
 - `make image` pushes images; do not use it as a routine local build check.
