@@ -5,11 +5,13 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "primereact/button";
 import { Card } from "primereact/card";
 import { InputText } from "primereact/inputtext";
+import { Password } from "primereact/password";
 import { Message } from "primereact/message";
 import { type Toast } from "primereact/toast";
 import { classNames } from "primereact/utils";
 
 import { AppToast } from "../components/AppToast";
+import { PasswordStrengthMeter } from "../components/PasswordStrengthMeter";
 import type { UserRole } from "../models/auth";
 import type { PasswordChangeInput, ProfileUpdateInput } from "../models/profile";
 import type { User } from "../models/user";
@@ -251,14 +253,24 @@ function PasswordChangeForm({
                 minLength: { value: 12, message: "Password must be at least 12 characters" },
               }}
               render={({ field }) => (
-                <InputText
-                  id="new_password"
-                  {...field}
-                  type="password"
-                  className={classNames({ "p-invalid": !!errors.new_password })}
-                  placeholder="New password"
-                  autoComplete="new-password"
-                />
+                <>
+                  <PasswordStrengthMeter value={field.value} />
+                  <Password
+                    inputId="new_password"
+                    value={field.value ?? ""}
+                    onChange={(e) => field.onChange(e.target.value)}
+                    onBlur={field.onBlur}
+                    inputRef={field.ref}
+                    name={field.name}
+                    className="aut-password"
+                    inputClassName={classNames({ "p-invalid": !!errors.new_password })}
+                    placeholder="New password"
+                    autoComplete="new-password"
+                    feedback={false}
+                    toggleMask
+                    invalid={!!errors.new_password}
+                  />
+                </>
               )}
             />
             {errMsg("new_password") && <small className="p-error">{errMsg("new_password")}</small>}

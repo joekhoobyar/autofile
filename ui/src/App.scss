@@ -516,6 +516,71 @@ body {
   padding: 0 1rem;
 }
 
+// Password strength inputs (PrimeReact Password) should fill their
+// fluid grid columns like plain InputText fields do.
+.aut-password {
+  width: 100%;
+
+  .p-inputtext {
+    width: 100%;
+  }
+}
+
+// Inline strength meter shown above the password input. It is part of
+// the normal layout (not an overlay) so password-manager suggestion
+// popups cannot cover it.
+.aut-password-meter {
+  margin-bottom: 0.4rem;
+}
+
+.aut-password-meter-track {
+  height: 0.5rem;
+  border-radius: 4px;
+  background: var(--surface-200);
+  overflow: hidden;
+}
+
+.aut-password-meter-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 4px;
+  transition: width 200ms ease, background-color 200ms ease;
+  background: transparent;
+
+  &.is-weak {
+    width: 33%;
+    background: var(--red-500);
+  }
+
+  &.is-medium {
+    width: 66%;
+    background: var(--yellow-500);
+  }
+
+  &.is-strong {
+    width: 100%;
+    background: var(--green-500);
+  }
+}
+
+.aut-password-meter-label {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--text-color-secondary);
+
+  &.is-weak {
+    color: var(--red-500);
+  }
+
+  &.is-medium {
+    color: var(--yellow-500);
+  }
+
+  &.is-strong {
+    color: var(--green-500);
+  }
+}
+
 .text-end {
   margin-top: 1.3rem;
 

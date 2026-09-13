@@ -4,6 +4,7 @@ import { Link, useNavigate, Navigate, Outlet, useLocation } from "react-router-d
 import { useQueryClient } from "@tanstack/react-query";
 
 import { InputText } from "primereact/inputtext";
+import { Password } from "primereact/password";
 import { classNames } from "primereact/utils";
 import { Message } from "primereact/message";
 import { Button } from "primereact/button";
@@ -12,6 +13,7 @@ import { Skeleton } from "primereact/skeleton";
 import { HttpError } from "../api";
 import type { LoginRequest, RegisterRequest } from "../models/auth";
 import { Card } from "primereact/card";
+import { PasswordStrengthMeter } from "../components/PasswordStrengthMeter";
 import { canAdminister, login, logout, register, useAuth } from "../auth";
 import { usePublicSettings } from "../queries/useAppSettings";
 
@@ -265,10 +267,18 @@ export function Signup() {
                 },
               }}
               render={({ field }) => (
-                <InputText id="password" {...field} type="password"
-                  className={classNames({ 'p-invalid': !!errors.password })}
-                  placeholder="Password" autoComplete="new-password"
-                />
+                <>
+                  <PasswordStrengthMeter value={field.value} />
+                  <Password inputId="password" value={field.value ?? ""}
+                    onChange={(e) => field.onChange(e.target.value)}
+                    onBlur={field.onBlur} inputRef={field.ref} name={field.name}
+                    className="aut-password"
+                    inputClassName={classNames({ 'p-invalid': !!errors.password })}
+                    placeholder="Password" autoComplete="new-password"
+                    feedback={false} toggleMask
+                    invalid={!!errors.password}
+                  />
+                </>
               )}
             />
             {errMsg('password') && <small className="p-error">{errMsg('password')}</small>}
