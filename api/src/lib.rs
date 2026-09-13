@@ -36,6 +36,7 @@ pub mod application {
     pub mod document_files;
     pub mod document_index_documents;
     pub mod document_index_values;
+    pub mod document_indexes;
     pub mod document_metadatas;
     pub mod document_thumbnails;
     pub mod document_types;
