@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- External document-processing tools (`pandoc`, `soffice`, `weasyprint`, `pdftocairo`, `pdftotext`, `pdfinfo`, `magick`, `tesseract`) no longer inherit the API process environment. Child commands run with a sanitized environment containing only `PATH` and `HOME` taken from the main process, so secrets such as `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `AWS_*`, and `S3_BUCKET` are never exposed to them.
+
+### Fixed
+
+- Fixed intermittent `soffice` conversion failures (`exit status: 1` with no output) when the file-pages and thumbnail jobs convert the same office document concurrently. Each conversion now uses an isolated LibreOffice user profile (`-env:UserInstallation`), so concurrent runs no longer fight over the shared profile lock.
+- Failed external-process errors now include both `stdout` and `stderr` (trimmed and truncated), since several tools — notably `soffice` — report errors on `stdout`. `pdftocairo` failures in page-image extraction and thumbnail generation now capture `stderr` instead of reporting only the exit status.
+
 ## [0.5.6] - 2026-09-13
 
 ### Added
