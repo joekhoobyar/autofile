@@ -75,6 +75,9 @@ api:
     successThreshold: 1
     failureThreshold: 3
   resources: {}
+  tmpDir:
+    enabled: true
+    sizeLimit: 2Gi
 
 ui:
   replicaCount: 1

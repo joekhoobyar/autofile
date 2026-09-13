@@ -266,6 +266,14 @@ api:
           key: my-key
 ```
 
+### Adjust API /tmp Ephemeral Storage
+
+```yaml
+api:
+  tmpDir:
+    sizeLimit: 4Gi
+```
+
 ### Enable Ingress
 
 The chart creates separate Ingress resources for the API and UI. The API is served at `/api`; the UI is served at `/`.
@@ -347,6 +355,8 @@ ingress:
 | `api.livenessProbe.*` | see `values.yaml` | API liveness probe timing values. |
 | `api.readinessProbe.*` | see `values.yaml` | API readiness probe timing values. |
 | `api.resources` | `{}` | API container resource requests and limits. |
+| `api.tmpDir.enabled` | `true` | Mount an `emptyDir` at `/tmp` for upload buffering and document-processing scratch. |
+| `api.tmpDir.sizeLimit` | `2Gi` | `emptyDir` `sizeLimit` for `/tmp`. The pod is evicted if usage exceeds it. Set to `""` for no limit, or raise it for large `MAX_UPLOAD_SIZE_MB` values and concurrent jobs. |
 
 ### UI
 

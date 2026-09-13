@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added `api.tmpDir` Helm values mounting an `emptyDir` at `/tmp` in the API pod for upload buffering and document-processing scratch. `api.tmpDir.sizeLimit` (default `2Gi`) sets the `emptyDir` `sizeLimit`; set it to `""` for no limit or raise it for large `MAX_UPLOAD_SIZE_MB` values and concurrent jobs. Set `api.tmpDir.enabled=false` to disable the mount.
+
 ### Security
 
 - External document-processing tools (`pandoc`, `soffice`, `weasyprint`, `pdftocairo`, `pdftotext`, `pdfinfo`, `magick`, `tesseract`) no longer inherit the API process environment. Child commands run with a sanitized environment containing only `PATH` and `HOME` taken from the main process, so secrets such as `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `AWS_*`, and `S3_BUCKET` are never exposed to them.
