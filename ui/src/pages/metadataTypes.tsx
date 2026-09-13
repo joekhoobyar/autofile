@@ -22,7 +22,7 @@ import { createSlugRules, normalizeSlug } from '../util/slugValidation';
 import { useHashListParams } from '../util/listParamsHash';
 import { AppToast } from '../components/AppToast';
 import { DescriptionList } from '../components/DescriptionList';
-import { DateText } from '../components/DateText';
+import { DateTimeText } from '../components/DateTimeText';
 import { canAdminister, useAuth } from '../auth';
 import { Tag } from 'primereact/tag';
 
@@ -305,8 +305,8 @@ export function ViewMetadataType() {
                 </span>
               ),
             },
-            { label: 'Created', value: <DateText value={data.created_at} /> },
-            { label: 'Updated', value: <DateText value={data.updated_at} /> },
+            { label: 'Created', value: <DateTimeText value={data.created_at} /> },
+            { label: 'Updated', value: <DateTimeText value={data.updated_at} /> },
           ]}
         />
 

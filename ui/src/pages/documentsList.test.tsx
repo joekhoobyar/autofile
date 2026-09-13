@@ -46,6 +46,16 @@ vi.mock('../queries/useMetadataTypes', () => ({
   useMetadataTypesMap: () => ({ data: {} }),
 }));
 
+vi.mock('../queries/useAppSettings', () => ({
+  usePublicSettings: () => ({
+    data: {
+      allow_user_registration: true,
+      date_format: 'yyyy-MM-dd',
+      datetime_format: 'MM/dd/yyyy HH:mm',
+    },
+  }),
+}));
+
 function renderList(path: string, routePath: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>

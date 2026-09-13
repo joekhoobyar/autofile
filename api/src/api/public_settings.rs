@@ -15,6 +15,12 @@ use crate::shared::extractors::DbConn;
 #[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct PublicSettingsResponse {
     pub allow_user_registration: bool,
+    /// Frontend-only date display and date-picker format. Date metadata API values remain YYYY-MM-DD.
+    #[schema(example = "yyyy-MM-dd")]
+    pub date_format: String,
+    /// Frontend-only date/time display format for timestamps. API timestamps remain serialized as timestamp strings.
+    #[schema(example = "MM/dd/yyyy HH:mm")]
+    pub datetime_format: String,
 }
 
 #[utoipa::path(
@@ -32,6 +38,8 @@ pub async fn get_public_settings(
 
     Ok(Json(PublicSettingsResponse {
         allow_user_registration: settings.allow_user_registration,
+        date_format: settings.date_format,
+        datetime_format: settings.datetime_format,
     }))
 }
 

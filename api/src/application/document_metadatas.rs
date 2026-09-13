@@ -19,6 +19,8 @@ use diesel_async::{AsyncPgConnection, RunQueryDsl};
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct NewDocumentMetadata {
     pub metadata_type_id: i64,
+    /// Metadata value to store. For Date metadata, clients must send YYYY-MM-DD regardless of the configured frontend display format.
+    #[schema(example = "2026-08-25")]
     pub value: String,
 }
 

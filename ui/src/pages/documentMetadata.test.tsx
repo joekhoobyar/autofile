@@ -35,6 +35,16 @@ vi.mock('../queries/useDocuments', () => ({
   }),
 }));
 
+vi.mock('../queries/useAppSettings', () => ({
+  usePublicSettings: () => ({
+    data: {
+      allow_user_registration: true,
+      date_format: 'dd/MM/yyyy',
+      datetime_format: 'MM/dd/yyyy HH:mm',
+    },
+  }),
+}));
+
 vi.mock('../queries/useMetadataTypes', () => ({
   fetchMetadataTypeValues: vi.fn(() => Promise.resolve([])),
   useDocumentTypeMetadataTypes: () => ({
@@ -119,5 +129,15 @@ describe('EditDocumentMetadata', () => {
     await waitFor(() => {
       expect(mutateAsync).toHaveBeenCalledWith([{ metadata_type_id: 1, value: 'Globex' }]);
     });
+  });
+
+  it('displays date metadata with the configured format', () => {
+    documentMetadata = {
+      vendor: 'Acme',
+      invoice_date: '2024-01-02',
+    };
+    renderPage();
+
+    expect(screen.getByText('02/01/2024')).toBeInTheDocument();
   });
 });

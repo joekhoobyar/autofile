@@ -1,13 +1,23 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { DateText } from './DateText';
 
+vi.mock('../queries/useAppSettings', () => ({
+  usePublicSettings: () => ({ data: { date_format: 'dd/MM/yyyy' } }),
+}));
+
 describe('DateText', () => {
   it('renders a formatted date value', () => {
-    render(<DateText value={new Date(2024, 0, 2, 3, 4)} />);
+    render(<DateText value="2024-01-02" />);
 
-    expect(screen.getByText('01/02/2024 03:04')).toBeInTheDocument();
+    expect(screen.getByText('02/01/2024')).toBeInTheDocument();
+  });
+
+  it('allows explicit format overrides', () => {
+    render(<DateText value="2024-01-02" formatString="yyyy-MM-dd" />);
+
+    expect(screen.getByText('2024-01-02')).toBeInTheDocument();
   });
 
   it('renders the fallback for missing values', () => {

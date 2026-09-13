@@ -21,7 +21,7 @@ import { classNames } from 'primereact/utils';
 
 import { HttpError, apiUrl, ensureAuthenticated, getAccessToken } from '../api';
 import { AppToast } from '../components/AppToast';
-import { DateText } from '../components/DateText';
+import { DateTimeText } from '../components/DateTimeText';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { type DocumentFile } from '../models/documentFile';
 import { useDocument } from '../queries/useDocuments';
@@ -160,7 +160,7 @@ function FileMetadata({ file }: Readonly<{ file: DocumentFile }>) {
       <li><span>Content Type</span>: {file.content_type ?? 'Unknown'}</li>
       <li><span>Size</span>: {formatBytes(file.size)}</li>
       <li><span>Pages</span>: {file.pages ?? 0}</li>
-      <li><span>Created</span>: <DateText value={file.created_at} /></li>
+      <li><span>Created</span>: <DateTimeText value={file.created_at} /></li>
     </ul>
   );
 }

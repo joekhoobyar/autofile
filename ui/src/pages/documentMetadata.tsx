@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useDocument, useSaveDocumentMetadata } from '../queries/useDocuments';
+import { usePublicSettings } from '../queries/useAppSettings';
 import { Message } from 'primereact/message';
 import { Card } from 'primereact/card';
 import { DataTable } from 'primereact/datatable';
@@ -14,7 +15,9 @@ import { AutoComplete, type AutoCompleteCompleteEvent } from 'primereact/autocom
 import { useId } from '../util';
 import { fetchMetadataTypeValues, useDocumentTypeMetadataTypes, useMetadataTypesMap } from '../queries/useMetadataTypes';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
+import { DateText } from '../components/DateText';
 import { buildMetadataRows, buildMetadataUpdates, getMissingRequiredRows, type MetadataRow } from '../util/documentMetadataRows';
+import { getDateFormatOption, parseBackendDate, serializeBackendDate } from '../util/dateFormats';
 
 type MetadataValueAutoCompleteProps = {
   metadataTypeId: number | undefined;
@@ -84,6 +87,7 @@ export function EditDocumentMetadata() {
   const id = useId('id');
   const saveDocumentMetadata = useSaveDocumentMetadata(id);
   const { isLoading, isError, data: doc, error } = useDocument(id);
+  const { data: settings } = usePublicSettings();
   const { isLoading: isDocumentTypeMetadataLoading, data: dtmdts } = useDocumentTypeMetadataTypes(doc?.document_type_id);
   const { isLoading: isMetadataTypesLoading, data: mdt } = useMetadataTypesMap('id');
 
@@ -113,6 +117,7 @@ export function EditDocumentMetadata() {
 
     return `Required fields are missing: ${missingRequiredRows.map((row) => row.name).join(', ')}`;
   }, [hasMissingRequired, missingRequiredRows]);
+  const dateFormatOption = getDateFormatOption(settings?.date_format);
 
   const requiredTemplate = useCallback((rowData: {required: boolean}) => {
     return rowData.required ?
@@ -187,11 +192,7 @@ export function EditDocumentMetadata() {
 
   const dateEditor = useCallback((options: ColumnEditorOptions) => {
     const dateValue = typeof options.value === 'string' && options.value
-      ? (() => {
-          const [year, month, day] = options.value.split('-').map(Number);
-          if (!year || !month || !day) return null;
-          return new Date(year, month - 1, day);
-        })()
+      ? parseBackendDate(options.value)
       : null;
 
     return (
@@ -199,7 +200,7 @@ export function EditDocumentMetadata() {
         value={dateValue}
         onChange={(event) => {
           const nextValue = event.value instanceof Date
-            ? `${event.value.getFullYear()}-${String(event.value.getMonth() + 1).padStart(2, '0')}-${String(event.value.getDate()).padStart(2, '0')}`
+            ? serializeBackendDate(event.value)
             : (typeof event.value === 'string' ? event.value : '');
           options.editorCallback?.(nextValue);
           updateRowValue(options.rowData?.metadataTypeId as number | undefined, nextValue);
@@ -207,13 +208,13 @@ export function EditDocumentMetadata() {
         onBlur={(event) => {
           closeCellEditor(event);
         }}
-        dateFormat="yy-mm-dd"
-        placeholder="yyyy-mm-dd"
+        dateFormat={dateFormatOption.calendarFormat}
+        placeholder={dateFormatOption.example}
         showIcon
         className="w-full"
       />
     );
-  }, [closeCellEditor, updateRowValue]);
+  }, [closeCellEditor, dateFormatOption, updateRowValue]);
 
   const lookupEditor = useCallback((options: ColumnEditorOptions) => {
     const choices = options.rowData?.options?.choices ?? [];
@@ -250,6 +251,12 @@ export function EditDocumentMetadata() {
     });
   }, [loadedRowsKey, rows]);
 
+  const valueTemplate = useCallback((rowData: MetadataRow) => {
+    return rowData.dataType === 'date'
+      ? <DateText value={rowData.value} fallback={rowData.value} />
+      : rowData.value;
+  }, []);
+
   const cellEditor = useCallback((options: ColumnEditorOptions) => {
     if (options.field !== 'value')
       return null;
@@ -263,12 +270,12 @@ export function EditDocumentMetadata() {
   const columns = useMemo(() => ([
     <Column key="name" field="name" header="Field" style={{ width: '25%' }} />,
     <Column key="value" field="value" header="Value" style={{ width: '60%' }}
-      editor={cellEditor} onCellEditComplete={onCellEditComplete}
+      body={valueTemplate} editor={cellEditor} onCellEditComplete={onCellEditComplete}
     />,
     <Column key="required" field="required" header="Required" style={{ width: '15%' }}
       body={requiredTemplate}
     />
-  ]), [cellEditor, onCellEditComplete, requiredTemplate]);
+  ]), [cellEditor, onCellEditComplete, requiredTemplate, valueTemplate]);
 
   const onSave = async () => {
     if (hasMissingRequired) {

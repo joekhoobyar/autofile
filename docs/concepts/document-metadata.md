@@ -26,10 +26,12 @@ Fields are displayed alphabetically by name. The value editor depends on the Met
 | Data Type | Editor | Behavior |
 | --- | --- | --- |
 | String | Text input | Accepts free-form text. |
-| Date | Date picker | Stores a valid `YYYY-MM-DD` date. |
+| Date | Date picker | Displays and edits dates using the configured UI date format, and stores a valid `YYYY-MM-DD` date. |
 | Lookup | Dropdown | Selects one of the configured choices. |
 
 The editor sends only values that changed. Existing values for other fields remain unchanged.
+
+The date display format is configured on the Settings page and affects only the frontend. The API, stored metadata values, classifier rules, and index templates continue to use `YYYY-MM-DD` for Date metadata.
 
 ## Required Values
 
@@ -123,7 +125,7 @@ If a field or value does not behave as expected:
 
 - Confirm the Metadata Type is associated with the document's current Document Type.
 - Confirm required fields contain more than whitespace.
-- Use `YYYY-MM-DD` for Date values.
+- Use `YYYY-MM-DD` for Date values in API requests, classifier actions, and templates, even if the UI displays dates with a different configured format.
 - Confirm a Lookup value matches a configured choice after surrounding whitespace is trimmed, including capitalization.
 - Review the document's type if a field disappeared after editing Properties.
 - Use Metadata Type slugs, not display names, in classifier actions and templates. Document metadata API writes use numeric Metadata Type IDs.

@@ -71,7 +71,7 @@ fn metadata_map_schema() -> utoipa::openapi::Object {
     let string_schema =
         utoipa::openapi::ObjectBuilder::new().schema_type(utoipa::openapi::schema::Type::String);
     utoipa::openapi::ObjectBuilder::new()
-        .description(Some("Stored metadata values keyed by Metadata Type slug"))
+        .description(Some("Stored metadata values keyed by Metadata Type slug. Date metadata values use YYYY-MM-DD regardless of the configured frontend display format."))
         .additional_properties(Some(string_schema))
         .build()
 }

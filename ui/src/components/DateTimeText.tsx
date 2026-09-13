@@ -1,17 +1,17 @@
 import type { ReactNode } from "react";
 
-import { formatDateOnly } from "../util/dateFormats";
 import { usePublicSettings } from "../queries/useAppSettings";
+import { formatDateTime } from "../util/dateFormats";
 
-type DateTextProps = {
+type DateTimeTextProps = {
   value: Date | string | null | undefined;
   fallback?: ReactNode;
   formatString?: string;
 };
 
-export function DateText({ value, fallback = "", formatString }: Readonly<DateTextProps>) {
+export function DateTimeText({ value, fallback = "", formatString }: Readonly<DateTimeTextProps>) {
   const { data: settings } = usePublicSettings();
-  const text = formatDateOnly(value, formatString ?? settings?.date_format);
+  const text = formatDateTime(value, formatString ?? settings?.datetime_format);
 
   if (!text) {
     return <>{fallback}</>;
