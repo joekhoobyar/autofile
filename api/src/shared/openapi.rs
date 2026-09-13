@@ -65,7 +65,7 @@ pub fn build_openapi_router() -> (axum::Router<Arc<AppState>>, utoipa::openapi::
         crate::domain::documents::DocumentView,
         // Referenced from list query parameters; not auto-collected
         // because the query structs derive IntoParams.
-        crate::api::cabinets::CabinetSortField,
+        crate::application::cabinets::CabinetSortField,
         crate::api::cabinet_documents::CabinetDocumentSortField,
         crate::application::classifier_blocks::ClassifierBlockSortField,
         crate::api::document_indexes::DocumentIndexSortField,
