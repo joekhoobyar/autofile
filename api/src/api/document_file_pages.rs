@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
+use crate::application::document_files::{
+    get_document_file_page_image_key, list_document_file_ocr_pages, list_document_file_pages,
+};
 use crate::domain::document_files::{DocumentFileOcrPage, DocumentFilePage};
-use crate::schema::{document_file_ocr_pages, document_file_pages, document_files};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::AuthUser;
-use crate::shared::errors::{ApiError, ApiErrorContext};
+use crate::shared::errors::ApiError;
 use crate::shared::extractors::DbConn;
 use crate::shared::s3::serve_s3_file;
 
@@ -14,8 +16,6 @@ use axum::{
     http::HeaderMap,
     response::Response,
 };
-use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 #[utoipa::path(
@@ -39,18 +39,7 @@ pub async fn list(
     DbConn(mut db): DbConn,
     Path((document_id, document_file_id)): Path<(i64, i64)>,
 ) -> Result<Json<Vec<DocumentFilePage>>, ApiError> {
-    let rows = document_file_pages::table
-        .inner_join(
-            document_files::table.on(document_files::id.eq(document_file_pages::document_file_id)),
-        )
-        .filter(document_files::document_id.eq(document_id))
-        .filter(document_file_pages::document_file_id.eq(document_file_id))
-        .select(DocumentFilePage::as_select())
-        .order(document_file_pages::page_number.asc())
-        .load::<DocumentFilePage>(&mut db)
-        .await
-        .api_context("Failed to list document_file_pages")?;
-
+    let rows = list_document_file_pages(&mut db, document_id, document_file_id).await?;
     Ok(Json(rows))
 }
 
@@ -75,19 +64,7 @@ pub async fn list_ocr(
     DbConn(mut db): DbConn,
     Path((document_id, document_file_id)): Path<(i64, i64)>,
 ) -> Result<Json<Vec<DocumentFileOcrPage>>, ApiError> {
-    let rows = document_file_ocr_pages::table
-        .inner_join(
-            document_files::table
-                .on(document_files::id.eq(document_file_ocr_pages::document_file_id)),
-        )
-        .filter(document_files::document_id.eq(document_id))
-        .filter(document_file_ocr_pages::document_file_id.eq(document_file_id))
-        .select(DocumentFileOcrPage::as_select())
-        .order(document_file_ocr_pages::page_number.asc())
-        .load::<DocumentFileOcrPage>(&mut db)
-        .await
-        .api_context("Failed to list document_file_ocr_pages")?;
-
+    let rows = list_document_file_ocr_pages(&mut db, document_id, document_file_id).await?;
     Ok(Json(rows))
 }
 
@@ -118,21 +95,9 @@ pub async fn page_image_get(
     Path((document_id, document_file_id, page_number)): Path<(i64, i64, i32)>,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
-    let s3_prefix = document_files::table
-        .filter(document_files::document_id.eq(document_id))
-        .filter(document_files::id.eq(document_file_id))
-        .select(document_files::s3_prefix)
-        .first::<String>(&mut db)
-        .await
-        .map_err(|e| {
-            if matches!(e, diesel::result::Error::NotFound) {
-                ApiError::not_found("Document file not found")
-            } else {
-                ApiError::from_diesel("Failed to fetch document file", e)
-            }
-        })?;
-
-    let s3_key = format!("{}/pages/{}.png", s3_prefix, page_number);
+    let s3_key =
+        get_document_file_page_image_key(&mut db, document_id, document_file_id, page_number)
+            .await?;
     serve_s3_file(
         state.as_ref(),
         &headers,

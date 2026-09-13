@@ -14,7 +14,9 @@ use tokio::process::Command;
 use uuid::Uuid;
 
 use crate::application::jobs::{FastJob, MediumJob};
-use crate::domain::document_files::{DocumentFile, DocumentFileView};
+use crate::domain::document_files::{
+    DocumentFile, DocumentFileOcrPage, DocumentFilePage, DocumentFileView,
+};
 use crate::domain::document_types::UNSPECIFIED_DOCUMENT_TYPE_ID;
 use crate::domain::users::SYSTEM_USER_ID;
 use crate::infrastructure::s3::delete_from_s3;
@@ -168,6 +170,66 @@ pub async fn ensure_document_file_exists(
         .await
         .map(|_| ())
         .map_err(|e| ApiError::from_diesel("Failed to fetch document file", e))
+}
+
+pub async fn list_document_file_pages(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    document_file_id: i64,
+) -> Result<Vec<DocumentFilePage>, ApiError> {
+    document_file_pages::table
+        .inner_join(
+            document_files::table.on(document_files::id.eq(document_file_pages::document_file_id)),
+        )
+        .filter(document_files::document_id.eq(document_id))
+        .filter(document_file_pages::document_file_id.eq(document_file_id))
+        .select(DocumentFilePage::as_select())
+        .order(document_file_pages::page_number.asc())
+        .load::<DocumentFilePage>(db)
+        .await
+        .map_err(|e| ApiError::from_diesel("Failed to list document_file_pages", e))
+}
+
+pub async fn list_document_file_ocr_pages(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    document_file_id: i64,
+) -> Result<Vec<DocumentFileOcrPage>, ApiError> {
+    document_file_ocr_pages::table
+        .inner_join(
+            document_files::table
+                .on(document_files::id.eq(document_file_ocr_pages::document_file_id)),
+        )
+        .filter(document_files::document_id.eq(document_id))
+        .filter(document_file_ocr_pages::document_file_id.eq(document_file_id))
+        .select(DocumentFileOcrPage::as_select())
+        .order(document_file_ocr_pages::page_number.asc())
+        .load::<DocumentFileOcrPage>(db)
+        .await
+        .map_err(|e| ApiError::from_diesel("Failed to list document_file_ocr_pages", e))
+}
+
+pub async fn get_document_file_page_image_key(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    document_file_id: i64,
+    page_number: i32,
+) -> Result<String, ApiError> {
+    let s3_prefix = document_files::table
+        .filter(document_files::document_id.eq(document_id))
+        .filter(document_files::id.eq(document_file_id))
+        .select(document_files::s3_prefix)
+        .first::<String>(db)
+        .await
+        .map_err(|e| {
+            if matches!(e, diesel::result::Error::NotFound) {
+                ApiError::not_found("Document file not found")
+            } else {
+                ApiError::from_diesel("Failed to fetch document file", e)
+            }
+        })?;
+
+    Ok(format!("{}/pages/{}.png", s3_prefix, page_number))
 }
 
 pub async fn create_document_file(
