@@ -30,17 +30,20 @@ pub mod api {
 }
 pub mod application {
     pub mod app_settings;
+    pub mod auth;
     pub mod cabinet_documents;
     pub mod cabinets;
     pub mod classifier_blocks;
     pub mod classifier_rule_validation;
     pub mod document_files;
     pub mod document_index_documents;
+    pub mod document_index_templates;
     pub mod document_index_values;
     pub mod document_indexes;
     pub mod document_metadatas;
     pub mod document_thumbnails;
     pub mod document_types;
+    pub mod document_types_metadata_types;
     pub mod documents;
     pub mod jobs;
     pub mod metadata_types;
