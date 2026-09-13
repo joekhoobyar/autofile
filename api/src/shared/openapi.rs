@@ -65,17 +65,17 @@ pub fn build_openapi_router() -> (axum::Router<Arc<AppState>>, utoipa::openapi::
         crate::domain::documents::DocumentView,
         // Referenced from list query parameters; not auto-collected
         // because the query structs derive IntoParams.
-        crate::api::cabinets::CabinetSortField,
-        crate::api::cabinet_documents::CabinetDocumentSortField,
-        crate::api::classifier_blocks::ClassifierBlockSortField,
-        crate::api::document_indexes::DocumentIndexSortField,
-        crate::api::document_index_templates::DocumentIndexTemplateSortField,
-        crate::api::document_index_values::DocumentIndexValueSortField,
-        crate::api::document_types::DocumentTypeSortField,
-        crate::api::documents::DocumentSortField,
-        crate::api::metadata_types::MetadataTypeSortField,
-        crate::api::tag_documents::TagDocumentSortField,
-        crate::api::tags::TagSortField,
+        crate::application::cabinets::CabinetSortField,
+        crate::application::cabinet_documents::CabinetDocumentSortField,
+        crate::application::classifier_blocks::ClassifierBlockSortField,
+        crate::application::document_indexes::DocumentIndexSortField,
+        crate::application::document_index_templates::DocumentIndexTemplateSortField,
+        crate::application::document_index_values::DocumentIndexValueSortField,
+        crate::application::document_types::DocumentTypeSortField,
+        crate::application::documents::DocumentSortField,
+        crate::application::metadata_types::MetadataTypeSortField,
+        crate::application::tag_documents::TagDocumentSortField,
+        crate::application::tags::TagSortField,
         crate::application::users::UserSortField,
     ))
 )]

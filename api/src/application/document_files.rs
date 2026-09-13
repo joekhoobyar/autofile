@@ -1,20 +1,26 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use apalis::prelude::*;
+use bb8::PooledConnection;
 use diesel::dsl::select;
 use diesel::prelude::*;
 use diesel::result::{DatabaseErrorKind, Error as DieselError};
+use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use tokio::io::AsyncRead;
 use tokio::process::Command;
 use uuid::Uuid;
 
-use crate::application::jobs::MediumJob;
-use crate::domain::document_files::DocumentFile;
+use crate::application::jobs::{FastJob, MediumJob};
+use crate::domain::document_files::{
+    DocumentFile, DocumentFileOcrPage, DocumentFilePage, DocumentFileView,
+};
 use crate::domain::document_types::UNSPECIFIED_DOCUMENT_TYPE_ID;
 use crate::domain::users::SYSTEM_USER_ID;
 use crate::infrastructure::s3::delete_from_s3;
+use crate::infrastructure::s3::delete_prefix_from_s3;
 use crate::infrastructure::s3::upload_file_to_s3;
 use crate::schema::{document_file_ocr_pages, document_file_pages, document_files, documents};
 use crate::shared::app_state::AppState;
@@ -53,6 +59,355 @@ pub struct UploadedDocumentFile {
     pub content_type: Option<String>,
     pub size: i64,
     pub checksum_sha256: String,
+}
+
+pub struct DocumentFileDownloadMetadata {
+    pub s3_key: String,
+    pub filename: String,
+    pub content_type: Option<String>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+fn document_file_view(file: DocumentFile) -> DocumentFileView {
+    DocumentFileView {
+        id: file.id,
+        document_id: file.document_id,
+        filename: file.filename,
+        content_type: file.content_type,
+        size: file.size,
+        pages: file.pages,
+        created_at: file.created_at,
+        created_by: file.created_by,
+        updated_at: file.updated_at,
+        updated_by: file.updated_by,
+    }
+}
+
+pub async fn list_document_files(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+) -> Result<Vec<DocumentFileView>, ApiError> {
+    document_files::table
+        .filter(document_files::document_id.eq(document_id))
+        .select(DocumentFileView::as_select())
+        .order(document_files::id.asc())
+        .load::<DocumentFileView>(db)
+        .await
+        .map_err(|e| ApiError::from_diesel("Failed to list document_files", e))
+}
+
+pub async fn get_document_file(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    id: i64,
+) -> Result<DocumentFileView, ApiError> {
+    document_files::table
+        .filter(document_files::document_id.eq(document_id))
+        .filter(document_files::id.eq(id))
+        .select(DocumentFileView::as_select())
+        .first::<DocumentFileView>(db)
+        .await
+        .map_err(|e| ApiError::from_diesel("Failed to fetch document_file", e))
+}
+
+pub async fn get_document_file_thumbnail_metadata(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    id: i64,
+) -> Result<(String, chrono::DateTime<chrono::Utc>), ApiError> {
+    let (s3_prefix, updated_at) = document_files::table
+        .filter(document_files::document_id.eq(document_id))
+        .filter(document_files::id.eq(id))
+        .select((document_files::s3_prefix, document_files::updated_at))
+        .first::<(String, chrono::DateTime<chrono::Utc>)>(db)
+        .await
+        .map_err(|e| ApiError::from_diesel("Failed to fetch document file thumbnail", e))?;
+
+    Ok((format!("{}/_thumb.png", s3_prefix), updated_at))
+}
+
+pub async fn get_document_file_download_metadata(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    id: i64,
+) -> Result<DocumentFileDownloadMetadata, ApiError> {
+    let (s3_prefix, filename, content_type, updated_at) = document_files::table
+        .filter(document_files::document_id.eq(document_id))
+        .filter(document_files::id.eq(id))
+        .select((
+            document_files::s3_prefix,
+            document_files::filename,
+            document_files::content_type,
+            document_files::updated_at,
+        ))
+        .first::<(
+            String,
+            String,
+            Option<String>,
+            chrono::DateTime<chrono::Utc>,
+        )>(db)
+        .await
+        .map_err(|e| ApiError::from_diesel("Failed to fetch document file download", e))?;
+
+    Ok(DocumentFileDownloadMetadata {
+        s3_key: format!("{}/{}", s3_prefix, filename),
+        filename,
+        content_type,
+        updated_at,
+    })
+}
+
+pub async fn ensure_document_file_exists(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    id: i64,
+) -> Result<(), ApiError> {
+    document_files::table
+        .filter(document_files::document_id.eq(document_id))
+        .filter(document_files::id.eq(id))
+        .select(document_files::id)
+        .first::<i64>(db)
+        .await
+        .map(|_| ())
+        .map_err(|e| ApiError::from_diesel("Failed to fetch document file", e))
+}
+
+pub async fn list_document_file_pages(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    document_file_id: i64,
+) -> Result<Vec<DocumentFilePage>, ApiError> {
+    document_file_pages::table
+        .inner_join(
+            document_files::table.on(document_files::id.eq(document_file_pages::document_file_id)),
+        )
+        .filter(document_files::document_id.eq(document_id))
+        .filter(document_file_pages::document_file_id.eq(document_file_id))
+        .select(DocumentFilePage::as_select())
+        .order(document_file_pages::page_number.asc())
+        .load::<DocumentFilePage>(db)
+        .await
+        .map_err(|e| ApiError::from_diesel("Failed to list document_file_pages", e))
+}
+
+pub async fn list_document_file_ocr_pages(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    document_file_id: i64,
+) -> Result<Vec<DocumentFileOcrPage>, ApiError> {
+    document_file_ocr_pages::table
+        .inner_join(
+            document_files::table
+                .on(document_files::id.eq(document_file_ocr_pages::document_file_id)),
+        )
+        .filter(document_files::document_id.eq(document_id))
+        .filter(document_file_ocr_pages::document_file_id.eq(document_file_id))
+        .select(DocumentFileOcrPage::as_select())
+        .order(document_file_ocr_pages::page_number.asc())
+        .load::<DocumentFileOcrPage>(db)
+        .await
+        .map_err(|e| ApiError::from_diesel("Failed to list document_file_ocr_pages", e))
+}
+
+pub async fn get_document_file_page_image_key(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    document_file_id: i64,
+    page_number: i32,
+) -> Result<String, ApiError> {
+    let s3_prefix = document_files::table
+        .filter(document_files::document_id.eq(document_id))
+        .filter(document_files::id.eq(document_file_id))
+        .select(document_files::s3_prefix)
+        .first::<String>(db)
+        .await
+        .map_err(|e| {
+            if matches!(e, diesel::result::Error::NotFound) {
+                ApiError::not_found("Document file not found")
+            } else {
+                ApiError::from_diesel("Failed to fetch document file", e)
+            }
+        })?;
+
+    Ok(format!("{}/pages/{}.png", s3_prefix, page_number))
+}
+
+pub async fn create_document_file(
+    state: Arc<AppState>,
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    user_id: i64,
+    document_id: i64,
+    file_upload: BufferedDocumentFileUpload,
+) -> Result<DocumentFileView, ApiError> {
+    let file_info = upload_document_file_to_s3(&state, file_upload).await?;
+    let file_info_for_cleanup = file_info.clone();
+
+    let fast_jobs = state.fast_jobs.as_ref().clone();
+    let medium_jobs = state.medium_jobs.as_ref().clone();
+    let thumbnail_enqueue_failed = Arc::new(AtomicBool::new(false));
+    let thumbnail_enqueue_failed_for_tx = Arc::clone(&thumbnail_enqueue_failed);
+    let pages_enqueue_failed = Arc::new(AtomicBool::new(false));
+    let pages_enqueue_failed_for_tx = Arc::clone(&pages_enqueue_failed);
+
+    let result = db
+        .build_transaction()
+        .run::<_, diesel::result::Error, _>(async move |conn| {
+            let mut fast_jobs = fast_jobs;
+            let mut medium_jobs = medium_jobs;
+
+            documents::table
+                .find(document_id)
+                .select(documents::id)
+                .first::<i64>(conn)
+                .await?;
+
+            let inserted_file = insert_document_file(conn, document_id, file_info, user_id).await?;
+
+            if medium_jobs
+                .push(MediumJob::ProcessFilePages {
+                    document_file_id: inserted_file.id,
+                })
+                .await
+                .is_err()
+            {
+                pages_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
+                return Err(diesel::result::Error::RollbackTransaction);
+            }
+
+            if fast_jobs
+                .push(FastJob::GenerateThumbnail {
+                    document_file_id: inserted_file.id,
+                    page: 1,
+                    width: 800,
+                })
+                .await
+                .is_err()
+            {
+                thumbnail_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
+                return Err(diesel::result::Error::RollbackTransaction);
+            }
+
+            Ok(document_file_view(inserted_file))
+        })
+        .await;
+
+    match result {
+        Ok(document_file) => Ok(document_file),
+        Err(e) => {
+            delete_uploaded_document_file_from_s3(&state, &file_info_for_cleanup).await;
+            if matches!(e, diesel::result::Error::RollbackTransaction) {
+                let pages_failed = pages_enqueue_failed.as_ref().load(Ordering::Relaxed);
+                let thumbnail_failed = thumbnail_enqueue_failed.as_ref().load(Ordering::Relaxed);
+                if pages_failed {
+                    Err(ApiError::internal_server_error(
+                        "Failed to enqueue file pages job",
+                    ))
+                } else if thumbnail_failed {
+                    Err(ApiError::internal_server_error(
+                        "Failed to enqueue thumbnail job",
+                    ))
+                } else {
+                    Err(ApiError::from_diesel("Failed to create document_file", e))
+                }
+            } else {
+                Err(ApiError::from_diesel("Failed to create document_file", e))
+            }
+        }
+    }
+}
+
+pub async fn delete_document_file(
+    state: Arc<AppState>,
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    document_id: i64,
+    id: i64,
+) -> Result<(), ApiError> {
+    let delete_last_file = Arc::new(AtomicBool::new(false));
+    let delete_last_file_for_tx = Arc::clone(&delete_last_file);
+
+    let deleted_prefix = db
+        .build_transaction()
+        .run::<_, diesel::result::Error, _>(async move |conn| {
+            let files = document_files::table
+                .filter(document_files::document_id.eq(document_id))
+                .select(DocumentFile::as_select())
+                .order(document_files::id.asc())
+                .load::<DocumentFile>(conn)
+                .await?;
+
+            let Some(file_index) = files.iter().position(|file| file.id == id) else {
+                return Err(diesel::result::Error::NotFound);
+            };
+
+            if files.len() <= 1 {
+                delete_last_file_for_tx.store(true, Ordering::Relaxed);
+                return Err(diesel::result::Error::RollbackTransaction);
+            }
+
+            let deleted_file = &files[file_index];
+            let replacement_thumbnail = if file_index == 0 {
+                files
+                    .get(1)
+                    .map(|next_file| format!("{}/_thumb.png", next_file.s3_prefix))
+            } else {
+                None
+            };
+
+            diesel::delete(
+                document_file_ocr_pages::table
+                    .filter(document_file_ocr_pages::document_file_id.eq(id)),
+            )
+            .execute(conn)
+            .await?;
+
+            diesel::delete(
+                document_file_pages::table.filter(document_file_pages::document_file_id.eq(id)),
+            )
+            .execute(conn)
+            .await?;
+
+            let affected = diesel::delete(
+                document_files::table
+                    .filter(document_files::document_id.eq(document_id))
+                    .filter(document_files::id.eq(id)),
+            )
+            .execute(conn)
+            .await?;
+            if affected == 0 {
+                return Err(diesel::result::Error::NotFound);
+            }
+
+            if let Some(thumbnail_key) = replacement_thumbnail {
+                diesel::update(documents::table.filter(documents::id.eq(document_id)))
+                    .set(documents::s3_thumbnail.eq(thumbnail_key))
+                    .execute(conn)
+                    .await?;
+            }
+
+            Ok(deleted_file.s3_prefix.clone())
+        })
+        .await
+        .map_err(|e| {
+            if delete_last_file.as_ref().load(Ordering::Relaxed) {
+                ApiError::conflict("Cannot delete the last file in a document")
+            } else if matches!(e, diesel::result::Error::NotFound) {
+                ApiError::not_found("Document file not found")
+            } else {
+                ApiError::from_diesel("Failed to delete document_file", e)
+            }
+        })?;
+
+    let delete_prefix = format!("{}/", deleted_prefix);
+    delete_prefix_from_s3(&state.s3_client, &state.s3_bucket, &delete_prefix)
+        .await
+        .map_err(|e| {
+            ApiError::internal_server_error(&format!(
+                "Failed to delete document file from storage: {}",
+                e
+            ))
+        })?;
+
+    Ok(())
 }
 
 pub async fn buffer_document_file_field(

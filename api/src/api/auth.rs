@@ -1,20 +1,17 @@
 use std::sync::Arc;
 
-use crate::application::app_settings::get_app_settings;
-use crate::domain::users::{User, UserRole};
-use crate::is_production;
-use crate::schema::users;
-use crate::shared::app_state::AppState;
-use crate::shared::auth::{
-    hash_password, sign_access, sign_refresh, verify_password, verify_refresh,
+use crate::application::auth::{
+    find_user_for_login, find_user_for_refresh, register_user, validate_login_user,
+    validate_refresh_user,
 };
-use crate::shared::errors::{ApiError, ApiErrorContext};
+use crate::domain::users::User;
+use crate::is_production;
+use crate::shared::app_state::AppState;
+use crate::shared::auth::{sign_access, sign_refresh, verify_refresh};
+use crate::shared::errors::ApiError;
 use crate::shared::extractors::DbConn;
 
 use axum::{Json, extract::State, http::StatusCode};
-use chrono::Utc;
-use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
 use tower_cookies::{Cookie, Cookies};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
@@ -58,86 +55,14 @@ pub async fn register(
     DbConn(mut db): DbConn,
     Json(req): Json<RegisterRequest>,
 ) -> Result<Json<User>, ApiError> {
-    let settings = get_app_settings(&mut db).await?;
-    if !settings.allow_user_registration {
-        return Err(ApiError::new(
-            StatusCode::FORBIDDEN,
-            "User registration is disabled",
-        ));
-    }
-
-    let pw_hash = hash_password(&req.password).map_err(ApiError::bad_request)?;
-
-    let existing_email = users::table
-        .filter(users::email.eq(&req.email))
-        .select(User::as_select())
-        .first::<User>(&mut db)
-        .await
-        .optional()
-        .api_context("Failed to register user")?;
-
-    let inserted = if let Some(existing_email) = existing_email {
-        if existing_email.deleted_at.is_none() {
-            return Err(ApiError::conflict("Email address is already registered"));
-        }
-
-        let username_owner = users::table
-            .filter(users::username.eq(&req.username))
-            .filter(users::id.ne(existing_email.id))
-            .select(User::as_select())
-            .first::<User>(&mut db)
-            .await
-            .optional()
-            .api_context("Failed to register user")?;
-
-        if username_owner.is_some() {
-            return Err(ApiError::conflict("Username is already taken"));
-        }
-
-        diesel::update(users::table.filter(users::id.eq(existing_email.id)))
-            .set((
-                users::username.eq(&req.username),
-                users::display_name.eq(&req.display_name),
-                users::password_hash.eq(pw_hash),
-                users::password_changed_at.eq(Utc::now()),
-                users::role.eq(UserRole::User),
-                users::force_password_change.eq(false),
-                users::enabled.eq(false),
-                users::deleted_at.eq::<Option<chrono::DateTime<chrono::Utc>>>(None),
-                users::updated_at.eq(diesel::dsl::now),
-            ))
-            .returning(User::as_returning())
-            .get_result(&mut db)
-            .await
-            .api_context("Failed to register user")?
-    } else {
-        let username_owner = users::table
-            .filter(users::username.eq(&req.username))
-            .select(User::as_select())
-            .first::<User>(&mut db)
-            .await
-            .optional()
-            .api_context("Failed to register user")?;
-
-        if username_owner.is_some() {
-            return Err(ApiError::conflict("Username is already taken"));
-        }
-
-        diesel::insert_into(users::table)
-            .values((
-                users::username.eq(&req.username),
-                users::email.eq(&req.email),
-                users::display_name.eq(&req.display_name),
-                users::password_hash.eq(pw_hash),
-                users::password_changed_at.eq(Utc::now()),
-                users::role.eq(UserRole::User),
-                users::enabled.eq(false),
-            ))
-            .returning(User::as_returning())
-            .get_result(&mut db)
-            .await
-            .api_context("Failed to register user")?
-    };
+    let inserted = register_user(
+        &mut db,
+        req.username,
+        req.email,
+        req.display_name,
+        req.password,
+    )
+    .await?;
 
     Ok(Json(inserted))
 }
@@ -196,13 +121,7 @@ pub async fn login(
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<AccessTokenResponse>, ApiError> {
     // 1) verify credentials
-    let user = users::table
-        .filter(users::username.eq(&req.username))
-        .filter(users::deleted_at.is_null())
-        .select(User::as_select())
-        .first::<User>(&mut db)
-        .await
-        .ok();
+    let user = find_user_for_login(&mut db, &req.username).await?;
 
     let fail = || ApiError::unauthorized("Invalid credentials");
     let Some(user) = user else {
@@ -256,36 +175,11 @@ pub async fn refresh(
     let claims = verify_refresh(&state.jwt_secret, refresh_cookie.value())
         .map_err(|_| ApiError::unauthorized("Invalid refresh token"))?;
 
-    let user = users::table
-        .find(claims.uid)
-        .filter(users::deleted_at.is_null())
-        .select(User::as_select())
-        .first::<User>(&mut db)
-        .await
-        .map_err(|_| ApiError::unauthorized("Invalid refresh token"))?;
+    let user = find_user_for_refresh(&mut db, claims.uid).await?;
 
     validate_refresh_user(&user)?;
 
     Ok(Json(issue_tokens(&state, &cookies, &user)?))
-}
-
-fn validate_login_user(user: &User, password: &str) -> Result<(), ApiError> {
-    let fail = || ApiError::unauthorized("Invalid credentials");
-
-    let ok = verify_password(password, &user.password_hash).unwrap_or(false);
-    if !ok || !user.enabled {
-        return Err(fail());
-    }
-
-    Ok(())
-}
-
-fn validate_refresh_user(user: &User) -> Result<(), ApiError> {
-    if !user.enabled {
-        return Err(ApiError::unauthorized("Invalid refresh token"));
-    }
-
-    Ok(())
 }
 
 pub fn routes() -> OpenApiRouter<Arc<AppState>> {
@@ -294,56 +188,4 @@ pub fn routes() -> OpenApiRouter<Arc<AppState>> {
         .routes(routes!(login))
         .routes(routes!(refresh))
         .routes(routes!(logout))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{validate_login_user, validate_refresh_user};
-    use crate::domain::users::{User, UserRole};
-    use crate::shared::auth::hash_password;
-    use axum::http::StatusCode;
-    use chrono::Utc;
-
-    fn test_user(enabled: bool) -> User {
-        User {
-            id: 42,
-            username: "test-user".to_string(),
-            email: "test-user@example.com".to_string(),
-            display_name: "Test User".to_string(),
-            password_hash: hash_password("long-enough-password").expect("hash should succeed"),
-            password_changed_at: Utc::now(),
-            role: UserRole::User,
-            force_password_change: false,
-            enabled,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            deleted_at: None,
-        }
-    }
-
-    #[test]
-    fn disabled_user_cannot_login() {
-        let err = validate_login_user(&test_user(false), "long-enough-password")
-            .expect_err("disabled user should not login");
-
-        assert_eq!(err.status, StatusCode::UNAUTHORIZED);
-        assert_eq!(err.message, "Invalid credentials");
-    }
-
-    #[test]
-    fn disabled_user_cannot_refresh() {
-        let err =
-            validate_refresh_user(&test_user(false)).expect_err("disabled user should not refresh");
-
-        assert_eq!(err.status, StatusCode::UNAUTHORIZED);
-        assert_eq!(err.message, "Invalid refresh token");
-    }
-
-    #[test]
-    fn enabled_user_can_login_and_refresh() {
-        let user = test_user(true);
-
-        validate_login_user(&user, "long-enough-password").expect("enabled user should login");
-        validate_refresh_user(&user).expect("enabled user should refresh");
-    }
 }
