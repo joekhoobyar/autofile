@@ -36,6 +36,10 @@ pub struct UpdateAppSettingsInput {
     /// Frontend-only date/time display format for timestamps. Must be one of the supported UI date/time formats. API timestamps remain serialized as timestamp strings.
     #[schema(example = "MM/dd/yyyy HH:mm")]
     pub datetime_format: String,
+    /// Master switch for virus scanning. When false, uploads skip scanning and scan UI is hidden.
+    pub virus_scanning_enabled: bool,
+    /// Default checked state for the per-upload `Virus scan this upload` checkbox. Only meaningful when `virus_scanning_enabled` is true.
+    pub virus_scan_by_default: bool,
 }
 
 pub async fn get_app_settings(
@@ -66,6 +70,8 @@ pub async fn update_app_settings(
             app_settings::allow_user_registration.eq(input.allow_user_registration),
             app_settings::date_format.eq(input.date_format),
             app_settings::datetime_format.eq(input.datetime_format),
+            app_settings::virus_scanning_enabled.eq(input.virus_scanning_enabled),
+            app_settings::virus_scan_by_default.eq(input.virus_scan_by_default),
             app_settings::updated_at.eq(diesel::dsl::now),
         ))
         .returning(AppSettings::as_returning())

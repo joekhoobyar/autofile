@@ -1,9 +1,9 @@
 ## 1. Data Model And Settings
 
-- [ ] Add a migration for `app_settings.virus_scanning_enabled` and `app_settings.virus_scan_by_default`.
-- [ ] Add a migration for document-file scan fields and scan-status constraints.
-- [ ] Regenerate `api/src/schema.rs`.
-- [ ] Update API domain models and UI models for the new settings, scan fields, and derived `content_available` field.
+- [x] Add a migration for `app_settings.virus_scanning_enabled` and `app_settings.virus_scan_by_default`.
+- [x] Add a migration for document-file scan fields and scan-status constraints.
+- [x] Regenerate `api/src/schema.rs`.
+- [x] Update API domain models and UI models for the new settings, scan fields, and derived `content_available` field.
 
 ## 2. Scanner Infrastructure
 

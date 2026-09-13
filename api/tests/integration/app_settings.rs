@@ -29,6 +29,8 @@ async fn settings_default_to_allowing_user_registration() {
     assert!(settings.allow_user_registration);
     assert_eq!(settings.date_format, "yyyy-MM-dd");
     assert_eq!(settings.datetime_format, "MM/dd/yyyy HH:mm");
+    assert!(!settings.virus_scanning_enabled);
+    assert!(settings.virus_scan_by_default);
 }
 
 #[tokio::test]
@@ -48,6 +50,8 @@ async fn public_settings_expose_registration_flag() {
     assert!(public.allow_user_registration);
     assert_eq!(public.date_format, "yyyy-MM-dd");
     assert_eq!(public.datetime_format, "MM/dd/yyyy HH:mm");
+    assert!(!public.virus_scanning_enabled);
+    assert!(public.virus_scan_by_default);
 
     let mut db = test_db
         .pool
@@ -60,6 +64,8 @@ async fn public_settings_expose_registration_flag() {
             allow_user_registration: false,
             date_format: "dd/MM/yyyy".to_string(),
             datetime_format: "dd/MM/yyyy HH:mm".to_string(),
+            virus_scanning_enabled: true,
+            virus_scan_by_default: false,
         },
     )
     .await
@@ -79,6 +85,8 @@ async fn public_settings_expose_registration_flag() {
     assert!(!public.allow_user_registration);
     assert_eq!(public.date_format, "dd/MM/yyyy");
     assert_eq!(public.datetime_format, "dd/MM/yyyy HH:mm");
+    assert!(public.virus_scanning_enabled);
+    assert!(!public.virus_scan_by_default);
 }
 
 #[tokio::test]
@@ -96,6 +104,8 @@ async fn settings_reject_invalid_display_date_formats() {
             allow_user_registration: true,
             date_format: "yyyy/MMMM/dddd".to_string(),
             datetime_format: "MM/dd/yyyy HH:mm".to_string(),
+            virus_scanning_enabled: false,
+            virus_scan_by_default: true,
         },
     )
     .await
@@ -110,6 +120,8 @@ async fn settings_reject_invalid_display_date_formats() {
             allow_user_registration: true,
             date_format: "yyyy-MM-dd".to_string(),
             datetime_format: "EEEE, MMMM do yyyy h:mm:ss a".to_string(),
+            virus_scanning_enabled: false,
+            virus_scan_by_default: true,
         },
     )
     .await
@@ -271,6 +283,8 @@ async fn disabled_registration_rejects_register_request() {
             allow_user_registration: false,
             date_format: "yyyy-MM-dd".to_string(),
             datetime_format: "MM/dd/yyyy HH:mm".to_string(),
+            virus_scanning_enabled: false,
+            virus_scan_by_default: true,
         },
     )
     .await

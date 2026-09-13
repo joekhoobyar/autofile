@@ -6,6 +6,8 @@ diesel::table! {
         allow_user_registration -> Bool,
         date_format -> Text,
         datetime_format -> Text,
+        virus_scanning_enabled -> Bool,
+        virus_scan_by_default -> Bool,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
     }
@@ -91,6 +93,22 @@ diesel::table! {
         updated_at -> Timestamptz,
         updated_by -> Int8,
         pages -> Int4,
+        #[max_length = 32]
+        scan_status -> Varchar,
+        scan_requested -> Bool,
+        #[max_length = 64]
+        scan_scanner -> Nullable<Varchar>,
+        #[max_length = 128]
+        scan_scanner_version -> Nullable<Varchar>,
+        #[max_length = 128]
+        scan_signature_version -> Nullable<Varchar>,
+        #[max_length = 512]
+        scan_threat_name -> Nullable<Varchar>,
+        scan_error -> Nullable<Text>,
+        scan_started_at -> Nullable<Timestamptz>,
+        scan_completed_at -> Nullable<Timestamptz>,
+        scan_requested_by -> Nullable<Int8>,
+        content_available -> Bool,
     }
 }
 

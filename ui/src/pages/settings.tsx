@@ -37,6 +37,8 @@ function SettingsForm({ toast }: Readonly<{ toast: RefObject<Toast | null> }>) {
       allow_user_registration: true,
       date_format: "yyyy-MM-dd",
       datetime_format: "MM/dd/yyyy HH:mm",
+      virus_scanning_enabled: false,
+      virus_scan_by_default: true,
     },
   });
 
@@ -46,6 +48,8 @@ function SettingsForm({ toast }: Readonly<{ toast: RefObject<Toast | null> }>) {
         allow_user_registration: data.allow_user_registration,
         date_format: data.date_format,
         datetime_format: data.datetime_format,
+        virus_scanning_enabled: data.virus_scanning_enabled,
+        virus_scan_by_default: data.virus_scan_by_default,
       });
     }
   }, [data, reset]);
@@ -57,6 +61,8 @@ function SettingsForm({ toast }: Readonly<{ toast: RefObject<Toast | null> }>) {
         allow_user_registration: updated.allow_user_registration,
         date_format: updated.date_format,
         datetime_format: updated.datetime_format,
+        virus_scanning_enabled: updated.virus_scanning_enabled,
+        virus_scan_by_default: updated.virus_scan_by_default,
       });
       toast.current?.show({ severity: "success", summary: "Settings saved" });
     } catch (err) {
