@@ -42,8 +42,45 @@ jobs:
           ignore-unfixed: false
           exit-code: '0'
 
+      - name: Filter SARIF to high and critical results
+        shell: bash
+        run: |
+          jq '
+            def security_severity($rules_by_id; $result):
+              ($result.ruleId // "") as $rule_id
+              | ($rules_by_id[$rule_id] // {}) as $rule
+              | ($result.properties."security-severity" // $rule.properties."security-severity" // "0" | tonumber? // 0);
+
+            def severity_label($rules_by_id; $result):
+              ($result.ruleId // "") as $rule_id
+              | ($rules_by_id[$rule_id] // {}) as $rule
+              | [
+                  $result.properties.severity?,
+                  $result.properties.Severity?,
+                  $rule.properties.severity?,
+                  $rule.properties.Severity?,
+                  ($rule.properties.tags[]? | strings | ascii_downcase | select(. == "critical" or . == "high" or . == "medium" or . == "low" or . == "note" or . == "warning" or . == "error")),
+                  ($rule.properties.tags[]? | strings | ascii_downcase | try capture("severity[:=](?<severity>critical|high|medium|low|note|warning|error)").severity catch empty)
+                ]
+              | map(strings | ascii_downcase)
+              | .[0] // "";
+
+            def keep_result($rules_by_id; $result):
+              (security_severity($rules_by_id; $result) >= 7)
+              or ((severity_label($rules_by_id; $result) == "critical") or (severity_label($rules_by_id; $result) == "high"));
+
+            .runs |= map(
+              (.tool.driver.rules // []) as $rules
+              | ($rules | map({ key: .id, value: . }) | from_entries) as $rules_by_id
+              | ((.results // []) | map(select(keep_result($rules_by_id; .)))) as $results
+              | ($results | map(.ruleId // empty) | unique) as $rule_ids
+              | .results = $results
+              | .tool.driver.rules = ($rules | map(select((.id // "") as $id | $rule_ids | index($id))))
+            )
+          ' trivy.sarif > trivy-filtered.sarif
+
       - name: Upload Trivy results
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: trivy.sarif
+          sarif_file: trivy-filtered.sarif
           category: trivy-${{ matrix.category }}
