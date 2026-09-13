@@ -437,7 +437,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 0.5rem 1rem;
+  flex-wrap: wrap;
+  // No column gap: the bootstrap theme joins Prev/Pages/Next with -1px
+  // overlapping margins, and any gap would break that joined border.
+  column-gap: 0;
+  row-gap: 0.5rem;
 }
 
 .aut-documents-data-view .p-dataview-emptymessage {
@@ -446,7 +450,7 @@ body {
 
 .aut-documents-data-view .p-paginator .p-dropdown {
   margin-left: auto;
-  margin-right: 0;
+  margin-right: 1rem;
 }
 
 .aut-documents-data-view .p-paginator .p-paginator-prev {
