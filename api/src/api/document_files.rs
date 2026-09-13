@@ -2,30 +2,23 @@ use std::sync::Arc;
 
 use crate::application::document_files::{
     BufferedDocumentFileUpload, buffer_document_file_field, cleanup_buffered_document_file_upload,
-    delete_uploaded_document_file_from_s3, insert_document_file, upload_document_file_to_s3,
+    create_document_file, delete_document_file, ensure_document_file_exists, get_document_file,
+    get_document_file_download_metadata, get_document_file_thumbnail_metadata, list_document_files,
 };
-use crate::application::jobs::{FastJob, MediumJob};
-use crate::domain::document_files::DocumentFile;
 use crate::domain::document_files::DocumentFileView;
-use crate::infrastructure::s3::delete_prefix_from_s3;
-use crate::schema::{document_file_ocr_pages, document_file_pages, document_files, documents};
 use crate::shared::app_state::AppState;
 use crate::shared::auth::{AuthUser, sign_download, verify_download};
-use crate::shared::errors::{ApiError, ApiErrorContext};
+use crate::shared::errors::ApiError;
 use crate::shared::extractors::DbConn;
 use crate::shared::s3::serve_s3_file;
 
 use axum::{
     Json,
     extract::{DefaultBodyLimit, Multipart, Path, Query, State},
-    http::{HeaderMap, StatusCode, header},
+    http::{HeaderMap, header},
     response::Response,
 };
-use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
 use utoipa_axum::{router::OpenApiRouter, routes};
-
-use apalis::prelude::*;
 
 const DOWNLOAD_TTL_SECONDS: i64 = 120;
 
@@ -99,14 +92,7 @@ pub async fn list(
     DbConn(mut db): DbConn,
     Path(document_id): Path<i64>,
 ) -> Result<Json<Vec<DocumentFileView>>, ApiError> {
-    let rows = document_files::table
-        .filter(document_files::document_id.eq(document_id))
-        .select(DocumentFileView::as_select())
-        .order(document_files::id.asc())
-        .load::<DocumentFileView>(&mut db)
-        .await
-        .api_context("Failed to list document_files")?;
-
+    let rows = list_document_files(&mut db, document_id).await?;
     Ok(Json(rows))
 }
 
@@ -131,14 +117,7 @@ pub async fn get_by_ids(
     DbConn(mut db): DbConn,
     Path((document_id, id)): Path<(i64, i64)>,
 ) -> Result<Json<DocumentFileView>, ApiError> {
-    let row = document_files::table
-        .filter(document_files::document_id.eq(document_id))
-        .filter(document_files::id.eq(id))
-        .select(DocumentFileView::as_select())
-        .first::<DocumentFileView>(&mut db)
-        .await
-        .api_context("Failed to fetch document_file")?;
-
+    let row = get_document_file(&mut db, document_id, id).await?;
     Ok(Json(row))
 }
 
@@ -170,99 +149,9 @@ pub async fn create(
     mut multipart: Multipart,
 ) -> Result<Json<DocumentFileView>, ApiError> {
     let file_temp = parse_create_multipart(&mut multipart).await?;
-    let file_info = upload_document_file_to_s3(&state, file_temp).await?;
-    let file_info_for_cleanup = file_info.clone();
-
-    let fast_jobs = state.fast_jobs.as_ref().clone();
-    let medium_jobs = state.medium_jobs.as_ref().clone();
-    let thumbnail_enqueue_failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let thumbnail_enqueue_failed_for_tx = Arc::clone(&thumbnail_enqueue_failed);
-    let pages_enqueue_failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let pages_enqueue_failed_for_tx = Arc::clone(&pages_enqueue_failed);
-
-    let result = db
-        .build_transaction()
-        .run::<_, diesel::result::Error, _>(async move |conn| {
-            let mut fast_jobs = fast_jobs;
-            let mut medium_jobs = medium_jobs;
-
-            documents::table
-                .find(document_id)
-                .select(documents::id)
-                .first::<i64>(conn)
-                .await?;
-
-            let inserted_file =
-                insert_document_file(conn, document_id, file_info, user.user_id).await?;
-
-            if medium_jobs
-                .push(MediumJob::ProcessFilePages {
-                    document_file_id: inserted_file.id,
-                })
-                .await
-                .is_err()
-            {
-                pages_enqueue_failed_for_tx.store(true, std::sync::atomic::Ordering::Relaxed);
-                return Err(diesel::result::Error::RollbackTransaction);
-            }
-
-            if fast_jobs
-                .push(FastJob::GenerateThumbnail {
-                    document_file_id: inserted_file.id,
-                    page: 1,
-                    width: 800,
-                })
-                .await
-                .is_err()
-            {
-                thumbnail_enqueue_failed_for_tx.store(true, std::sync::atomic::Ordering::Relaxed);
-                return Err(diesel::result::Error::RollbackTransaction);
-            }
-
-            Ok(DocumentFileView {
-                id: inserted_file.id,
-                document_id: inserted_file.document_id,
-                filename: inserted_file.filename,
-                content_type: inserted_file.content_type,
-                size: inserted_file.size,
-                pages: inserted_file.pages,
-                created_at: inserted_file.created_at,
-                created_by: inserted_file.created_by,
-                updated_at: inserted_file.updated_at,
-                updated_by: inserted_file.updated_by,
-            })
-        })
-        .await;
-
-    match result {
-        Ok(document_file) => Ok(Json(document_file)),
-        Err(e) => {
-            delete_uploaded_document_file_from_s3(&state, &file_info_for_cleanup).await;
-            if matches!(e, diesel::result::Error::RollbackTransaction) {
-                let pages_failed = pages_enqueue_failed
-                    .as_ref()
-                    .load(std::sync::atomic::Ordering::Relaxed);
-                let thumbnail_failed = thumbnail_enqueue_failed
-                    .as_ref()
-                    .load(std::sync::atomic::Ordering::Relaxed);
-                if pages_failed {
-                    Err(ApiError::new(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to enqueue file pages job",
-                    ))
-                } else if thumbnail_failed {
-                    Err(ApiError::new(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to enqueue thumbnail job",
-                    ))
-                } else {
-                    Err(ApiError::from_diesel("Failed to create document_file", e))
-                }
-            } else {
-                Err(ApiError::from_diesel("Failed to create document_file", e))
-            }
-        }
-    }
+    let document_file =
+        create_document_file(state, &mut db, user.user_id, document_id, file_temp).await?;
+    Ok(Json(document_file))
 }
 
 #[utoipa::path(
@@ -289,94 +178,7 @@ pub async fn delete(
     DbConn(mut db): DbConn,
     Path((document_id, id)): Path<(i64, i64)>,
 ) -> Result<Json<()>, ApiError> {
-    let delete_last_file = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let delete_last_file_for_tx = Arc::clone(&delete_last_file);
-
-    let deleted_prefix = db
-        .build_transaction()
-        .run::<_, diesel::result::Error, _>(async move |conn| {
-            let files = document_files::table
-                .filter(document_files::document_id.eq(document_id))
-                .select(DocumentFile::as_select())
-                .order(document_files::id.asc())
-                .load::<DocumentFile>(conn)
-                .await?;
-
-            let Some(file_index) = files.iter().position(|file| file.id == id) else {
-                return Err(diesel::result::Error::NotFound);
-            };
-
-            if files.len() <= 1 {
-                delete_last_file_for_tx.store(true, std::sync::atomic::Ordering::Relaxed);
-                return Err(diesel::result::Error::RollbackTransaction);
-            }
-
-            let deleted_file = &files[file_index];
-            let replacement_thumbnail = if file_index == 0 {
-                files
-                    .get(1)
-                    .map(|next_file| format!("{}/_thumb.png", next_file.s3_prefix))
-            } else {
-                None
-            };
-
-            diesel::delete(
-                document_file_ocr_pages::table
-                    .filter(document_file_ocr_pages::document_file_id.eq(id)),
-            )
-            .execute(conn)
-            .await?;
-
-            diesel::delete(
-                document_file_pages::table.filter(document_file_pages::document_file_id.eq(id)),
-            )
-            .execute(conn)
-            .await?;
-
-            let affected = diesel::delete(
-                document_files::table
-                    .filter(document_files::document_id.eq(document_id))
-                    .filter(document_files::id.eq(id)),
-            )
-            .execute(conn)
-            .await?;
-            if affected == 0 {
-                return Err(diesel::result::Error::NotFound);
-            }
-
-            if let Some(thumbnail_key) = replacement_thumbnail {
-                diesel::update(documents::table.filter(documents::id.eq(document_id)))
-                    .set(documents::s3_thumbnail.eq(thumbnail_key))
-                    .execute(conn)
-                    .await?;
-            }
-
-            Ok(deleted_file.s3_prefix.clone())
-        })
-        .await
-        .map_err(|e| {
-            if delete_last_file
-                .as_ref()
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
-                ApiError::conflict("Cannot delete the last file in a document")
-            } else if matches!(e, diesel::result::Error::NotFound) {
-                ApiError::not_found("Document file not found")
-            } else {
-                ApiError::from_diesel("Failed to delete document_file", e)
-            }
-        })?;
-
-    let delete_prefix = format!("{}/", deleted_prefix);
-    delete_prefix_from_s3(&state.s3_client, &state.s3_bucket, &delete_prefix)
-        .await
-        .map_err(|e| {
-            ApiError::internal_server_error(&format!(
-                "Failed to delete document file from storage: {}",
-                e
-            ))
-        })?;
-
+    delete_document_file(state, &mut db, document_id, id).await?;
     Ok(Json(()))
 }
 
@@ -403,15 +205,8 @@ pub async fn thumbnail_get(
     Path((document_id, id)): Path<(i64, i64)>,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
-    let (s3_prefix, updated_at) = document_files::table
-        .filter(document_files::document_id.eq(document_id))
-        .filter(document_files::id.eq(id))
-        .select((document_files::s3_prefix, document_files::updated_at))
-        .first::<(String, chrono::DateTime<chrono::Utc>)>(&mut db)
-        .await
-        .api_context("Failed to fetch document file thumbnail")?;
-
-    let s3_key = format!("{}/_thumb.png", s3_prefix);
+    let (s3_key, updated_at) =
+        get_document_file_thumbnail_metadata(&mut db, document_id, id).await?;
     serve_s3_file(
         state.as_ref(),
         &headers,
@@ -467,37 +262,19 @@ pub async fn download(
             .map_err(|_| ApiError::unauthorized("Invalid or expired token"))?;
     }
 
-    let (s3_prefix, filename, content_type, updated_at) = document_files::table
-        .filter(document_files::document_id.eq(document_id))
-        .filter(document_files::id.eq(id))
-        .select((
-            document_files::s3_prefix,
-            document_files::filename,
-            document_files::content_type,
-            document_files::updated_at,
-        ))
-        .first::<(
-            String,
-            String,
-            Option<String>,
-            chrono::DateTime<chrono::Utc>,
-        )>(&mut db)
-        .await
-        .api_context("Failed to fetch document file download")?;
-
-    let s3_key = format!("{}/{}", s3_prefix, filename);
+    let file = get_document_file_download_metadata(&mut db, document_id, id).await?;
     let mut response = serve_s3_file(
         state.as_ref(),
         &headers,
-        &s3_key,
-        Some(updated_at),
+        &file.s3_key,
+        Some(file.updated_at),
         "File not available",
-        content_type.as_deref(),
+        file.content_type.as_deref(),
     )
     .await?;
 
     if let Ok(value) =
-        header::HeaderValue::from_str(&format!("attachment; filename={:?}", filename))
+        header::HeaderValue::from_str(&format!("attachment; filename={:?}", file.filename))
     {
         response
             .headers_mut()
@@ -530,13 +307,7 @@ pub async fn create_download_ticket(
     DbConn(mut db): DbConn,
     Path((document_id, id)): Path<(i64, i64)>,
 ) -> Result<Json<DownloadTicketResponse>, ApiError> {
-    document_files::table
-        .filter(document_files::document_id.eq(document_id))
-        .filter(document_files::id.eq(id))
-        .select(document_files::id)
-        .first::<i64>(&mut db)
-        .await
-        .api_context("Failed to fetch document file")?;
+    ensure_document_file_exists(&mut db, document_id, id).await?;
 
     let token = sign_download(
         &state.jwt_secret,
