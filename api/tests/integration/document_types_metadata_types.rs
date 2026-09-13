@@ -1,5 +1,3 @@
-mod support;
-
 use autofile_api::application::document_types_metadata_types::{
     DocumentTypeMetadataTypeChangeset, DocumentTypeNewMetadataTypeInput,
     ListDocumentTypesMetadataTypesQuery, NewDocumentTypeMetadataType,
@@ -11,8 +9,8 @@ use axum::http::StatusCode;
 use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::bb8;
 
-use support::db::TestDatabase;
-use support::fixtures::{insert_document_type, insert_metadata_type, insert_user};
+use crate::support::db::TestDatabase;
+use crate::support::fixtures::{insert_document_type, insert_metadata_type, insert_user};
 
 const USER_ID: i64 = 9003;
 

@@ -1,5 +1,3 @@
-mod support;
-
 use autofile_api::application::document_files::{cleanup_extra_page_rows, stale_page_image_keys};
 use autofile_api::schema::{document_file_ocr_pages, document_file_pages};
 use diesel::prelude::*;
@@ -7,8 +5,8 @@ use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
 use diesel_async::pooled_connection::bb8;
 
-use support::db::TestDatabase;
-use support::fixtures::{
+use crate::support::db::TestDatabase;
+use crate::support::fixtures::{
     insert_document, insert_document_file, insert_document_file_page, insert_document_type,
     insert_user,
 };

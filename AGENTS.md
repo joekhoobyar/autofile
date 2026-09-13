@@ -96,10 +96,10 @@ API checks from `api/`:
 cargo fmt --all -- --check
 cargo check --locked --all-targets
 cargo clippy --locked --all-targets -- -D warnings
-cargo nextest run --locked
+cargo test --locked --all-targets
 ```
 
-`cargo nextest` is the canonical API test runner (install with `cargo install cargo-nextest --locked`; CI installs it via `taiki-e/install-action`). It runs the same targets as `cargo test`, and CI uses the `ci` nextest profile's JUnit output to append a totals-only `## Rust Test Report` summary to the job summary.
+`cargo test` is the canonical API test runner. Integration tests share one Postgres container across the whole `integration` test binary and clone a migrated template database per test, so no external services are needed beyond a working Docker-compatible daemon. CI parses the libtest `test result:` lines to append a totals-only `## Rust Test Report` summary to the job summary.
 
 UI checks from `ui/`:
 

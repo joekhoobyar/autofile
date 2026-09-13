@@ -1,5 +1,3 @@
-mod support;
-
 use autofile_api::application::document_index_documents::rebuild_document_index_inner;
 use autofile_api::application::document_index_values::count_document_index_value_documents;
 use autofile_api::schema::{document_index_documents, document_index_values};
@@ -8,8 +6,8 @@ use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
 use diesel_async::pooled_connection::bb8;
 
-use support::db::TestDatabase;
-use support::fixtures::{
+use crate::support::db::TestDatabase;
+use crate::support::fixtures::{
     insert_document, insert_document_index, insert_document_index_document,
     insert_document_index_template, insert_document_index_value, insert_document_type, insert_user,
 };

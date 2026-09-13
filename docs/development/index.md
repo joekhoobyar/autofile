@@ -35,10 +35,10 @@ cargo run
 
 The API expects PostgreSQL, Redis, S3 credentials, `S3_BUCKET`, and `JWT_SECRET` to be available in the environment. For most development, running the full Compose stack is simpler.
 
-Run API tests (install with `cargo install cargo-nextest --locked` if needed):
+Run API tests:
 
 ```bash
-cargo nextest run --locked
+cargo test --locked --all-targets
 ```
 
 ## UI

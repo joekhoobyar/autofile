@@ -1,5 +1,3 @@
-mod support;
-
 use autofile_api::api::auth::{RegisterRequest, register};
 use autofile_api::api::public_settings::get_public_settings;
 use autofile_api::application::app_settings::{
@@ -13,7 +11,7 @@ use axum::http::StatusCode;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
-use support::db::TestDatabase;
+use crate::support::db::TestDatabase;
 
 #[tokio::test]
 async fn settings_default_to_allowing_user_registration() {

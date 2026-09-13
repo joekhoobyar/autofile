@@ -1,5 +1,3 @@
-mod support;
-
 use autofile_api::application::document_types::{
     DocumentTypeChangeset, ListDocumentTypesQuery, NewDocumentType, create_document_type,
     delete_document_type, get_document_type, get_document_type_by_slug, list_document_types,
@@ -12,8 +10,8 @@ use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
 use diesel_async::pooled_connection::bb8;
 
-use support::db::TestDatabase;
-use support::fixtures::{insert_document, insert_user};
+use crate::support::db::TestDatabase;
+use crate::support::fixtures::{insert_document, insert_user};
 
 const USER_ID: i64 = 9001;
 

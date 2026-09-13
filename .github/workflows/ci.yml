@@ -51,43 +51,46 @@ jobs:
         working-directory: api
         run: cargo clippy --locked --all-targets -- -D warnings
 
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
-
       - name: Test API
         working-directory: api
-        run: cargo nextest run --locked --profile ci
+        run: |
+          set -o pipefail
+          cargo test --locked --all-targets 2>&1 | tee "$RUNNER_TEMP/api-test-output.txt"
 
       - name: Summarize API tests
         if: always()
-        working-directory: api
         run: |
           python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
-          import xml.etree.ElementTree as ET
+          import os
+          import re
 
-          report_path = "target/nextest/ci/junit.xml"
+          report_path = os.path.join(os.environ.get("RUNNER_TEMP", ""), "api-test-output.txt")
           try:
-              root = ET.parse(report_path).getroot()
-          except (OSError, ET.ParseError):
-              root = None
+              with open(report_path) as f:
+                  output = f.read()
+          except OSError:
+              output = ""
+
+          # libtest prints one "test result:" line per binary, e.g.
+          # "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; ..."
+          pattern = re.compile(
+              r"^test result:\s+(ok|FAILED)\.\s+(\d+) passed;\s+(\d+) failed;\s+(\d+) ignored;",
+              re.MULTILINE,
+          )
+          matches = pattern.findall(output)
 
           print("## Rust Test Report")
           print()
           print("### Summary")
           print()
-          if root is None:
-              print("- ❌ **Results unavailable** · could not parse nextest JUnit output")
+          if not matches:
+              print("- ❌ **Results unavailable** · could not parse cargo test output")
           else:
-              suites = root.findall("testsuite") if root.tag == "testsuites" else [root]
-              total = sum(int(suite.attrib.get("tests", 0)) for suite in suites)
-              failures = sum(int(suite.attrib.get("failures", 0)) for suite in suites)
-              errors = sum(int(suite.attrib.get("errors", 0)) for suite in suites)
-              skipped = sum(int(suite.attrib.get("skipped", 0)) for suite in suites)
-              failed = failures + errors
-              passed = total - failed - skipped
-              binaries = len(suites)
+              passed = sum(int(m[1]) for m in matches)
+              failed = sum(int(m[2]) for m in matches)
+              skipped = sum(int(m[3]) for m in matches)
+              total = passed + failed + skipped
+              binaries = len(matches)
 
               print(f"- **Test Binaries**: {binaries} total")
               results = f"✅ **{passed} {'pass' if passed == 1 else 'passes'}**"
