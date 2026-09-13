@@ -1,5 +1,3 @@
-mod support;
-
 use autofile_api::application::metadata_types::{
     ListMetadataTypeValuesQuery, ListMetadataTypesQuery, MetadataTypeChangeset,
     MetadataTypeSortField, NewMetadataType, create_metadata_type, delete_metadata_type,
@@ -11,8 +9,8 @@ use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::bb8;
 use serde_json::json;
 
-use support::db::TestDatabase;
-use support::fixtures::{
+use crate::support::db::TestDatabase;
+use crate::support::fixtures::{
     insert_document, insert_document_metadata, insert_document_type, insert_user,
 };
 

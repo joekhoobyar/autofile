@@ -1,5 +1,3 @@
-mod support;
-
 use autofile_api::application::users::{
     ChangePasswordInput, ListUsersInput, UpdateProfileInput, UpdateUserInput, UserSortField,
     change_password, delete_user, get_profile, get_user_by_id, get_user_by_username, list_users,
@@ -15,8 +13,8 @@ use diesel_async::RunQueryDsl;
 use diesel_async::pooled_connection::bb8;
 use serde_json::json;
 
-use support::db::TestDatabase;
-use support::fixtures::insert_user;
+use crate::support::db::TestDatabase;
+use crate::support::fixtures::insert_user;
 
 async fn load_user(db: &mut bb8::PooledConnection<'_, AsyncPgConnection>, id: i64) -> User {
     users::table

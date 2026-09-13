@@ -99,7 +99,7 @@ cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked --all-targets
 ```
 
-`cargo test` is the canonical API test runner. Integration tests share one Postgres container per test binary and clone a migrated template database per test, so no external services are needed beyond a working Docker-compatible daemon. CI parses the libtest `test result:` lines to append a totals-only `## Rust Test Report` summary to the job summary.
+`cargo test` is the canonical API test runner. Integration tests share one Postgres container across the whole `integration` test binary and clone a migrated template database per test, so no external services are needed beyond a working Docker-compatible daemon. CI parses the libtest `test result:` lines to append a totals-only `## Rust Test Report` summary to the job summary.
 
 UI checks from `ui/`:
 

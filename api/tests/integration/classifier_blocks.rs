@@ -1,5 +1,3 @@
-mod support;
-
 use autofile_api::application::classifier_blocks::{
     UpdateClassifierBlockInput, compute_classification_actions, create_classifier_block,
     delete_classifier_block, load_classifier_blocks, load_document_text, persist_computed_actions,
@@ -13,8 +11,8 @@ use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
 use diesel_async::pooled_connection::bb8;
 
-use support::db::TestDatabase;
-use support::fixtures::{
+use crate::support::db::TestDatabase;
+use crate::support::fixtures::{
     build_rules, insert_user, seed_classifier_blocks, seed_classifier_document_scenario,
 };
 
