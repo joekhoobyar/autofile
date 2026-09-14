@@ -252,9 +252,17 @@ export function EditDocumentMetadata() {
   }, [loadedRowsKey, rows]);
 
   const valueTemplate = useCallback((rowData: MetadataRow) => {
-    return rowData.dataType === 'date'
+    const content = rowData.dataType === 'date'
       ? <DateText value={rowData.value} fallback={rowData.value} />
       : rowData.value;
+    // The pencil is decorative: clicks on it bubble up to the cell, which is
+    // what opens the cell editor, so it behaves exactly like clicking the cell.
+    return (
+      <span className="aut-metadata-value">
+        <i className="pi pi-pencil aut-metadata-edit-icon" title="Click to edit" aria-hidden="true" />
+        <span>{content}</span>
+      </span>
+    );
   }, []);
 
   const cellEditor = useCallback((options: ColumnEditorOptions) => {

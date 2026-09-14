@@ -140,4 +140,20 @@ describe('EditDocumentMetadata', () => {
 
     expect(screen.getByText('02/01/2024')).toBeInTheDocument();
   });
+
+  it('opens the cell editor when the pencil icon is clicked', async () => {
+    documentMetadata = {
+      vendor: 'Acme',
+      invoice_date: '2024-01-02',
+    };
+    renderPage();
+
+    const vendorCell = screen.getByText('Acme').closest('td');
+    const pencil = vendorCell?.querySelector('.aut-metadata-edit-icon');
+    if (!pencil) throw new Error('pencil icon not found in vendor cell');
+    fireEvent.click(pencil);
+    fireEvent.doubleClick(pencil);
+
+    expect(await screen.findByDisplayValue('Acme')).toBeInTheDocument();
+  });
 });

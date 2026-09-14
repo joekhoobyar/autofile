@@ -1,3 +1,9 @@
+:root {
+  // The bootstrap4-dark-blue theme has no --text-color-success token, so we
+  // define it here from the success palette.
+  --text-color-success: var(--green-600);
+}
+
 html, body, #root {
   height: 100%;
 }
@@ -436,6 +442,18 @@ button:disabled,
 
 .p-datatable .p-paginator-bottom {
   border-width: 0;
+}
+
+.aut-metadata-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.aut-metadata-edit-icon {
+  font-size: 0.85rem;
+  color: var(--text-color-success);
+  flex-shrink: 0;
 }
 
 .aut-documents-card .p-card-content {
