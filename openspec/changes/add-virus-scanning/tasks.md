@@ -42,12 +42,12 @@
 
 ## 6. Deployment And Documentation
 
-- [ ] Add a Docker Compose `clamav` service using the ClamAV container image and API environment examples for local scanner testing.
-- [ ] Add the Wiremind ClamAV chart as a Helm dependency gated by `clamav.enabled` and update `Chart.lock`.
-- [ ] Add Helm values/templates using `virusScanning.provider`, `virusScanning.clamavHost`, `virusScanning.clamavPort`, and `clamav.enabled` to configure bundled Wiremind ClamAV, external ClamAV, and disabled scanner modes without maintaining first-party ClamAV Deployment/Service templates.
-- [ ] Update README configuration table.
-- [ ] Update docs administration/configuration and background-job documentation.
-- [ ] Update API reference for new settings, upload field, and response fields.
+- [x] Add a Docker Compose `clamav` service using the ClamAV container image and API environment examples for local scanner testing.
+- [x] Add the Wiremind ClamAV chart as a Helm dependency gated by `clamav.enabled` and update `Chart.lock`.
+- [x] Add Helm values/templates using `virusScanning.provider`, `virusScanning.clamavHost`, `virusScanning.clamavPort`, and `clamav.enabled` to configure bundled Wiremind ClamAV, external ClamAV, and disabled scanner modes without maintaining first-party ClamAV Deployment/Service templates.
+- [x] Update README configuration table.
+- [x] Update docs administration/configuration and background-job documentation.
+- [x] Update API reference for new settings, upload field, and response fields.
 
 ## 7. Verification
 
