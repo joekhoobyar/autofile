@@ -17,7 +17,7 @@ Autofile is an open-source self-hosted document management application that turn
 - Handles PDF documents, images, plain text files, Office documents (Word, Excel, PowerPoint, and LibreOffice equivalents) and more.
 - Extracts high-resolution images for all document pages, for quick viewing in the browser.
 - [Organizes](concepts/organization.md) documents with cabinets, tags and metadata.
-- Assigns [metadata](concepts/metadata.md) to documents.
+- Lets you create custom fields, or [metadata](concepts/metadata.md) for your documents.
 - Automatically [classify](concepts/classification.md) documents to assign tags, metadata, document types, and organize into cabinets.
 - Filter by tag, metadata, document type, cabinets, and more.
 - Full text search.
