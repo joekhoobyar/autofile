@@ -28,7 +28,7 @@
     "primeicons": "^7.0.0",
     "primereact": "^10.9.7",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "react-dom": "^19.3.0",
     "react-hook-form": "^7.69.0",
     "react-router-dom": "^7.18.3",
     "yaml": "^2.9.0"
@@ -39,7 +39,7 @@
     "@testing-library/react": "^16.3.3",
     "@types/node": "~24.10",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.3",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.1.1",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.1.1",
