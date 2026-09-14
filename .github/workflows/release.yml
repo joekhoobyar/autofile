@@ -232,6 +232,7 @@ jobs:
         run: |
           helm repo add valkey https://valkey.io/valkey-helm/
           helm repo add rustfs https://charts.rustfs.com
+          helm repo add wiremind https://wiremind.github.io/wiremind-helm-charts
           helm dependency build charts/autofile
 
       - name: Lint and render chart
