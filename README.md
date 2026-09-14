@@ -6,7 +6,7 @@ Autofile is an open-source self-hosted document management application that turn
 
 For installation guides, concepts, configuration, and API reference, see the full documentation at [autofile.dev](https://autofile.dev/).
 
-![document grid basic](docs/assets/document-grid-basic.png){ align=left width="100%" style="margin: 0 0 1rem 0;" }
+![document grid basic](docs/assets/document-grid-basic.png)
 
 The project is built as two containers:
 
