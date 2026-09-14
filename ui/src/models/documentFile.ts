@@ -52,6 +52,34 @@ export function documentFileScanStatusLabel(file: Pick<DocumentFile, 'scan_statu
   }
 }
 
+export type DocumentFileScanStatusSeverity =
+  | 'success'
+  | 'info'
+  | 'warning'
+  | 'danger'
+  | 'secondary'
+  | 'contrast'
+  | undefined;
+
+export function documentFileScanStatusSeverity(
+  file: Pick<DocumentFile, 'scan_status'>,
+): DocumentFileScanStatusSeverity {
+  switch (file.scan_status) {
+    case 'clean':
+      return 'success';
+    case 'infected':
+    case 'scan_error':
+      return 'danger';
+    case 'scanning':
+      return 'info';
+    case 'pending':
+      return 'warning';
+    case 'not_required':
+    default:
+      return 'secondary';
+  }
+}
+
 export function unavailableDocumentFileMessage(file: Pick<DocumentFile, 'scan_status' | 'scan_threat_name'>): string {
   switch (file.scan_status) {
     case 'pending':

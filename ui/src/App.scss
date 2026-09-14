@@ -362,6 +362,11 @@ body {
 
 .p-dialog-footer .p-button { margin-left: 0.7rem; }
 
+button:disabled,
+.p-button.p-disabled {
+  cursor: not-allowed;
+}
+
 /*
  * Data Table
  */
@@ -1259,6 +1264,10 @@ section.aut-document {
   cursor: pointer;
 }
 
+.aut-document-file-card.is-disabled {
+  cursor: default;
+}
+
 .aut-document-file-name {
   word-break: break-all;
   overflow-wrap: anywhere;
@@ -1288,8 +1297,4 @@ section.aut-document {
   border: 1px solid black;
   width: 100%;
   min-width: 10rem;
-}
-
-.aut-document-file-metadata li {
-  text-align: left !important;
 }

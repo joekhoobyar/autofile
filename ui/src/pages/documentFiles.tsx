@@ -25,7 +25,7 @@ import { AppToast } from '../components/AppToast';
 import { DateTimeText } from '../components/DateTimeText';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { type DocumentFile } from '../models/documentFile';
-import { canSubmitDocumentFileRescan, documentFileScanStatusLabel, unavailableDocumentFileMessage } from '../models/documentFile';
+import { canSubmitDocumentFileRescan, documentFileScanStatusLabel, documentFileScanStatusSeverity, unavailableDocumentFileMessage } from '../models/documentFile';
 import { useDocument } from '../queries/useDocuments';
 import { usePublicSettings } from '../queries/useAppSettings';
 import {
@@ -172,7 +172,7 @@ function FileMetadata({ file }: Readonly<{ file: DocumentFile }>) {
       <li><span>Content Type</span>: {file.content_type ?? 'Unknown'}</li>
       <li><span>Size</span>: {formatBytes(file.size)}</li>
       <li><span>Pages</span>: {file.pages ?? 0}</li>
-      <li><span>Virus Scan</span>: {documentFileScanStatusLabel(file)}</li>
+      <li><span>Virus Scan</span>: <Tag value={documentFileScanStatusLabel(file)} severity={documentFileScanStatusSeverity(file)} /></li>
       <li><span>Created</span>: <DateTimeText value={file.created_at} /></li>
     </ul>
   );
@@ -209,7 +209,7 @@ function RescanButton({ file, onRescan, isRescanning }: Readonly<{
       type="button"
       label={isRescanning ? 'Submitting' : 'Rescan'}
       icon={isRescanning ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'}
-      severity="secondary"
+      severity="warning"
       outlined
       size="small"
       aria-label={`Rescan ${file.filename}`}
@@ -270,21 +270,25 @@ function DocumentFileActions({ file, onDownload, onDelete, onRescan, isDownloadi
 }
 
 function DocumentFileListItem({ documentId, file, index, onOpenPreview, onDownload, onDelete, onRescan, isDownloading, isDeleting, isRescanning, canDelete, virusScanningEnabled }: Readonly<DocumentFileListItemProps>) {
+  const canPreview = file.content_available;
   return (
     <div className="col-12 aut-document-list aut-document-file-list" key={file.id}>
       <div
         className={classNames('flex flex-column xl:flex-row xl:align-items-start p-4 gap-4 aut-document-file-card', {
           'border-top-1 surface-border': index !== 0,
+          'is-disabled': !canPreview,
         })}
-        onClick={() => onOpenPreview(file.id)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            onOpenPreview(file.id);
+        onClick={canPreview ? () => onOpenPreview(file.id) : undefined}
+        role={canPreview ? ('button' as const) : undefined}
+        tabIndex={canPreview ? 0 : undefined}
+        onKeyDown={canPreview
+          ? (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              onOpenPreview(file.id);
+            }
           }
-        }}
+          : undefined}
       >
         <DocumentFileThumbnail documentId={documentId} file={file} />
         <section className="flex flex-column sm:flex-row justify-content-between align-items-center xl:align-items-start flex-1 gap-4 aut-document">
@@ -307,19 +311,24 @@ function DocumentFileListItem({ documentId, file, index, onOpenPreview, onDownlo
 }
 
 function DocumentFileGridItem({ documentId, file, onOpenPreview, onDownload, onDelete, onRescan, isDownloading, isDeleting, isRescanning, canDelete, virusScanningEnabled }: Readonly<DocumentFileGridItemProps>) {
+  const canPreview = file.content_available;
   return (
     <div className="col-12 sm:col-6 lg:col-4 xl:col-3 p-2 aut-document-grid aut-document-file-grid" key={file.id}>
       <div
-        className="border-1 surface-border surface-card aut-document-file-card"
-        onClick={() => onOpenPreview(file.id)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            onOpenPreview(file.id);
+        className={classNames('border-1 surface-border surface-card aut-document-file-card', {
+          'is-disabled': !canPreview,
+        })}
+        onClick={canPreview ? () => onOpenPreview(file.id) : undefined}
+        role={canPreview ? ('button' as const) : undefined}
+        tabIndex={canPreview ? 0 : undefined}
+        onKeyDown={canPreview
+          ? (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              onOpenPreview(file.id);
+            }
           }
-        }}
+          : undefined}
       >
         <section className="flex flex-column aut-document w-full">
           <header className="flex align-items-center gap-2 aut-document-header aut-document-header-row aut-document-file-header-row">

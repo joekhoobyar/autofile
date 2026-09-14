@@ -104,4 +104,27 @@ describe('ListDocumentFiles virus scan gating', () => {
     const download = screen.getByRole('button', { name: 'Download a.pdf' });
     expect(download).not.toBeDisabled();
   });
+
+  it('does not make the file tile clickable when content_available is false', () => {
+    mockUseDocumentFiles.mockReturnValue({
+      data: [fileFixture({ content_available: false, scan_status: 'pending' })],
+      isLoading: false,
+      isError: false,
+    });
+    const { container } = renderList();
+
+    expect(container.querySelector('.aut-document-file-card[role="button"]')).toBeNull();
+    expect(container.querySelector('.aut-document-file-card.is-disabled')).not.toBeNull();
+  });
+
+  it('makes the file tile clickable when content_available is true', () => {
+    mockUseDocumentFiles.mockReturnValue({
+      data: [fileFixture({ content_available: true, scan_status: 'clean' })],
+      isLoading: false,
+      isError: false,
+    });
+    const { container } = renderList();
+
+    expect(container.querySelector('.aut-document-file-card[role="button"]')).not.toBeNull();
+  });
 });
