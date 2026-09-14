@@ -262,9 +262,21 @@ function DocumentFileActions({ file, onDownload, onDelete, onRescan, isDownloadi
         event.stopPropagation();
       }}
     >
-      <DownloadButton file={file} onDownload={onDownload} isDownloading={isDownloading} />
-      {virusScanningEnabled && <RescanButton file={file} onRescan={onRescan} isRescanning={isRescanning} />}
-      <DeleteButton file={file} onDelete={onDelete} isDeleting={isDeleting} canDelete={canDelete} />
+      {/* Each button gets a wrapper span carrying the disabled cursor: hover
+          does not land on disabled buttons in Chrome, so a cursor rule on the
+          button itself never paints. The wrapper only shows not-allowed when
+          its button is actually disabled. */}
+      <span className={classNames('aut-file-action', { 'is-disabled': isDownloading || !file.content_available })}>
+        <DownloadButton file={file} onDownload={onDownload} isDownloading={isDownloading} />
+      </span>
+      {virusScanningEnabled && (
+        <span className={classNames('aut-file-action', { 'is-disabled': isRescanning || !canSubmitDocumentFileRescan(file) })}>
+          <RescanButton file={file} onRescan={onRescan} isRescanning={isRescanning} />
+        </span>
+      )}
+      <span className={classNames('aut-file-action', { 'is-disabled': isDeleting || !canDelete })}>
+        <DeleteButton file={file} onDelete={onDelete} isDeleting={isDeleting} canDelete={canDelete} />
+      </span>
     </div>
   );
 }

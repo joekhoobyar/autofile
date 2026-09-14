@@ -367,6 +367,14 @@ button:disabled,
   cursor: not-allowed;
 }
 
+.aut-file-action {
+  display: inline-flex;
+}
+
+.aut-file-action.is-disabled {
+  cursor: not-allowed;
+}
+
 /*
  * Data Table
  */

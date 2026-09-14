@@ -127,4 +127,15 @@ describe('ListDocumentFiles virus scan gating', () => {
 
     expect(container.querySelector('.aut-document-file-card[role="button"]')).not.toBeNull();
   });
+
+  it('marks action wrappers as disabled when content_available is false', () => {
+    mockUseDocumentFiles.mockReturnValue({
+      data: [fileFixture({ content_available: false, scan_status: 'pending' })],
+      isLoading: false,
+      isError: false,
+    });
+    const { container } = renderList();
+
+    expect(container.querySelector('.aut-file-action.is-disabled')).not.toBeNull();
+  });
 });
