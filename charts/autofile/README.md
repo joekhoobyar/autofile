@@ -13,7 +13,7 @@ By default, the chart installs:
 - A CloudNativePG `Cluster` resource
 - Valkey through the `valkey` dependency
 - RustFS through the `rustfs` dependency
-- ClamAV through the `clamav` dependency only when `clamav.enabled=true` (disabled by default)
+- ClamAV through the `clamav` dependency (enabled by default; set `clamav.enabled=false` with `virusScanning.provider=disabled` to omit it)
 - A parent-managed Valkey users Secret with a generated default-user password
 - A parent-managed RustFS Secret with generated S3-compatible credentials
 - An API init container that waits for RustFS and creates the configured bucket
@@ -111,23 +111,20 @@ The chart-level `virusScanning.provider` controls how the API reaches a ClamAV `
 
 | Mode | Behavior |
 | --- | --- |
-| `disabled` | Default. No scanner environment is configured and the `clamav` dependency is not required. |
-| `clamav` | Bundled Wiremind ClamAV subchart is used. Requires `clamav.enabled=true`. The API is pointed at `virusScanning.clamavHost:virusScanning.clamavPort`. |
+| `clamav` | Default. The bundled Wiremind ClamAV subchart is deployed and the API is pointed at `virusScanning.clamavHost:virusScanning.clamavPort`. |
 | `external` | An external `clamd` endpoint is used. Set `clamav.enabled=false` and configure `virusScanning.clamavHost` and `virusScanning.clamavPort`. No first-party ClamAV Deployment or Service is rendered. |
+| `disabled` | No scanner is deployed and no scanner environment is configured. Set `clamav.enabled=false`. |
 
 Chart validation rejects `virusScanning.provider=clamav` with `clamav.enabled=false`; point at an external endpoint with `provider=external` instead.
 
-The bundled ClamAV Service is named `<release>-clamav` (a ClusterIP Service on port 3310) unless `clamav.fullnameOverride` is set, so with the defaults either set `virusScanning.clamavHost` to that name or pin the subchart name:
+The bundled ClamAV is deployed as a ClusterIP Service named `clamav` (port 3310) via `clamav.fullnameOverride`, matching the default `virusScanning.clamavHost`. To disable the bundled scanner:
 
 ```yaml
 virusScanning:
-  provider: clamav
-  clamavHost: clamav
-  clamavPort: 3310
+  provider: disabled
 
 clamav:
-  enabled: true
-  fullnameOverride: clamav
+  enabled: false
 ```
 
 External ClamAV:
@@ -367,10 +364,11 @@ ingress:
 
 | Parameter | Default | Description |
 | --- | --- | --- |
-| `virusScanning.provider` | `disabled` | Scanner wiring mode: `clamav` (bundled), `external`, or `disabled`. |
+| `virusScanning.provider` | `clamav` | Scanner wiring mode: `clamav` (bundled), `external`, or `disabled`. |
 | `virusScanning.clamavHost` | `clamav` | `clamd` hostname used when the provider is `clamav` or `external`. Rendered as `CLAMAV_HOST`. |
 | `virusScanning.clamavPort` | `3310` | `clamd` port used when the provider is `clamav` or `external`. Rendered as `CLAMAV_PORT`. |
-| `clamav.enabled` | `false` | Install the Wiremind ClamAV dependency. Required when `virusScanning.provider=clamav`. |
+| `clamav.enabled` | `true` | Install the Wiremind ClamAV dependency. Required when `virusScanning.provider=clamav`. |
+| `clamav.fullnameOverride` | `clamav` | Name of the bundled ClamAV resources, matching the default `virusScanning.clamavHost`. Clear it and set `virusScanning.clamavHost` to `<release>-clamav` when running multiple releases in one namespace. |
 
 Additional `clamav.*` values are passed through to the Wiremind subchart. See the subchart documentation for the full dependency value surface.
 

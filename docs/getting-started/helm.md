@@ -68,6 +68,10 @@ database:
   url: postgres://user:password@postgres.example.com:5432/autofile
 ```
 
+## Virus Scanning
+
+The chart deploys a bundled ClamAV scanner by default (`clamav.enabled=true`, `virusScanning.provider=clamav`). Uploads are not scanned until an administrator enables virus scanning in application settings. To omit the scanner, set `virusScanning.provider=disabled` and `clamav.enabled=false`; to use an external `clamd` endpoint instead, set `virusScanning.provider=external` with `virusScanning.clamavHost`/`clamavPort`. See [Configuration](../admin/configuration.md#virus-scanning) for details.
+
 ## Full Chart Reference
 
 The full chart README contains all values, local chart development commands, and dependency notes:

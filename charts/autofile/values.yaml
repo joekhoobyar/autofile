@@ -159,10 +159,14 @@ rustfs:
     existingSecret: *rustfsExistingSecret
 
 # Bundled ClamAV antivirus (Wiremind `clamav` subchart) for virus scanning.
-# Enable with `virusScanning.provider=clamav`. Additional `clamav.*` values
-# are passed through to the subchart; see its documentation for the full
-# value surface. The bundled Service is named `<release>-clamav` unless
-# `clamav.fullnameOverride` is set, so point `virusScanning.clamavHost` at
-# that name (for example via `clamav.fullnameOverride: clamav`).
+# Deployed by default; disable with `clamav.enabled=false` together with
+# `virusScanning.provider=disabled` (or `external`). Additional `clamav.*`
+# values are passed through to the subchart; see its documentation for the
+# full value surface. The bundled Service is named `clamav` via
+# `fullnameOverride` so it matches the default `virusScanning.clamavHost`.
+# Running multiple releases in one namespace requires distinct names: clear
+# `clamav.fullnameOverride` and set `virusScanning.clamavHost` to
+# `<release>-clamav`.
 clamav:
   enabled: true
+  fullnameOverride: clamav

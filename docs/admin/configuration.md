@@ -48,7 +48,9 @@ Document-file responses include these fields plus a derived `content_available` 
 
 Scanner failures default to fail-closed: the file is marked `scan_error` and never processed. With `MALWARE_SCANNER_FAILURE_POLICY=open`, failures are marked `not_required` so processing continues; prefer `closed` unless scanner downtime must not block ingestion.
 
-For local testing, Docker Compose provides a `clamav` service and sets the scanner environment variables on the API. ClamAV may take several minutes to download and load signatures on first startup, so early scans can fail until it is ready. Keep `clamd` on the private deployment network: the protocol is unauthenticated and unencrypted, and Autofile streams file bytes to it (the scanner never receives object-storage credentials).
+ClamAV is available by default in both supported deployments: Docker Compose runs a `clamav` service and sets the scanner environment variables on the API, and the Helm chart deploys the bundled Wiremind ClamAV subchart (`clamav.enabled=true`, `virusScanning.provider=clamav`) unless disabled. Uploads still are not scanned until an administrator enables `virus_scanning_enabled` in application settings.
+
+ClamAV may take several minutes to download and load signatures on first startup, so early scans can fail until it is ready. Keep `clamd` on the private deployment network: the protocol is unauthenticated and unencrypted, and Autofile streams file bytes to it (the scanner never receives object-storage credentials).
 
 ## Production Notes
 
