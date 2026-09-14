@@ -81,7 +81,7 @@ async fn parse_create_multipart(
                 }
                 file_temp = Some(buffer_document_file_field(&mut field, max_bytes).await?);
             }
-            "virus_scan" | "scan_for_viruses" => {
+            "virus_scan" => {
                 let value = field.text().await.map_err(|e| {
                     ApiError::bad_request(&format!("Failed to read virus_scan: {}", e))
                 })?;

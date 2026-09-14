@@ -127,7 +127,7 @@ See the [OpenAPI Spec](openapi.md) for document endpoint details and the [Docume
 
 ## Document Uploads And Virus Scanning
 
-`POST /api/v1/documents` (multipart document creation) and `POST /api/v1/documents/{document_id}/files` (multipart file upload) accept an optional `virus_scan` field (alias `scan_for_viruses`, boolean). When application settings have `virus_scanning_enabled=false`, the field is ignored and files are stored with scan status `not_required`. When scanning is enabled and the field is omitted, the file follows `virus_scan_by_default`; an explicit value overrides the default for that upload.
+`POST /api/v1/documents` (multipart document creation) and `POST /api/v1/documents/{document_id}/files` (multipart file upload) accept an optional `virus_scan` field (boolean). When application settings have `virus_scanning_enabled=false`, the field is ignored and files are stored with scan status `not_required`. When scanning is enabled and the field is omitted, the file follows `virus_scan_by_default`; an explicit value overrides the default for that upload.
 
 Uploads that request scanning are stored durably and returned with scan status `pending` while a `ScanDocumentFile` background job streams the object to the scanner. Normal page-processing and thumbnail jobs are enqueued only after a `clean` verdict (or immediately for `not_required` files).
 
