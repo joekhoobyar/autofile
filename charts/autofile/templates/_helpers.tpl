@@ -93,6 +93,21 @@ app.kubernetes.io/component: ui
 {{- end -}}
 {{- end -}}
 
+{{- define "autofile.validateVirusScanning" -}}
+{{- if not (has .Values.virusScanning.provider (list "clamav" "external" "disabled")) -}}
+{{- fail "virusScanning.provider must be one of: clamav, external, disabled" -}}
+{{- end -}}
+{{- if and (eq .Values.virusScanning.provider "clamav") (not .Values.clamav.enabled) -}}
+{{- fail "virusScanning.provider=clamav requires clamav.enabled=true, or use virusScanning.provider=external with an explicit virusScanning.clamavHost" -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "autofile.virusScanning.enabled" -}}
+{{- if has .Values.virusScanning.provider (list "clamav" "external") -}}
+true
+{{- end -}}
+{{- end -}}
+
 {{- define "autofile.valkey.enabledWithAuth" -}}
 {{- if and .Values.valkey.enabled .Values.valkey.auth.enabled .Values.valkey.auth.usersExistingSecret -}}
 true

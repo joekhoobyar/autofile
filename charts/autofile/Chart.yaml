@@ -36,3 +36,7 @@ dependencies:
     version: 1.0.0-rc.6
     repository: https://charts.rustfs.com
     condition: rustfs.enabled
+  - name: clamav
+    version: 3.7.3
+    repository: https://wiremind.github.io/wiremind-helm-charts
+    condition: clamav.enabled
