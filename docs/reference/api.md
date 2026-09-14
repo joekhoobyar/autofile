@@ -125,11 +125,29 @@ Documents are the main managed resource and may include a stored file, extracted
 
 See the [OpenAPI Spec](openapi.md) for document endpoint details and the [Documents concept guide](../concepts/documents.md) for how documents are processed.
 
+## Document Uploads And Virus Scanning
+
+`POST /api/v1/documents` (multipart document creation) and `POST /api/v1/documents/{document_id}/files` (multipart file upload) accept an optional `virus_scan` field (boolean). When application settings have `virus_scanning_enabled=false`, the field is ignored and files are stored with scan status `not_required`. When scanning is enabled and the field is omitted, the file follows `virus_scan_by_default`; an explicit value overrides the default for that upload.
+
+Uploads that request scanning are stored durably and returned with scan status `pending` while a `ScanDocumentFile` background job streams the object to the scanner. Normal page-processing and thumbnail jobs are enqueued only after a `clean` verdict (or immediately for `not_required` files).
+
+Document-file responses include the scan fields:
+
+- `scan_status`: `not_required`, `pending`, `scanning`, `clean`, `infected`, or `scan_error`.
+- `scan_requested`, `scan_requested_by`, `scan_scanner`, `scan_scanner_version`, `scan_signature_version`, `scan_threat_name`, `scan_started_at`, `scan_completed_at`.
+- `content_available`: derived boolean, true only for `clean` and `not_required` files.
+
+Operations that read file bytes or unsafe derived content (downloads, download tickets, page images, extracted text, OCR text, thumbnails, page processing, classification) require `content_available=true` and return `409 Conflict` for manual endpoints when the file is blocked. Deleting a file and submitting an eligible file for rescan with `POST /api/v1/documents/{document_id}/files/{id}/rescan` remain allowed while `content_available=false`; rescan requires `virus_scanning_enabled=true` and rejects files that are already `pending` or `scanning`.
+
+See the [OpenAPI Spec](openapi.md) for upload payloads and response schemas.
+
 ## Settings
 
 Settings endpoints under `/api/v1/settings` require an admin access token. Public settings are exposed separately under `/api/v1/public/settings` through an explicit allowlist that is safe for anonymous clients.
 
 `allow_user_registration` controls whether unauthenticated users can call `POST /api/v1/auth/register`. Date and datetime format settings control frontend display only; API date metadata values remain `YYYY-MM-DD`, and API timestamps remain serialized as timestamp strings.
+
+`virus_scanning_enabled` controls whether uploads can request virus scanning, and `virus_scan_by_default` controls the default state of the per-upload `Virus scan this upload` checkbox when scanning is enabled. Both fields are also exposed through `GET /api/v1/public/settings` so upload pages can render the checkbox without admin access.
 
 See the [OpenAPI Spec](openapi.md) for settings payloads and responses.
 

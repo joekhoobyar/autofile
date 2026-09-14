@@ -44,6 +44,8 @@ export function useSaveAppSettings(): UseMutationResult<
         allow_user_registration: settings.allow_user_registration,
         date_format: settings.date_format,
         datetime_format: settings.datetime_format,
+        virus_scanning_enabled: settings.virus_scanning_enabled,
+        virus_scan_by_default: settings.virus_scan_by_default,
       });
     },
   });

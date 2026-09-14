@@ -4,6 +4,8 @@ use apalis_redis::RedisStorage;
 use diesel_async::{AsyncPgConnection, pooled_connection::bb8};
 
 use crate::application::jobs::{FastJob, MediumJob, SlowJob};
+use crate::application::malware_scanning::DynMalwareScanner;
+use crate::shared::config::MalwareScannerConfig;
 
 // Shared application state
 #[derive(Clone)]
@@ -15,6 +17,8 @@ pub struct AppState {
     pub fast_jobs: Arc<RedisStorage<FastJob>>,
     pub medium_jobs: Arc<RedisStorage<MediumJob>>,
     pub slow_jobs: Arc<RedisStorage<SlowJob>>,
+    pub malware_scanner_config: MalwareScannerConfig,
+    pub malware_scanner: DynMalwareScanner,
     /// Maximum size in bytes for a single uploaded file. Read once from
     /// `MAX_UPLOAD_SIZE_MB` at startup and enforced while streaming uploads.
     pub max_upload_bytes: usize,

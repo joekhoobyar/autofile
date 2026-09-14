@@ -4,7 +4,7 @@ Autofile is an open-source self-hosted document management application that turn
 
 For installation guides, concepts, configuration, and API reference, see the full documentation at [autofile.dev](https://autofile.dev/).
 
-This chart deploys Autofile's API and UI, with optional bundled Valkey, RustFS, and CloudNativePG resources.
+This chart deploys Autofile's API and UI, with optional bundled Valkey, RustFS, ClamAV, and CloudNativePG resources.
 
 By default, the chart installs:
 
@@ -13,6 +13,7 @@ By default, the chart installs:
 - A CloudNativePG `Cluster` resource
 - Valkey through the `valkey` dependency
 - RustFS through the `rustfs` dependency
+- ClamAV through the `clamav` dependency (enabled by default; set `clamav.enabled=false` with `virusScanning.provider=disabled` to omit it)
 - A parent-managed Valkey users Secret with a generated default-user password
 - A parent-managed RustFS Secret with generated S3-compatible credentials
 - An API init container that waits for RustFS and creates the configured bucket
@@ -103,6 +104,42 @@ Autofile stores document files in S3-compatible object storage. The chart-level 
 | `s3` | AWS S3 is used. Static AWS credentials are optional and are emitted only when both `secrets.AWS_ACCESS_KEY_ID` and `secrets.AWS_SECRET_ACCESS_KEY` are non-empty. |
 
 For `rustfs` mode, keep `rustfs.enabled=true`. For `external` or `s3`, set `rustfs.enabled=false` unless you intentionally want to deploy RustFS without using it for Autofile.
+
+## Virus Scanning Modes
+
+The chart-level `virusScanning.provider` controls how the API reaches a ClamAV `clamd` scanner. Application settings (`virus_scanning_enabled`) still decide whether uploads are actually scanned.
+
+| Mode | Behavior |
+| --- | --- |
+| `clamav` | Default. The bundled Wiremind ClamAV subchart is deployed and the API is pointed at `virusScanning.clamavHost:virusScanning.clamavPort`. |
+| `external` | An external `clamd` endpoint is used. Set `clamav.enabled=false` and configure `virusScanning.clamavHost` and `virusScanning.clamavPort`. No first-party ClamAV Deployment or Service is rendered. |
+| `disabled` | No scanner is deployed and no scanner environment is configured. Set `clamav.enabled=false`. |
+
+Chart validation rejects `virusScanning.provider=clamav` with `clamav.enabled=false`; point at an external endpoint with `provider=external` instead.
+
+The bundled ClamAV is deployed as a ClusterIP Service named `clamav` (port 3310) via `clamav.fullnameOverride`, matching the default `virusScanning.clamavHost`. To disable the bundled scanner:
+
+```yaml
+virusScanning:
+  provider: disabled
+
+clamav:
+  enabled: false
+```
+
+External ClamAV:
+
+```yaml
+virusScanning:
+  provider: external
+  clamavHost: scanner.example.com
+  clamavPort: 3310
+
+clamav:
+  enabled: false
+```
+
+Additional `clamav.*` values pass through to the Wiremind subchart. ClamAV signature databases are large and take time to initialize; avoid sending scan jobs before ClamAV is ready. Keep `clamd` on the private cluster network.
 
 ## Database Modes
 
@@ -322,6 +359,18 @@ ingress:
 | `database.cnpg.annotations` | `{}` | Annotations added to the CloudNativePG `Cluster`. |
 | `database.cnpg.labels` | `{}` | Additional labels added to the CloudNativePG `Cluster`. |
 | `database.cnpg.spec` | PostgreSQL 18, 1 instance, 5Gi storage | CloudNativePG `Cluster` spec rendered as-is. |
+
+### Virus Scanning
+
+| Parameter | Default | Description |
+| --- | --- | --- |
+| `virusScanning.provider` | `clamav` | Scanner wiring mode: `clamav` (bundled), `external`, or `disabled`. |
+| `virusScanning.clamavHost` | `clamav` | `clamd` hostname used when the provider is `clamav` or `external`. Rendered as `CLAMAV_HOST`. |
+| `virusScanning.clamavPort` | `3310` | `clamd` port used when the provider is `clamav` or `external`. Rendered as `CLAMAV_PORT`. |
+| `clamav.enabled` | `true` | Install the Wiremind ClamAV dependency. Required when `virusScanning.provider=clamav`. |
+| `clamav.fullnameOverride` | `clamav` | Name of the bundled ClamAV resources, matching the default `virusScanning.clamavHost`. Clear it and set `virusScanning.clamavHost` to `<release>-clamav` when running multiple releases in one namespace. |
+
+Additional `clamav.*` values are passed through to the Wiremind subchart. See the subchart documentation for the full dependency value surface.
 
 ### Object Storage
 

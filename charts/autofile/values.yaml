@@ -27,6 +27,15 @@ database:
           database: autofile
           owner: autofile
 
+virusScanning:
+  # Malware scanner wiring mode: `clamav` (bundled Wiremind ClamAV subchart),
+  # `external` (external ClamAV endpoint), or `disabled` (no scanner).
+  provider: clamav
+  # Host and port of the ClamAV `clamd` endpoint. Used when
+  # `virusScanning.provider` is `clamav` or `external`.
+  clamavHost: clamav
+  clamavPort: 3310
+
 objectStorage:
   mode: rustfs
   bucket: autofile-documents
@@ -148,3 +157,16 @@ rustfs:
     enabled: false
   secret:
     existingSecret: *rustfsExistingSecret
+
+# Bundled ClamAV antivirus (Wiremind `clamav` subchart) for virus scanning.
+# Deployed by default; disable with `clamav.enabled=false` together with
+# `virusScanning.provider=disabled` (or `external`). Additional `clamav.*`
+# values are passed through to the subchart; see its documentation for the
+# full value surface. The bundled Service is named `clamav` via
+# `fullnameOverride` so it matches the default `virusScanning.clamavHost`.
+# Running multiple releases in one namespace requires distinct names: clear
+# `clamav.fullnameOverride` and set `virusScanning.clamavHost` to
+# `<release>-clamav`.
+clamav:
+  enabled: true
+  fullnameOverride: clamav

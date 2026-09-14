@@ -46,12 +46,15 @@ struct CreateDocumentMultipart {
     /// Optional uploaded file bytes.
     #[schema(value_type = Option<String>, format = Binary)]
     file: Option<String>,
+    /// Optional per-upload virus scan selection. Ignored when virus scanning is disabled.
+    virus_scan: Option<bool>,
 }
 
 struct ParsedMultipart {
     title: Option<String>,
     document_type_id: Option<i64>,
     file_temp: Option<BufferedDocumentFileUpload>,
+    virus_scan: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -71,6 +74,7 @@ async fn parse_create_multipart(
     let mut title: Option<String> = None;
     let mut document_type_id: Option<i64> = None;
     let mut file_temp: Option<BufferedDocumentFileUpload> = None;
+    let mut virus_scan: Option<bool> = None;
 
     while let Some(mut field) = multipart
         .next_field()
@@ -107,6 +111,12 @@ async fn parse_create_multipart(
                 }
                 file_temp = Some(buffer_document_file_field(&mut field, max_bytes).await?);
             }
+            "virus_scan" => {
+                let value = field.text().await.map_err(|e| {
+                    ApiError::bad_request(&format!("Failed to read virus_scan: {}", e))
+                })?;
+                virus_scan = Some(parse_multipart_bool(&value, "virus_scan")?);
+            }
             _ => {
                 // Ignore unknown fields
             }
@@ -117,7 +127,16 @@ async fn parse_create_multipart(
         title,
         document_type_id,
         file_temp,
+        virus_scan,
     })
+}
+
+fn parse_multipart_bool(value: &str, field_name: &str) -> Result<bool, ApiError> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "true" | "1" | "yes" | "on" => Ok(true),
+        "false" | "0" | "no" | "off" => Ok(false),
+        _ => Err(ApiError::bad_request(&format!("Invalid {field_name}"))),
+    }
 }
 
 #[utoipa::path(
@@ -357,6 +376,7 @@ async fn create(
         title,
         document_type_id,
         file_temp,
+        virus_scan,
     } = parse_create_multipart(&mut multipart, state.max_upload_bytes as u64).await?;
 
     let document = create_document(
@@ -367,6 +387,7 @@ async fn create(
             title,
             document_type_id,
             file_upload: file_temp,
+            virus_scan,
         },
     )
     .await?;

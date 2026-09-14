@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use apalis::prelude::Data;
 
 use crate::application::classifier_blocks::classify_document;
-use crate::application::document_files::process_file_pages;
+use crate::application::document_files::{process_file_pages, scan_document_file};
 use crate::application::document_index_documents::{
     rebuild_document_index, update_document_index_document,
 };
@@ -29,6 +29,7 @@ pub enum FastJob {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MediumJob {
     ProcessFilePages { document_file_id: i64 },
+    ScanDocumentFile { document_file_id: i64 },
     ClassifyDocument { document_id: i64, user_id: i64 },
 }
 
@@ -65,6 +66,9 @@ pub async fn handle_medium_job(job: MediumJob, state: Data<Arc<AppState>>) -> Jo
     match job {
         MediumJob::ProcessFilePages { document_file_id } => {
             process_file_pages(document_file_id, state).await
+        }
+        MediumJob::ScanDocumentFile { document_file_id } => {
+            scan_document_file(document_file_id, state).await
         }
         MediumJob::ClassifyDocument {
             document_id,

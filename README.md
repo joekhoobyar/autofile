@@ -59,8 +59,11 @@ This starts:
 - Redis on the internal Compose network
 - RustFS at `http://localhost:9000`
 - RustFS console at `http://localhost:9001`
+- ClamAV (`clamav:3310` on the internal Compose network) for virus-scanning tests
 - API at `http://localhost:8000`
 - UI at `http://localhost:5173`
+
+ClamAV may take several minutes to download and load signatures on first startup. Virus scanning stays off until an administrator enables it in application settings.
 
 RustFS uses the default local credentials from `docker-compose.yml`:
 
@@ -103,7 +106,15 @@ The API is configured with environment variables.
 | `JWT_SECRET` | Yes | none | Secret used to sign JWTs. Use a strong value in production. |
 | `ALLOWED_ORIGINS` | No | `http://localhost:5173` | Comma-separated CORS origins. |
 | `MAX_UPLOAD_SIZE_MB` | No | `100` | Maximum size in megabytes for a single uploaded file. Applies to both document and document-file uploads. Requires a restart. Invalid values prevent startup. |
+| `MALWARE_SCANNER_PROVIDER` | No | `disabled` | Malware scanner provider: `clamav`, `external` (external `clamd` endpoint), or `disabled`. Invalid values prevent startup. |
+| `CLAMAV_HOST` | No | `clamav` | Hostname of the ClamAV `clamd` endpoint. Used when the provider is `clamav` or `external`. |
+| `CLAMAV_PORT` | No | `3310` | Port of the ClamAV `clamd` endpoint. Invalid values prevent startup. |
+| `CLAMAV_CONNECT_TIMEOUT_SECONDS` | No | `5` | Timeout in seconds for connecting to `clamd`. Invalid values prevent startup. |
+| `CLAMAV_SCAN_TIMEOUT_SECONDS` | No | `120` | Timeout in seconds for a single scan. Invalid values prevent startup. |
+| `MALWARE_SCANNER_FAILURE_POLICY` | No | `closed` | Scanner failure policy: `closed` marks failed scans as `scan_error` and blocks file use, `open` marks them `not_required` so processing continues. |
 | `RUST_LOG` | No | Rust tracing default | Logging filter, for example `info`. |
+
+Virus scanning also requires enabling it in application settings (`virus_scanning_enabled`); scanner environment variables alone do not scan uploads. See [Configuration](https://autofile.dev/admin/configuration/).
 
 ## 🛠️ Development
 

@@ -5,5 +5,8 @@ dependencies:
 - name: rustfs
   repository: https://charts.rustfs.com
   version: 1.0.0-rc.6
-digest: sha256:dffc0741b8e1c35f8b71c7edbd4ff39a8aa5a88ce53b0a0f73b36682ea98cfe7
-generated: "2026-09-11T21:03:34.361585-04:00"
+- name: clamav
+  repository: https://wiremind.github.io/wiremind-helm-charts
+  version: 3.7.3
+digest: sha256:bb0df8225368bc3f19d952dd037d71ec9e9ac9448957d377edec3c01a757c982
+generated: "2026-09-13T20:09:41.274258-04:00"

@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use crate::application::document_files::{
     BufferedDocumentFileUpload, buffer_document_file_field, cleanup_buffered_document_file_upload,
-    create_document_file, delete_document_file, ensure_document_file_exists, get_document_file,
+    create_document_file, delete_document_file, ensure_document_file_available, get_document_file,
     get_document_file_download_metadata, get_document_file_thumbnail_metadata, list_document_files,
+    rescan_document_file,
 };
 use crate::domain::document_files::DocumentFileView;
 use crate::shared::app_state::AppState;
@@ -46,13 +47,21 @@ struct UploadDocumentFileMultipart {
     /// Uploaded file bytes (required).
     #[schema(value_type = String, format = Binary)]
     file: String,
+    /// Optional per-upload virus scan selection. Ignored when virus scanning is disabled.
+    virus_scan: Option<bool>,
+}
+
+struct ParsedCreateMultipart {
+    file_temp: BufferedDocumentFileUpload,
+    virus_scan: Option<bool>,
 }
 
 async fn parse_create_multipart(
     multipart: &mut Multipart,
     max_bytes: u64,
-) -> Result<BufferedDocumentFileUpload, ApiError> {
+) -> Result<ParsedCreateMultipart, ApiError> {
     let mut file_temp: Option<BufferedDocumentFileUpload> = None;
+    let mut virus_scan: Option<bool> = None;
 
     while let Some(mut field) = multipart
         .next_field()
@@ -64,16 +73,37 @@ async fn parse_create_multipart(
             .ok_or_else(|| ApiError::bad_request("Field missing name"))?
             .to_string();
 
-        if field_name.as_str() == "file" {
-            if let Some(upload) = &file_temp {
-                cleanup_buffered_document_file_upload(upload).await;
-                return Err(ApiError::bad_request("Only one file upload is supported"));
+        match field_name.as_str() {
+            "file" => {
+                if let Some(upload) = &file_temp {
+                    cleanup_buffered_document_file_upload(upload).await;
+                    return Err(ApiError::bad_request("Only one file upload is supported"));
+                }
+                file_temp = Some(buffer_document_file_field(&mut field, max_bytes).await?);
             }
-            file_temp = Some(buffer_document_file_field(&mut field, max_bytes).await?);
+            "virus_scan" => {
+                let value = field.text().await.map_err(|e| {
+                    ApiError::bad_request(&format!("Failed to read virus_scan: {}", e))
+                })?;
+                virus_scan = Some(parse_multipart_bool(&value, "virus_scan")?);
+            }
+            _ => {}
         }
     }
 
-    file_temp.ok_or_else(|| ApiError::bad_request("Missing required field: file"))
+    Ok(ParsedCreateMultipart {
+        file_temp: file_temp
+            .ok_or_else(|| ApiError::bad_request("Missing required field: file"))?,
+        virus_scan,
+    })
+}
+
+fn parse_multipart_bool(value: &str, field_name: &str) -> Result<bool, ApiError> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "true" | "1" | "yes" | "on" => Ok(true),
+        "false" | "0" | "no" | "off" => Ok(false),
+        _ => Err(ApiError::bad_request(&format!("Invalid {field_name}"))),
+    }
 }
 
 #[utoipa::path(
@@ -150,9 +180,19 @@ pub async fn create(
     Path(document_id): Path<i64>,
     mut multipart: Multipart,
 ) -> Result<Json<DocumentFileView>, ApiError> {
-    let file_temp = parse_create_multipart(&mut multipart, state.max_upload_bytes as u64).await?;
-    let document_file =
-        create_document_file(state, &mut db, user.user_id, document_id, file_temp).await?;
+    let ParsedCreateMultipart {
+        file_temp,
+        virus_scan,
+    } = parse_create_multipart(&mut multipart, state.max_upload_bytes as u64).await?;
+    let document_file = create_document_file(
+        state,
+        &mut db,
+        user.user_id,
+        document_id,
+        file_temp,
+        virus_scan,
+    )
+    .await?;
     Ok(Json(document_file))
 }
 
@@ -182,6 +222,35 @@ pub async fn delete(
 ) -> Result<Json<()>, ApiError> {
     delete_document_file(state, &mut db, document_id, id).await?;
     Ok(Json(()))
+}
+
+#[utoipa::path(
+    post,
+    path = "/{document_id}/files/{id}/rescan",
+    tag = "document-files",
+    security(("bearer" = [])),
+    params(
+        ("document_id" = i64, Path, description = "Document ID"),
+        ("id" = i64, Path, description = "File ID"),
+    ),
+    responses(
+        (status = 200, description = "File submitted for virus rescan", body = DocumentFileView),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+        (status = 404, description = "File not found", body = ApiError),
+        (status = 409, description = "Virus scanning disabled or file already scanning", body = ApiError),
+        (status = 500, description = "Failed to enqueue virus scan job", body = ApiError),
+    )
+)]
+pub async fn rescan(
+    user: AuthUser,
+    State(state): State<Arc<AppState>>,
+    DbConn(mut db): DbConn,
+    Path((document_id, id)): Path<(i64, i64)>,
+) -> Result<Json<DocumentFileView>, ApiError> {
+    Ok(Json(
+        rescan_document_file(state, &mut db, user.user_id, document_id, id).await?,
+    ))
 }
 
 #[utoipa::path(
@@ -309,7 +378,7 @@ pub async fn create_download_ticket(
     DbConn(mut db): DbConn,
     Path((document_id, id)): Path<(i64, i64)>,
 ) -> Result<Json<DownloadTicketResponse>, ApiError> {
-    ensure_document_file_exists(&mut db, document_id, id).await?;
+    ensure_document_file_available(&mut db, document_id, id).await?;
 
     let token = sign_download(
         &state.jwt_secret,
@@ -335,6 +404,7 @@ pub fn routes(max_upload_bytes: usize) -> OpenApiRouter<Arc<AppState>> {
         .routes(routes!(create))
         .routes(routes!(get_by_ids))
         .routes(routes!(delete))
+        .routes(routes!(rescan))
         .routes(routes!(thumbnail_get))
         .routes(routes!(create_download_ticket))
         .routes(routes!(download))

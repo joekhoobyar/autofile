@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 
 import { Button } from "primereact/button";
 import { Card } from "primereact/card";
@@ -37,8 +37,11 @@ function SettingsForm({ toast }: Readonly<{ toast: RefObject<Toast | null> }>) {
       allow_user_registration: true,
       date_format: "yyyy-MM-dd",
       datetime_format: "MM/dd/yyyy HH:mm",
+      virus_scanning_enabled: false,
+      virus_scan_by_default: true,
     },
   });
+  const virusScanningEnabled = useWatch({ control, name: "virus_scanning_enabled" });
 
   useEffect(() => {
     if (data) {
@@ -46,6 +49,8 @@ function SettingsForm({ toast }: Readonly<{ toast: RefObject<Toast | null> }>) {
         allow_user_registration: data.allow_user_registration,
         date_format: data.date_format,
         datetime_format: data.datetime_format,
+        virus_scanning_enabled: data.virus_scanning_enabled,
+        virus_scan_by_default: data.virus_scan_by_default,
       });
     }
   }, [data, reset]);
@@ -57,6 +62,8 @@ function SettingsForm({ toast }: Readonly<{ toast: RefObject<Toast | null> }>) {
         allow_user_registration: updated.allow_user_registration,
         date_format: updated.date_format,
         datetime_format: updated.datetime_format,
+        virus_scanning_enabled: updated.virus_scanning_enabled,
+        virus_scan_by_default: updated.virus_scan_by_default,
       });
       toast.current?.show({ severity: "success", summary: "Settings saved" });
     } catch (err) {
@@ -142,6 +149,50 @@ function SettingsForm({ toast }: Readonly<{ toast: RefObject<Toast | null> }>) {
               )}
             />
           </div>
+
+          <div className="col-12 md:col-8 lg:col-6 mt-4">
+            <Controller
+              name="virus_scanning_enabled"
+              control={control}
+              render={({ field }) => (
+                <div className="flex align-items-center gap-2">
+                  <Checkbox
+                    inputId="virus_scanning_enabled"
+                    checked={field.value ?? false}
+                    onChange={(event) => field.onChange(event.checked ?? false)}
+                    disabled={isPending}
+                  />
+                  <label htmlFor="virus_scanning_enabled">Enable virus scanning</label>
+                </div>
+              )}
+            />
+            <small className="block mt-2 text-color-secondary">
+              Uploaded files can be held from preview, download, and processing until a clean scan completes.
+            </small>
+          </div>
+
+          {virusScanningEnabled && (
+            <div className="col-12 md:col-8 lg:col-6 mt-4">
+              <Controller
+                name="virus_scan_by_default"
+                control={control}
+                render={({ field }) => (
+                  <div className="flex align-items-center gap-2">
+                    <Checkbox
+                      inputId="virus_scan_by_default"
+                      checked={field.value ?? false}
+                      onChange={(event) => field.onChange(event.checked ?? false)}
+                      disabled={isPending}
+                    />
+                    <label htmlFor="virus_scan_by_default">Virus scan uploads by default</label>
+                  </div>
+                )}
+              />
+              <small className="block mt-2 text-color-secondary">
+                Upload forms use this as the default for the per-upload virus scan checkbox.
+              </small>
+            </div>
+          )}
         </div>
 
         <div className="text-end mt-3">

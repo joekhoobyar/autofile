@@ -46,6 +46,7 @@ pub mod application {
     pub mod document_types_metadata_types;
     pub mod documents;
     pub mod jobs;
+    pub mod malware_scanning;
     pub mod metadata_types;
     pub mod tag_documents;
     pub mod tags;

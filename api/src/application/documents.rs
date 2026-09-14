@@ -13,6 +13,7 @@ use crate::application::document_index_documents::delete_document_index_document
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::jobs::{FastJob, MediumJob};
 use crate::domain::classifier_blocks::ClassifierBlock;
+use crate::domain::document_files::DocumentFile;
 use crate::domain::document_indexes::DocumentIndexValue;
 use crate::domain::documents::{Document, DocumentChangeset, DocumentView};
 use crate::infrastructure::s3::delete_prefix_from_s3;
@@ -39,6 +40,7 @@ pub struct CreateDocumentInput {
     pub title: Option<String>,
     pub document_type_id: Option<i64>,
     pub file_upload: Option<BufferedDocumentFileUpload>,
+    pub virus_scan: Option<bool>,
 }
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
@@ -110,6 +112,7 @@ pub async fn create_document(
         title,
         document_type_id,
         mut file_upload,
+        virus_scan,
     } = input;
 
     let title = match title {
@@ -133,6 +136,15 @@ pub async fn create_document(
         }
     };
 
+    let scan_decision = if file_upload.is_some() {
+        Some(
+            crate::application::document_files::resolve_upload_scan_decision(db, virus_scan)
+                .await?,
+        )
+    } else {
+        None
+    };
+
     let mut file_info = None;
     if let Some(upload) = file_upload.take() {
         file_info = Some(upload_document_file_to_s3(&state, upload).await?);
@@ -141,6 +153,8 @@ pub async fn create_document(
     let file_info_for_cleanup = file_info.clone();
     let fast_jobs = state.fast_jobs.as_ref().clone();
     let medium_jobs = state.medium_jobs.as_ref().clone();
+    let scan_enqueue_failed = Arc::new(AtomicBool::new(false));
+    let scan_enqueue_failed_for_tx = Arc::clone(&scan_enqueue_failed);
     let thumb_enqueue_failed = Arc::new(AtomicBool::new(false));
     let thumb_enqueue_failed_for_tx = Arc::clone(&thumb_enqueue_failed);
     let pages_enqueue_failed = Arc::new(AtomicBool::new(false));
@@ -163,31 +177,53 @@ pub async fn create_document(
                 .await?;
 
             if let Some(upload) = file_info {
-                let inserted_file =
-                    insert_document_file(conn, inserted_document.id, upload, user_id).await?;
+                let inserted_file = insert_document_file(
+                    conn,
+                    inserted_document.id,
+                    upload,
+                    user_id,
+                    scan_decision.expect("scan decision is present when file info is present"),
+                )
+                .await?;
 
-                if fast_jobs
-                    .push(FastJob::GenerateThumbnail {
-                        document_file_id: inserted_file.id,
-                        page: 1,
-                        width: 800,
-                    })
-                    .await
-                    .is_err()
+                if scan_decision
+                    .expect("scan decision is present when file info is present")
+                    .requested
                 {
-                    thumb_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
-                    return Err(diesel::result::Error::RollbackTransaction);
-                }
+                    if medium_jobs
+                        .push(MediumJob::ScanDocumentFile {
+                            document_file_id: inserted_file.id,
+                        })
+                        .await
+                        .is_err()
+                    {
+                        scan_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
+                        return Err(diesel::result::Error::RollbackTransaction);
+                    }
+                } else {
+                    if fast_jobs
+                        .push(FastJob::GenerateThumbnail {
+                            document_file_id: inserted_file.id,
+                            page: 1,
+                            width: 800,
+                        })
+                        .await
+                        .is_err()
+                    {
+                        thumb_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
+                        return Err(diesel::result::Error::RollbackTransaction);
+                    }
 
-                if medium_jobs
-                    .push(MediumJob::ProcessFilePages {
-                        document_file_id: inserted_file.id,
-                    })
-                    .await
-                    .is_err()
-                {
-                    pages_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
-                    return Err(diesel::result::Error::RollbackTransaction);
+                    if medium_jobs
+                        .push(MediumJob::ProcessFilePages {
+                            document_file_id: inserted_file.id,
+                        })
+                        .await
+                        .is_err()
+                    {
+                        pages_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
+                        return Err(diesel::result::Error::RollbackTransaction);
+                    }
                 }
             }
 
@@ -205,9 +241,15 @@ pub async fn create_document(
                 delete_uploaded_document_file_from_s3(&state, &upload).await;
             }
             if matches!(e, diesel::result::Error::RollbackTransaction) {
+                let scan_failed = scan_enqueue_failed.as_ref().load(Ordering::Relaxed);
                 let thumb_failed = thumb_enqueue_failed.as_ref().load(Ordering::Relaxed);
                 let pages_failed = pages_enqueue_failed.as_ref().load(Ordering::Relaxed);
-                if thumb_failed && pages_failed {
+                if scan_failed {
+                    Err(ApiError::new(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to enqueue virus scan job",
+                    ))
+                } else if thumb_failed && pages_failed {
                     Err(ApiError::new(
                         StatusCode::INTERNAL_SERVER_ERROR,
                         "Failed to enqueue document processing jobs",
@@ -324,16 +366,22 @@ pub async fn enqueue_document_file_page_processing(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
     document_id: i64,
 ) -> Result<(), ApiError> {
-    let file_ids: Vec<i64> = document_files::table
+    let files: Vec<DocumentFile> = document_files::table
         .filter(document_files::document_id.eq(document_id))
-        .select(document_files::id)
+        .select(DocumentFile::as_select())
         .order(document_files::id.asc())
-        .load::<i64>(db)
+        .load::<DocumentFile>(db)
         .await
         .api_context("Failed to list document files")?;
 
+    for file in &files {
+        if let Some(message) = file.content_availability().unavailable_message() {
+            return Err(ApiError::conflict(message));
+        }
+    }
+
     let mut medium_jobs = state.medium_jobs.as_ref().clone();
-    for document_file_id in file_ids {
+    for document_file_id in files.into_iter().map(|file| file.id) {
         medium_jobs
             .push(MediumJob::ProcessFilePages { document_file_id })
             .await
@@ -348,23 +396,27 @@ pub async fn enqueue_document_thumbnail_generation(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
     document_id: i64,
 ) -> Result<(), ApiError> {
-    let document_file_id = document_files::table
+    let document_file = document_files::table
         .filter(document_files::document_id.eq(document_id))
-        .select(document_files::id)
+        .select(DocumentFile::as_select())
         .order(document_files::id.asc())
-        .first::<i64>(db)
+        .first::<DocumentFile>(db)
         .await
         .optional()
         .api_context("Failed to fetch document file")?;
 
-    let Some(document_file_id) = document_file_id else {
+    let Some(document_file) = document_file else {
         return Ok(());
     };
+
+    if let Some(message) = document_file.content_availability().unavailable_message() {
+        return Err(ApiError::conflict(message));
+    }
 
     let mut fast_jobs = state.fast_jobs.as_ref().clone();
     fast_jobs
         .push(FastJob::GenerateThumbnail {
-            document_file_id,
+            document_file_id: document_file.id,
             page: 1,
             width: 800,
         })
@@ -392,6 +444,21 @@ pub async fn enqueue_document_classification(
                 ApiError::from_diesel("Failed to fetch document", e)
             }
         })?;
+
+    let unavailable_file = document_files::table
+        .filter(document_files::document_id.eq(document_id))
+        .select(DocumentFile::as_select())
+        .order(document_files::id.asc())
+        .load::<DocumentFile>(db)
+        .await
+        .api_context("Failed to list document files")?
+        .into_iter()
+        .find(|file| !file.content_available());
+    if let Some(file) = unavailable_file
+        && let Some(message) = file.content_availability().unavailable_message()
+    {
+        return Err(ApiError::conflict(message));
+    }
 
     let mut medium_jobs = state.medium_jobs.as_ref().clone();
     medium_jobs
@@ -720,6 +787,20 @@ pub async fn get_document_thumbnail_metadata(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
     id: i64,
 ) -> Result<(String, chrono::DateTime<Utc>), ApiError> {
+    let source_file = document_files::table
+        .filter(document_files::document_id.eq(id))
+        .select(DocumentFile::as_select())
+        .order(document_files::id.asc())
+        .first::<DocumentFile>(db)
+        .await
+        .optional()
+        .api_context("Failed to fetch document file")?;
+    if let Some(file) = source_file
+        && let Some(message) = file.content_availability().unavailable_message()
+    {
+        return Err(ApiError::conflict(message));
+    }
+
     let (s3_thumbnail, updated_at) = documents::table
         .find(id)
         .select((documents::s3_thumbnail, documents::updated_at))
