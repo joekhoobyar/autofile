@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added optional virus scanning for document uploads backed by ClamAV `clamd` over TCP (`INSTREAM`). Scanned files are stored durably but stay unavailable until a background `ScanDocumentFile` job records a `clean` verdict; downloads, previews, page images, extracted/OCR text, thumbnails, page processing, and classification all require `content_available=true` and return `409 Conflict` while blocked. Files expose `scan_status` (`not_required`, `pending`, `scanning`, `clean`, `infected`, `scan_error`), scanner metadata, and a derived `content_available` flag. Blocked files can still be deleted and resubmitted via `POST /api/v1/documents/{document_id}/files/{id}/rescan`. Scanning is configured with `MALWARE_SCANNER_PROVIDER`, `CLAMAV_HOST`, `CLAMAV_PORT`, timeouts, and `MALWARE_SCANNER_FAILURE_POLICY` (fail-closed by default), enabled per site with the `virus_scanning_enabled` setting, and opted in per upload with the `Virus scan this upload` checkbox (default from `virus_scan_by_default`). Docker Compose includes a `clamav` service, and the Helm chart bundles the Wiremind ClamAV chart by default (`clamav.enabled=true`, `virusScanning.provider=clamav`).
+
 ### Changed
 
 - Docker Compose now runs valkey instead of redis for background jobs
