@@ -63,6 +63,13 @@ services:
       AWS_REGION: us-east-1
       AWS_EC2_METADATA_DISABLED: "true"
 
+  clamav:
+    image: clamav/clamav:stable
+    pull_policy: always
+    restart: unless-stopped
+    volumes:
+      - clamav-data:/var/lib/clamav
+
   api:
     build:
       context: .
@@ -76,6 +83,8 @@ services:
         condition: service_healthy
       rustfs-init:
         condition: service_completed_successfully
+      clamav:
+        condition: service_started
     restart: unless-stopped
     environment:
       APP_MODE: development
@@ -89,6 +98,10 @@ services:
       S3_BUCKET: autofile-documents
       JWT_SECRET: dev-jwt-secret-change-me
       MAX_UPLOAD_SIZE_MB: "100"
+      MALWARE_SCANNER_PROVIDER: clamav
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: "3310"
+      MALWARE_SCANNER_FAILURE_POLICY: closed
       RUST_LOG: info
       TMPDIR: /tmp
       XDG_CACHE_HOME: /tmp/.cache
@@ -113,3 +126,4 @@ volumes:
   pgdata:
   rustfs-data:
   valkey-data:
+  clamav-data:
