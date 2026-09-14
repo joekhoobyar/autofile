@@ -6,6 +6,8 @@ Autofile is an open-source self-hosted document management application that turn
 
 For installation guides, concepts, configuration, and API reference, see the full documentation at [autofile.dev](https://autofile.dev/).
 
+![document grid basic](docs/assets/document-grid-basic.png){ align=left width="100%" style="margin: 0 0 1rem 0;" }
+
 The project is built as two containers:
 
 - `autofile-api`: Rust/Axum API, background workers, PostgreSQL migrations, S3 file storage, and document processing tools.
