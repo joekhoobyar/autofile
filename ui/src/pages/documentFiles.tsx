@@ -293,7 +293,7 @@ function DocumentFileListItem({ documentId, file, index, onOpenPreview, onDownlo
               <span className="aut-document-file-name">{file.filename}</span>
               <DocumentFileActions file={file} onDownload={onDownload} onDelete={onDelete} onRescan={onRescan} isDownloading={isDownloading} isDeleting={isDeleting} isRescanning={isRescanning} canDelete={canDelete} virusScanningEnabled={virusScanningEnabled} />
             </header>
-            {virusScanningEnabled && !file.content_available && (
+            {!file.content_available && (
               <Message severity="warn" text={unavailableDocumentFileMessage(file)} />
             )}
           </div>
@@ -328,7 +328,7 @@ function DocumentFileGridItem({ documentId, file, onOpenPreview, onDownload, onD
           <aside>
             <DocumentFileThumbnail documentId={documentId} file={file} />
             <FileMetadata file={file} />
-            {virusScanningEnabled && !file.content_available && (
+            {!file.content_available && (
               <Message className="m-2" severity="warn" text={unavailableDocumentFileMessage(file)} />
             )}
             <div className="aut-document-file-grid-actions">
