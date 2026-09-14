@@ -781,20 +781,18 @@ pub async fn scan_document_file(
             let result = db
                 .build_transaction()
                 .run::<_, diesel::result::Error, _>(async move |conn| {
-                    diesel::update(
-                        document_files::table.filter(document_files::id.eq(document_file_id)),
+                    update_document_file_scan_outcome(
+                        conn,
+                        document_file_id,
+                        ScanOutcomeUpdate {
+                            status: SCAN_STATUS_CLEAN,
+                            scanner: Some(scanner),
+                            scanner_version,
+                            signature_version,
+                            threat_name: None,
+                            scan_error: None,
+                        },
                     )
-                    .set((
-                        document_files::scan_status.eq(SCAN_STATUS_CLEAN),
-                        document_files::scan_scanner.eq(Some(scanner)),
-                        document_files::scan_scanner_version.eq(scanner_version),
-                        document_files::scan_signature_version.eq(signature_version),
-                        document_files::scan_threat_name.eq::<Option<String>>(None),
-                        document_files::scan_error.eq::<Option<String>>(None),
-                        document_files::scan_completed_at.eq(Some(Utc::now())),
-                        document_files::updated_at.eq(Utc::now()),
-                    ))
-                    .execute(conn)
                     .await?;
                     enqueue_post_upload_processing_jobs(
                         &mut fast_jobs,
@@ -851,19 +849,19 @@ pub async fn scan_document_file(
                 threat_name = ?threat_name,
                 "virus scan found a threat; file blocked"
             );
-            diesel::update(document_files::table.filter(document_files::id.eq(document_file_id)))
-                .set((
-                    document_files::scan_status.eq(SCAN_STATUS_INFECTED),
-                    document_files::scan_scanner.eq(Some(scanner)),
-                    document_files::scan_scanner_version.eq(scanner_version),
-                    document_files::scan_signature_version.eq(signature_version),
-                    document_files::scan_threat_name.eq(threat_name),
-                    document_files::scan_error.eq::<Option<String>>(None),
-                    document_files::scan_completed_at.eq(Some(Utc::now())),
-                    document_files::updated_at.eq(Utc::now()),
-                ))
-                .execute(&mut db)
-                .await?;
+            update_document_file_scan_outcome(
+                &mut db,
+                document_file_id,
+                ScanOutcomeUpdate {
+                    status: SCAN_STATUS_INFECTED,
+                    scanner: Some(scanner),
+                    scanner_version,
+                    signature_version,
+                    threat_name,
+                    scan_error: None,
+                },
+            )
+            .await?;
         }
         Err(err) if state.malware_scanner.failure_policy() == MalwareScannerFailurePolicy::Open => {
             tracing::warn!(
@@ -872,16 +870,19 @@ pub async fn scan_document_file(
                 reason = %err.reason,
                 "virus scan failed but failure policy is open; marking file not_required"
             );
-            diesel::update(document_files::table.filter(document_files::id.eq(document_file_id)))
-                .set((
-                    document_files::scan_status.eq(SCAN_STATUS_NOT_REQUIRED),
-                    document_files::scan_scanner.eq(Some(err.scanner)),
-                    document_files::scan_error.eq(Some(err.reason)),
-                    document_files::scan_completed_at.eq(Some(Utc::now())),
-                    document_files::updated_at.eq(Utc::now()),
-                ))
-                .execute(&mut db)
-                .await?;
+            update_document_file_scan_outcome(
+                &mut db,
+                document_file_id,
+                ScanOutcomeUpdate {
+                    status: SCAN_STATUS_NOT_REQUIRED,
+                    scanner: Some(err.scanner),
+                    scanner_version: None,
+                    signature_version: None,
+                    threat_name: None,
+                    scan_error: Some(err.reason),
+                },
+            )
+            .await?;
 
             let mut fast_jobs = state.fast_jobs.as_ref().clone();
             let mut medium_jobs = state.medium_jobs.as_ref().clone();
@@ -916,19 +917,54 @@ pub async fn scan_document_file(
                 reason = %err.reason,
                 "virus scan failed; file marked scan_error"
             );
-            diesel::update(document_files::table.filter(document_files::id.eq(document_file_id)))
-                .set((
-                    document_files::scan_status.eq(SCAN_STATUS_ERROR),
-                    document_files::scan_scanner.eq(Some(err.scanner)),
-                    document_files::scan_error.eq(Some(err.reason)),
-                    document_files::scan_completed_at.eq(Some(Utc::now())),
-                    document_files::updated_at.eq(Utc::now()),
-                ))
-                .execute(&mut db)
-                .await?;
+            update_document_file_scan_outcome(
+                &mut db,
+                document_file_id,
+                ScanOutcomeUpdate {
+                    status: SCAN_STATUS_ERROR,
+                    scanner: Some(err.scanner),
+                    scanner_version: None,
+                    signature_version: None,
+                    threat_name: None,
+                    scan_error: Some(err.reason),
+                },
+            )
+            .await?;
         }
     }
 
+    Ok(())
+}
+
+/// New scan-column values for a terminal document-file scan transition.
+/// Each field maps onto its `document_files` column; `None` clears it.
+struct ScanOutcomeUpdate {
+    status: &'static str,
+    scanner: Option<String>,
+    scanner_version: Option<String>,
+    signature_version: Option<String>,
+    threat_name: Option<String>,
+    scan_error: Option<String>,
+}
+
+async fn update_document_file_scan_outcome(
+    conn: &mut AsyncPgConnection,
+    document_file_id: i64,
+    outcome: ScanOutcomeUpdate,
+) -> Result<(), diesel::result::Error> {
+    diesel::update(document_files::table.filter(document_files::id.eq(document_file_id)))
+        .set((
+            document_files::scan_status.eq(outcome.status),
+            document_files::scan_scanner.eq(outcome.scanner),
+            document_files::scan_scanner_version.eq(outcome.scanner_version),
+            document_files::scan_signature_version.eq(outcome.signature_version),
+            document_files::scan_threat_name.eq(outcome.threat_name),
+            document_files::scan_error.eq(outcome.scan_error),
+            document_files::scan_completed_at.eq(Some(Utc::now())),
+            document_files::updated_at.eq(Utc::now()),
+        ))
+        .execute(conn)
+        .await?;
     Ok(())
 }
 
@@ -938,16 +974,19 @@ async fn mark_scan_error(
     scanner: &str,
     reason: &str,
 ) -> JobResult<()> {
-    diesel::update(document_files::table.filter(document_files::id.eq(document_file_id)))
-        .set((
-            document_files::scan_status.eq(SCAN_STATUS_ERROR),
-            document_files::scan_scanner.eq(Some(scanner.to_string())),
-            document_files::scan_error.eq(Some(reason.to_string())),
-            document_files::scan_completed_at.eq(Some(Utc::now())),
-            document_files::updated_at.eq(Utc::now()),
-        ))
-        .execute(db)
-        .await?;
+    update_document_file_scan_outcome(
+        db,
+        document_file_id,
+        ScanOutcomeUpdate {
+            status: SCAN_STATUS_ERROR,
+            scanner: Some(scanner.to_string()),
+            scanner_version: None,
+            signature_version: None,
+            threat_name: None,
+            scan_error: Some(reason.to_string()),
+        },
+    )
+    .await?;
     Ok(())
 }
 
