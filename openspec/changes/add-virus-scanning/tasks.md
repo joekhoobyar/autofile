@@ -29,7 +29,7 @@
 - [x] Ensure deletion and explicit rescan/retry-scan operations are allowed for files with `content_available=false`.
 - [x] Return clear conflict errors for manual processing endpoints blocked by scan status.
 - [x] Add API tests that verify unsafe files are refused by download, page-image, text, OCR, thumbnail, processing, and classification paths.
-- [ ] Add API tests that verify unsafe files can still be deleted and can be submitted for explicit rescan/retry.
+- [x] Add API tests that verify unsafe files can still be deleted and can be submitted for explicit rescan/retry.
 
 ## 5. UI
 
@@ -51,7 +51,7 @@
 
 ## 7. Verification
 
-- [ ] Run `openspec validate add-virus-scanning --strict`.
-- [ ] Run relevant API checks from `api/`.
-- [ ] Run relevant UI checks from `ui/`.
-- [ ] Run Compose and Helm rendering checks for deployment changes.
+- [x] Run `openspec validate add-virus-scanning --strict`.
+- [x] Run relevant API checks from `api/`.
+- [x] Run relevant UI checks from `ui/`.
+- [x] Run Compose and Helm rendering checks for deployment changes.
