@@ -2,6 +2,19 @@ import type { DocumentListParams } from '../models/document';
 
 const DOCUMENT_LIST_PAGE_SIZES = new Set([6, 12, 24, 48, 96]);
 
+const DOCUMENT_FILE_SCAN_STATUS_LABELS: Record<string, string> = {
+  not_required: 'Not scanned',
+  pending: 'Pending scan',
+  scanning: 'Scanning',
+  clean: 'Clean',
+  infected: 'Infected',
+  scan_error: 'Scan error',
+};
+
+export function documentFileScanStatusSearchLabel(status: string): string {
+  return DOCUMENT_FILE_SCAN_STATUS_LABELS[status] ?? status;
+}
+
 export const DEFAULT_DOCUMENT_LIST_PARAMS: DocumentListParams = {
   per_page: 12,
   page: 1,
@@ -34,6 +47,7 @@ export function parseDocumentListHash(hash: string): DocumentListParams {
   const metadataValue = params.get('metadata_value')?.trim() || undefined;
   const filename = params.get('filename')?.trim() || undefined;
   const fileContentType = params.get('file_content_type')?.trim() || undefined;
+  const fileScanStatus = params.get('file_scan_status')?.trim() || undefined;
   const documentTypeId = parsePositiveIntParam(params.get('document_type_id'));
   const metadataTypeId = parsePositiveIntParam(params.get('metadata_type_id'));
   const cabinetId = parsePositiveIntParam(params.get('cabinet_id'));
@@ -62,6 +76,7 @@ export function parseDocumentListHash(hash: string): DocumentListParams {
     ...(metadataValue ? { metadata_value: metadataValue } : {}),
     ...(metadataTypeId ? { metadata_type_id: metadataTypeId } : {}),
     ...(fileContentType ? { file_content_type: fileContentType } : {}),
+    ...(fileScanStatus ? { file_scan_status: fileScanStatus } : {}),
     ...(cabinetId ? { cabinet_id: cabinetId } : {}),
     ...(tagId ? { tag_id: tagId } : {}),
     ...(documentIndexValueId ? { document_index_value_id: documentIndexValueId } : {}),
@@ -107,6 +122,9 @@ export function serializeBasicDocumentSearchHash(value: string, params: Document
   if (params.file_content_type?.trim()) {
     urlParams.set('file_content_type', params.file_content_type.trim());
   }
+  if (params.file_scan_status?.trim()) {
+    urlParams.set('file_scan_status', params.file_scan_status.trim());
+  }
   if (params.cabinet_id) {
     urlParams.set('cabinet_id', String(params.cabinet_id));
   }
@@ -144,6 +162,7 @@ export type AdvancedDocumentSearchFormValues = {
   metadata_type_id: number | null;
   filename: string;
   file_content_type: string;
+  file_scan_status: string | null;
   cabinet_id: number | null;
   tag_id: number | null;
   duplicates: boolean;
@@ -209,6 +228,7 @@ export function advancedFormDefaults(
     metadata_type_id: existingParams.metadata_type_id ?? null,
     filename: existingParams.filename ?? '',
     file_content_type: existingParams.file_content_type ?? '',
+    file_scan_status: existingParams.file_scan_status ?? null,
     cabinet_id: existingParams.cabinet_id ?? null,
     tag_id: existingParams.tag_id ?? null,
     duplicates: !!existingParams.duplicates,
@@ -226,6 +246,7 @@ export function advancedResetValues(): AdvancedDocumentSearchFormValues {
     metadata_type_id: null,
     filename: '',
     file_content_type: '',
+    file_scan_status: null,
     cabinet_id: null,
     tag_id: null,
     duplicates: false,
@@ -250,6 +271,7 @@ export function advancedSubmitParams(
     metadata_type_id: values.metadata_type_id ?? undefined,
     filename: values.filename.trim() || undefined,
     file_content_type: values.file_content_type.trim() || undefined,
+    file_scan_status: values.file_scan_status ?? undefined,
     cabinet_id: values.cabinet_id ?? undefined,
     tag_id: values.tag_id ?? undefined,
     document_index_value_id: existingParams.document_index_value_id,
@@ -322,6 +344,9 @@ export function buildActiveFilterChips(args: {
   if (listParams.file_content_type) {
     chips.push({ key: 'file-content-type', label: `Content type: ${listParams.file_content_type}` });
   }
+  if (listParams.file_scan_status) {
+    chips.push({ key: 'file-scan-status', label: `Scan status: ${documentFileScanStatusSearchLabel(listParams.file_scan_status)}` });
+  }
   const effectiveTagId = routeIds.tagId ?? listParams.tag_id;
   const effectiveCabinetId = routeIds.cabinetId ?? listParams.cabinet_id;
   if (effectiveTagId && tagName) {
@@ -353,6 +378,8 @@ export function chipRemoveResult(chipKey: string, listParams: DocumentListParams
       return { action: 'update', params: { ...listParams, filename: undefined, page: 1 } };
     case 'file-content-type':
       return { action: 'update', params: { ...listParams, file_content_type: undefined, page: 1 } };
+    case 'file-scan-status':
+      return { action: 'update', params: { ...listParams, file_scan_status: undefined, page: 1 } };
     case 'tag':
       return { action: 'update', params: { ...listParams, tag_id: undefined, page: 1 } };
     case 'cabinet':
@@ -430,6 +457,9 @@ export function serializeDocumentListHash(params: DocumentListParams): string {
   }
   if (params.file_content_type?.trim()) {
     urlParams.set('file_content_type', params.file_content_type.trim());
+  }
+  if (params.file_scan_status?.trim()) {
+    urlParams.set('file_scan_status', params.file_scan_status.trim());
   }
   if (params.cabinet_id) {
     urlParams.set('cabinet_id', String(params.cabinet_id));

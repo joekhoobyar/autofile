@@ -23,6 +23,7 @@ export interface DocumentListParams {
   metadata_value?: string;
   filename?: string;
   file_content_type?: string;
+  file_scan_status?: string;
   document_index_value_id?: number;
   document_type_id?: number;
   cabinet_id?: number;

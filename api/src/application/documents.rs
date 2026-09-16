@@ -63,7 +63,7 @@ pub enum DocumentSortField {
     UpdatedAt,
 }
 
-#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+#[derive(Debug, Default, serde::Deserialize, utoipa::IntoParams)]
 #[into_params(parameter_in = Query)]
 pub struct ListDocumentsQuery {
     /// 1-based page number.
@@ -90,6 +90,8 @@ pub struct ListDocumentsQuery {
     pub filename: Option<String>,
     /// Narrow results to documents with a file content type substring match.
     pub file_content_type: Option<String>,
+    /// Narrow results to documents with a file in this scan status.
+    pub file_scan_status: Option<String>,
     /// Narrow results to documents assigned to one document index value.
     pub document_index_value_id: Option<i64>,
     /// When true, narrow results to documents sharing a title with another document.
@@ -579,6 +581,14 @@ pub async fn list_documents(
             let subquery = document_files::table
                 .filter(document_files::document_id.eq(documents::id))
                 .filter(document_files::content_type.ilike(pattern));
+
+            query = query.filter(exists(subquery));
+        }
+
+        if let Some(scan_status) = params.file_scan_status.as_deref().filter(|s| !s.is_empty()) {
+            let subquery = document_files::table
+                .filter(document_files::document_id.eq(documents::id))
+                .filter(document_files::scan_status.eq(scan_status));
 
             query = query.filter(exists(subquery));
         }

@@ -123,6 +123,8 @@ The [OpenAPI Spec](openapi.md) lists the methods, parameters, request bodies, an
 
 Documents are the main managed resource and may include a stored file, extracted text, OCR text, classifier results, metadata, tags, cabinet placement, and document index assignments.
 
+`GET /api/v1/documents` supports text search plus narrowing filters. File-level narrowing filters include `file_content_type`, `duplicate_checksum=true`, and `file_scan_status`, which returns documents that have at least one file with the requested scan status (`not_required`, `pending`, `scanning`, `clean`, `infected`, or `scan_error`). Unknown `file_scan_status` values simply return no matching documents.
+
 See the [OpenAPI Spec](openapi.md) for document endpoint details and the [Documents concept guide](../concepts/documents.md) for how documents are processed.
 
 ## Document Uploads And Virus Scanning

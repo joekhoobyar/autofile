@@ -81,7 +81,7 @@ describe('document list hash helpers', () => {
   it('parses paging, sort, scope, and duplicate flags', () => {
     expect(
       parseDocumentListHash(
-        '#page=3&per_page=24&sf=title&sd=desc&cabinet_id=2&tag_id=3&document_index_value_id=7&document_type_id=9&metadata_type_id=11&metadata_value=%20Acme%20&file_content_type=pdf&duplicates=true&duplicate_checksum=true',
+        '#page=3&per_page=24&sf=title&sd=desc&cabinet_id=2&tag_id=3&document_index_value_id=7&document_type_id=9&metadata_type_id=11&metadata_value=%20Acme%20&file_content_type=pdf&file_scan_status=pending&duplicates=true&duplicate_checksum=true',
       ),
     ).toMatchObject({
       page: 3,
@@ -95,6 +95,7 @@ describe('document list hash helpers', () => {
       metadata_type_id: 11,
       metadata_value: 'Acme',
       file_content_type: 'pdf',
+      file_scan_status: 'pending',
       duplicates: true,
       duplicate_checksum: true,
     });
@@ -156,6 +157,7 @@ describe('document list hash helpers', () => {
       metadata_value: ' Acme ',
       metadata_type_id: 3,
       file_content_type: 'pdf',
+      file_scan_status: 'scan_error',
       cabinet_id: 5,
       tag_id: 6,
       document_index_value_id: 7,
@@ -167,6 +169,7 @@ describe('document list hash helpers', () => {
     expect(hash).toContain('metadata_value=Acme');
     expect(hash).toContain('metadata_type_id=3');
     expect(hash).toContain('file_content_type=pdf');
+    expect(hash).toContain('file_scan_status=scan_error');
     expect(hash).toContain('cabinet_id=5');
     expect(hash).toContain('tag_id=6');
     expect(hash).toContain('document_index_value_id=7');
@@ -274,6 +277,7 @@ describe('document list hash helpers', () => {
           metadata_type_id: null,
           filename: '',
           file_content_type: '',
+          file_scan_status: 'pending',
           cabinet_id: null,
           tag_id: 3,
           duplicates: false,
@@ -289,6 +293,7 @@ describe('document list hash helpers', () => {
       match_any: true,
       q: 'invoice',
       document_type_id: 2,
+      file_scan_status: 'pending',
       tag_id: 3,
       document_index_value_id: 11,
       duplicate_checksum: true,
@@ -310,12 +315,13 @@ describe('document list hash helpers', () => {
 
   it('builds filter chips and chip-removal actions', () => {
     const chips = buildActiveFilterChips({
-      listParams: { q: 'invoice', document_type_id: 2 },
+      listParams: { q: 'invoice', document_type_id: 2, file_scan_status: 'scan_error' },
       appliedSearchText: '',
       routeIds: {},
       documentTypeName: 'Invoice',
     });
-    expect(chips.map((chip) => chip.key)).toEqual(['q', 'document-type']);
+    expect(chips.map((chip) => chip.key)).toEqual(['q', 'document-type', 'file-scan-status']);
+    expect(chips.find((chip) => chip.key === 'file-scan-status')?.label).toBe('Scan status: Scan error');
 
     const searchChips = buildActiveFilterChips({
       listParams: { q: 'alpha', text: 'alpha', document_type_id: 2 },
@@ -329,6 +335,10 @@ describe('document list hash helpers', () => {
     expect(chipRemoveResult('q', { q: 'a', text: 'b' })).toEqual({
       action: 'update',
       params: { text: 'b', page: 1 },
+    });
+    expect(chipRemoveResult('file-scan-status', { file_scan_status: 'pending' })).toEqual({
+      action: 'update',
+      params: { page: 1 },
     });
     expect(chipRemoveResult('route-tag-3', {})).toEqual({ action: 'navigate-documents' });
   });

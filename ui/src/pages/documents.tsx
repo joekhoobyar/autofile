@@ -52,6 +52,7 @@ import {
   buildEffectiveListParams,
   chipRemoveResult,
   clearSearchParams,
+  documentFileScanStatusSearchLabel,
   isAllVisibleSelected,
   nextParamsForPage,
   nextParamsForQuickFilter,
@@ -68,6 +69,15 @@ import {
   toggleSelectedId,
   type AdvancedDocumentSearchFormValues,
 } from '../util/documentListHash';
+
+const FILE_SCAN_STATUS_OPTIONS = [
+  'not_required',
+  'pending',
+  'scanning',
+  'clean',
+  'infected',
+  'scan_error',
+].map((value) => ({ value, label: documentFileScanStatusSearchLabel(value) }));
 
 type DocumentListItemProps = {
   doc: Readonly<Document>;
@@ -1054,6 +1064,26 @@ export function AdvancedDocumentSearch() {
                   placeholder="Any document type"
                   itemTemplate={documentTypeSearchOptionTemplate}
                   panelClassName="aut-search-dropdown-panel"
+                  showClear
+                />
+              )}
+            />
+          </div>
+
+          <div className="col-12 md:col-6 xl:col-4">
+            <label htmlFor="advanced-search-file-scan-status" className="font-medium mb-2 block">File Scan Status</label>
+            <Controller
+              name="file_scan_status"
+              control={control}
+              render={({ field }) => (
+                <Dropdown
+                  id="advanced-search-file-scan-status"
+                  value={field.value}
+                  onChange={(event) => field.onChange(event.value ?? null)}
+                  optionLabel="label"
+                  optionValue="value"
+                  options={FILE_SCAN_STATUS_OPTIONS}
+                  placeholder="Any scan status"
                   showClear
                 />
               )}
