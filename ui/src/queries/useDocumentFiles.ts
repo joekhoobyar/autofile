@@ -13,6 +13,11 @@ export interface RescanDocumentFileInput {
   fileId: number;
 }
 
+export interface MarkDocumentFileScanNotRequiredInput {
+  documentId: number;
+  fileId: number;
+}
+
 export function useDocumentFiles(documentId: string | number): UseQueryResult<DocumentFile[], HttpError> {
   return useQuery({
     queryKey: ['documentFile', 'list', documentId],
@@ -81,6 +86,27 @@ export function useRescanDocumentFile(): UseMutationResult<DocumentFile, HttpErr
       queryClient.removeQueries({ queryKey: ['documentFile', 'get', documentId, fileId, 'thumbnail'], exact: true });
       queryClient.invalidateQueries({ queryKey: ['documentFile', 'list', documentId] });
       queryClient.invalidateQueries({ queryKey: ['document'] });
+    },
+  });
+}
+
+export function useMarkDocumentFileScanNotRequired(): UseMutationResult<DocumentFile, HttpError, MarkDocumentFileScanNotRequiredInput> {
+  const queryClient = useQueryClient();
+
+  return useMutation<DocumentFile, HttpError, MarkDocumentFileScanNotRequiredInput>({
+    mutationFn: async ({ documentId, fileId }) => {
+      return apiMutate<DocumentFile, void>(`api/v1/documents/${documentId}/files/${fileId}/scan-not-required`, {
+        method: 'POST',
+      });
+    },
+
+    onSuccess: (_data, { documentId, fileId }) => {
+      queryClient.removeQueries({ queryKey: ['documentFile', 'get', documentId, fileId, 'thumbnail'], exact: true });
+      queryClient.invalidateQueries({ queryKey: ['documentFile', 'list', documentId] });
+      queryClient.invalidateQueries({ queryKey: ['document'] });
+      queryClient.invalidateQueries({ queryKey: ['documentFilePage', 'list', documentId, fileId] });
+      queryClient.invalidateQueries({ queryKey: ['documentFileOcrPage', 'list', documentId, fileId] });
+      queryClient.invalidateQueries({ queryKey: ['documentFilePageImage', 'get', documentId, fileId] });
     },
   });
 }

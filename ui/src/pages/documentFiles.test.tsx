@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +9,12 @@ const mockUseDocument = vi.fn();
 const mockUseDocumentFiles = vi.fn();
 const mockUsePublicSettings = vi.fn();
 const mockUseThumbnail = vi.fn();
+const mockUseAuth = vi.fn();
+const mockConfirmDialog = vi.hoisted(() => vi.fn());
+
+vi.mock('primereact/confirmdialog', () => ({
+  confirmDialog: mockConfirmDialog,
+}));
 
 vi.mock('../components/DocumentViewLayout', () => ({
   DocumentViewLayout: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -24,6 +30,12 @@ vi.mock('../queries/useDocumentFiles', () => ({
     mockUseThumbnail(documentId, fileId, options),
   useDeleteDocumentFile: () => ({ mutateAsync: vi.fn() }),
   useRescanDocumentFile: () => ({ mutateAsync: vi.fn() }),
+  useMarkDocumentFileScanNotRequired: () => ({ mutateAsync: vi.fn() }),
+}));
+
+vi.mock('../auth', () => ({
+  useAuth: () => mockUseAuth(),
+  canAdminister: (auth: { status: string; role?: string }) => auth.status === 'authed' && auth.role === 'admin',
 }));
 
 vi.mock('../queries/useAppSettings', () => ({
@@ -65,11 +77,14 @@ describe('ListDocumentFiles virus scan gating', () => {
     mockUseDocumentFiles.mockReset();
     mockUsePublicSettings.mockReset();
     mockUseThumbnail.mockReset();
+    mockUseAuth.mockReset();
+    mockConfirmDialog.mockReset();
     mockUseDocument.mockReturnValue({ data: { id: 10, title: 'Invoice' }, isLoading: false, isError: false });
     mockUsePublicSettings.mockReturnValue({
       data: { virus_scanning_enabled: true, virus_scan_by_default: true },
     });
     mockUseThumbnail.mockReturnValue({ data: undefined });
+    mockUseAuth.mockReturnValue({ status: 'authed', role: 'user' });
   });
 
   afterEach(() => {
@@ -137,5 +152,73 @@ describe('ListDocumentFiles virus scan gating', () => {
     const { container } = renderList();
 
     expect(container.querySelector('.aut-file-action.is-disabled')).not.toBeNull();
+  });
+
+  it('shows Bypass Scan to admins when scanning is disabled and a file is blocked', () => {
+    mockUseAuth.mockReturnValue({ status: 'authed', role: 'admin' });
+    mockUsePublicSettings.mockReturnValue({
+      data: { virus_scanning_enabled: false, virus_scan_by_default: true },
+    });
+    mockUseDocumentFiles.mockReturnValue({
+      data: [fileFixture({ content_available: false, scan_status: 'pending' })],
+      isLoading: false,
+      isError: false,
+    });
+
+    renderList();
+
+    expect(screen.getByRole('button', { name: 'Mark a.pdf as scan not required' })).toHaveTextContent('Bypass Scan');
+    expect(screen.queryByRole('button', { name: 'Rescan a.pdf' })).not.toBeInTheDocument();
+  });
+
+  it('confirms before bypassing scan', () => {
+    mockUseAuth.mockReturnValue({ status: 'authed', role: 'admin' });
+    mockUsePublicSettings.mockReturnValue({
+      data: { virus_scanning_enabled: false, virus_scan_by_default: true },
+    });
+    mockUseDocumentFiles.mockReturnValue({
+      data: [fileFixture({ content_available: false, scan_status: 'pending' })],
+      isLoading: false,
+      isError: false,
+    });
+    renderList();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark a.pdf as scan not required' }));
+
+    expect(mockConfirmDialog).toHaveBeenCalledWith(expect.objectContaining({
+      header: 'Bypass Scan',
+      message: 'Mark "a.pdf" as not requiring a virus scan? This will make the file available without a clean scan result.',
+    }));
+  });
+
+  it('hides Bypass Scan from non-admins', () => {
+    mockUsePublicSettings.mockReturnValue({
+      data: { virus_scanning_enabled: false, virus_scan_by_default: true },
+    });
+    mockUseDocumentFiles.mockReturnValue({
+      data: [fileFixture({ content_available: false, scan_status: 'pending' })],
+      isLoading: false,
+      isError: false,
+    });
+
+    renderList();
+
+    expect(screen.queryByRole('button', { name: 'Mark a.pdf as scan not required' })).not.toBeInTheDocument();
+  });
+
+  it('does not offer Bypass Scan for infected files', () => {
+    mockUseAuth.mockReturnValue({ status: 'authed', role: 'admin' });
+    mockUsePublicSettings.mockReturnValue({
+      data: { virus_scanning_enabled: false, virus_scan_by_default: true },
+    });
+    mockUseDocumentFiles.mockReturnValue({
+      data: [fileFixture({ content_available: false, scan_status: 'infected' })],
+      isLoading: false,
+      isError: false,
+    });
+
+    renderList();
+
+    expect(screen.queryByRole('button', { name: 'Mark a.pdf as scan not required' })).not.toBeInTheDocument();
   });
 });

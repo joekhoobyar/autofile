@@ -139,6 +139,8 @@ Document-file responses include the scan fields:
 
 Operations that read file bytes or unsafe derived content (downloads, download tickets, page images, extracted text, OCR text, thumbnails, page processing, classification) require `content_available=true` and return `409 Conflict` for manual endpoints when the file is blocked. Deleting a file and submitting an eligible file for rescan with `POST /api/v1/documents/{document_id}/files/{id}/rescan` remain allowed while `content_available=false`; rescan requires `virus_scanning_enabled=true` and rejects files that are already `pending` or `scanning`.
 
+Admins can mark a non-infected blocked file as scan-not-required with `POST /api/v1/documents/{document_id}/files/{id}/scan-not-required`. This sets `scan_status` to `not_required`, clears scan metadata, makes `content_available=true`, and queues normal page and thumbnail processing. The endpoint returns `409 Conflict` for infected files.
+
 See the [OpenAPI Spec](openapi.md) for upload payloads and response schemas.
 
 ## Settings

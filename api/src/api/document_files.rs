@@ -4,11 +4,11 @@ use crate::application::document_files::{
     BufferedDocumentFileUpload, buffer_document_file_field, cleanup_buffered_document_file_upload,
     create_document_file, delete_document_file, ensure_document_file_available, get_document_file,
     get_document_file_download_metadata, get_document_file_thumbnail_metadata, list_document_files,
-    rescan_document_file,
+    mark_document_file_scan_not_required, rescan_document_file,
 };
 use crate::domain::document_files::DocumentFileView;
 use crate::shared::app_state::AppState;
-use crate::shared::auth::{AuthUser, sign_download, verify_download};
+use crate::shared::auth::{AdminUser, AuthUser, sign_download, verify_download};
 use crate::shared::config::MAX_UPLOAD_MULTIPART_OVERHEAD_BYTES;
 use crate::shared::errors::ApiError;
 use crate::shared::extractors::DbConn;
@@ -254,6 +254,35 @@ pub async fn rescan(
 }
 
 #[utoipa::path(
+    post,
+    path = "/{document_id}/files/{id}/scan-not-required",
+    tag = "document-files",
+    security(("bearer" = [])),
+    params(
+        ("document_id" = i64, Path, description = "Document ID"),
+        ("id" = i64, Path, description = "File ID"),
+    ),
+    responses(
+        (status = 200, description = "File marked as not requiring a virus scan", body = DocumentFileView),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Admin role required", body = ApiError),
+        (status = 404, description = "File not found", body = ApiError),
+        (status = 409, description = "Infected files cannot be marked scan-not-required", body = ApiError),
+        (status = 500, description = "Failed to enqueue document processing jobs", body = ApiError),
+    )
+)]
+pub async fn scan_not_required(
+    AdminUser { user_id }: AdminUser,
+    State(state): State<Arc<AppState>>,
+    DbConn(mut db): DbConn,
+    Path((document_id, id)): Path<(i64, i64)>,
+) -> Result<Json<DocumentFileView>, ApiError> {
+    Ok(Json(
+        mark_document_file_scan_not_required(state, &mut db, user_id, document_id, id).await?,
+    ))
+}
+
+#[utoipa::path(
     get,
     path = "/{document_id}/files/{id}/thumbnail",
     tag = "document-files",
@@ -405,6 +434,7 @@ pub fn routes(max_upload_bytes: usize) -> OpenApiRouter<Arc<AppState>> {
         .routes(routes!(get_by_ids))
         .routes(routes!(delete))
         .routes(routes!(rescan))
+        .routes(routes!(scan_not_required))
         .routes(routes!(thumbnail_get))
         .routes(routes!(create_download_ticket))
         .routes(routes!(download))

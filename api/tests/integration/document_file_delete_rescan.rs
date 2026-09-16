@@ -13,10 +13,14 @@ use std::time::Duration;
 
 use apalis_redis::RedisStorage;
 use autofile_api::AppState;
-use autofile_api::application::document_files::{delete_document_file, rescan_document_file};
+use autofile_api::application::document_files::{
+    delete_document_file, mark_document_file_scan_not_required, rescan_document_file,
+};
 use autofile_api::application::jobs::{FastJob, MediumJob, SlowJob};
 use autofile_api::application::malware_scanning::FakeMalwareScanner;
-use autofile_api::domain::document_files::{SCAN_STATUS_INFECTED, SCAN_STATUS_PENDING};
+use autofile_api::domain::document_files::{
+    SCAN_STATUS_INFECTED, SCAN_STATUS_NOT_REQUIRED, SCAN_STATUS_PENDING,
+};
 use autofile_api::schema::{app_settings, document_files};
 use autofile_api::shared::config::{
     MalwareScannerConfig, MalwareScannerFailurePolicy, MalwareScannerProvider,
@@ -303,4 +307,70 @@ async fn infected_file_can_be_rescanned() {
     .expect_err("resubmitting a pending file should be rejected");
     assert_eq!(err.status, axum::http::StatusCode::CONFLICT);
     assert_eq!(err.message, "File is already pending or actively scanning");
+}
+
+#[tokio::test]
+#[ignore = "requires Docker for Postgres, MinIO, and Valkey containers"]
+async fn admin_can_mark_pending_file_scan_not_required() {
+    let env = setup_env(SCAN_STATUS_PENDING).await;
+    let mut db = env
+        .db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+
+    let view = mark_document_file_scan_not_required(
+        env.state.clone(),
+        &mut db,
+        USER_ID,
+        DOCUMENT_ID,
+        UNSAFE_FILE_ID,
+    )
+    .await
+    .expect("pending file should be marked scan not required");
+
+    assert_eq!(view.scan_status, SCAN_STATUS_NOT_REQUIRED);
+    assert!(!view.scan_requested);
+    assert!(view.content_available);
+
+    let row: (String, bool, Option<i64>) = document_files::table
+        .filter(document_files::id.eq(UNSAFE_FILE_ID))
+        .select((
+            document_files::scan_status,
+            document_files::scan_requested,
+            document_files::scan_requested_by,
+        ))
+        .first(&mut db)
+        .await
+        .expect("file lookup should succeed");
+    assert_eq!(row, (SCAN_STATUS_NOT_REQUIRED.to_string(), false, None));
+}
+
+#[tokio::test]
+#[ignore = "requires Docker for Postgres, MinIO, and Valkey containers"]
+async fn infected_file_cannot_be_marked_scan_not_required() {
+    let env = setup_env(SCAN_STATUS_INFECTED).await;
+    let mut db = env
+        .db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+
+    let err = mark_document_file_scan_not_required(
+        env.state.clone(),
+        &mut db,
+        USER_ID,
+        DOCUMENT_ID,
+        UNSAFE_FILE_ID,
+    )
+    .await
+    .expect_err("infected file should remain blocked");
+
+    assert_eq!(err.status, axum::http::StatusCode::CONFLICT);
+    assert_eq!(
+        err.message,
+        "Infected files cannot be marked as scan not required"
+    );
 }

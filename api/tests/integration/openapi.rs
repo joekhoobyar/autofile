@@ -54,6 +54,7 @@ fn pilot_paths_are_documented() {
         "/documents/{document_id}/files/{id}/download",
         "/documents/{document_id}/files/{id}/download-ticket",
         "/documents/{document_id}/files/{id}/rescan",
+        "/documents/{document_id}/files/{id}/scan-not-required",
         "/documents/{document_id}/files/{document_file_id}/pages",
         "/documents/{document_id}/files/{document_file_id}/ocr-pages",
         "/documents/{document_id}/files/{document_file_id}/pages/{page_number}/image",

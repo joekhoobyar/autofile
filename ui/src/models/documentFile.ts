@@ -100,3 +100,7 @@ export function unavailableDocumentFileMessage(file: Pick<DocumentFile, 'scan_st
 export function canSubmitDocumentFileRescan(file: Pick<DocumentFile, 'scan_status'>): boolean {
   return file.scan_status !== 'pending' && file.scan_status !== 'scanning';
 }
+
+export function canMarkDocumentFileScanNotRequired(file: Pick<DocumentFile, 'scan_status' | 'content_available'>): boolean {
+  return !file.content_available && file.scan_status !== 'infected';
+}

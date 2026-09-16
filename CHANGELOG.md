@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added an admin-only **Bypass Scan** action for non-infected blocked document files. The action confirms before marking the file `not_required`, clearing scan metadata, making `content_available=true`, and queueing normal page and thumbnail processing. Infected files remain blocked and cannot be bypassed.
+
 ## [0.6.0] - 2026-09-14
 
 ### Added

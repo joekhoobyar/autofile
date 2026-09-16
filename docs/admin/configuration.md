@@ -38,13 +38,15 @@ When a scan is requested, the file is stored in object storage immediately but m
 
 | Scan status | Meaning |
 | --- | --- |
-| `not_required` | Scanning was disabled or the uploader opted out. The file is usable. |
+| `not_required` | Scanning was disabled, the uploader opted out, or an administrator marked the file **Scan Not Required**. The file is usable. |
 | `pending` / `scanning` | Waiting for or undergoing a scan. The file is unavailable. |
 | `clean` | Scanner accepted the file. The file is usable. |
 | `infected` | Scanner found a threat (`scan_threat_name` records it when available). The file stays blocked but is retained for audit; deleting the file removes the object. |
 | `scan_error` | The scan failed or timed out. The file stays blocked until rescanned. |
 
 Document-file responses include these fields plus a derived `content_available` boolean (true only for `clean` and `not_required`). Downloads, previews, page images, extracted text, OCR text, thumbnails, page processing, and classification all require `content_available=true`. Files can still be deleted, and eligible files can be submitted for rescan with `POST /api/v1/documents/{document_id}/files/{id}/rescan`.
+
+Administrators can use **Scan Not Required** to release a non-infected blocked file without a clean scan result. This marks the file `not_required`, clears scan metadata, makes `content_available=true`, and queues normal page and thumbnail processing. Infected files cannot be marked scan-not-required.
 
 Scanner failures default to fail-closed: the file is marked `scan_error` and never processed. With `MALWARE_SCANNER_FAILURE_POLICY=open`, failures are marked `not_required` so processing continues; prefer `closed` unless scanner downtime must not block ingestion.
 

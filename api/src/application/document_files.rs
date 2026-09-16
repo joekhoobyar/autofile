@@ -580,6 +580,92 @@ pub async fn rescan_document_file(
     }
 }
 
+pub async fn mark_document_file_scan_not_required(
+    state: Arc<AppState>,
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    user_id: i64,
+    document_id: i64,
+    id: i64,
+) -> Result<DocumentFileView, ApiError> {
+    let fast_jobs = state.fast_jobs.as_ref().clone();
+    let medium_jobs = state.medium_jobs.as_ref().clone();
+    let enqueue_failed = Arc::new(AtomicBool::new(false));
+    let enqueue_failed_for_tx = Arc::clone(&enqueue_failed);
+
+    let result = db
+        .build_transaction()
+        .run::<_, diesel::result::Error, _>(async move |conn| {
+            let current = document_files::table
+                .filter(document_files::document_id.eq(document_id))
+                .filter(document_files::id.eq(id))
+                .select(DocumentFile::as_select())
+                .first::<DocumentFile>(conn)
+                .await?;
+
+            match current.scan_status.as_str() {
+                SCAN_STATUS_INFECTED => return Err(diesel::result::Error::RollbackTransaction),
+                SCAN_STATUS_NOT_REQUIRED | SCAN_STATUS_CLEAN => {
+                    return Ok(document_file_view(current));
+                }
+                _ => {}
+            }
+
+            let updated = diesel::update(document_files::table.filter(document_files::id.eq(id)))
+                .set((
+                    document_files::scan_status.eq(SCAN_STATUS_NOT_REQUIRED),
+                    document_files::scan_requested.eq(false),
+                    document_files::scan_requested_by.eq::<Option<i64>>(None),
+                    document_files::scan_scanner.eq::<Option<String>>(None),
+                    document_files::scan_scanner_version.eq::<Option<String>>(None),
+                    document_files::scan_signature_version.eq::<Option<String>>(None),
+                    document_files::scan_threat_name.eq::<Option<String>>(None),
+                    document_files::scan_error.eq::<Option<String>>(None),
+                    document_files::scan_started_at.eq::<Option<chrono::DateTime<Utc>>>(None),
+                    document_files::scan_completed_at.eq::<Option<chrono::DateTime<Utc>>>(None),
+                    document_files::updated_by.eq(user_id),
+                    document_files::updated_at.eq(Utc::now()),
+                ))
+                .returning(DocumentFile::as_returning())
+                .get_result::<DocumentFile>(conn)
+                .await?;
+
+            let mut fast_jobs = fast_jobs;
+            let mut medium_jobs = medium_jobs;
+            if enqueue_post_upload_processing_jobs(&mut fast_jobs, &mut medium_jobs, updated.id)
+                .await
+                .is_err()
+            {
+                enqueue_failed_for_tx.store(true, Ordering::Relaxed);
+                return Err(diesel::result::Error::RollbackTransaction);
+            }
+
+            Ok(document_file_view(updated))
+        })
+        .await;
+
+    match result {
+        Ok(view) => Ok(view),
+        Err(err) => {
+            if matches!(err, diesel::result::Error::NotFound) {
+                Err(ApiError::not_found("Document file not found"))
+            } else if enqueue_failed.as_ref().load(Ordering::Relaxed) {
+                Err(ApiError::internal_server_error(
+                    "Failed to enqueue document processing jobs",
+                ))
+            } else if matches!(err, diesel::result::Error::RollbackTransaction) {
+                Err(ApiError::conflict(
+                    "Infected files cannot be marked as scan not required",
+                ))
+            } else {
+                Err(ApiError::from_diesel(
+                    "Failed to mark document file scan not required",
+                    err,
+                ))
+            }
+        }
+    }
+}
+
 pub async fn buffer_document_file_field(
     field: &mut axum::extract::multipart::Field<'_>,
     max_bytes: u64,

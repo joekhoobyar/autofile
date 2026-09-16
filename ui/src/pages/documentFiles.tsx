@@ -15,17 +15,19 @@ import { InputNumber } from 'primereact/inputnumber';
 import { Message } from 'primereact/message';
 import { ProgressBar } from 'primereact/progressbar';
 import { Skeleton } from 'primereact/skeleton';
+import { SplitButton } from 'primereact/splitbutton';
 import { Tag } from 'primereact/tag';
 import { type Toast } from 'primereact/toast';
 import { Tooltip } from 'primereact/tooltip';
 import { classNames } from 'primereact/utils';
 
 import { HttpError, apiUrl, ensureAuthenticated, getAccessToken } from '../api';
+import { canAdminister, useAuth } from '../auth';
 import { AppToast } from '../components/AppToast';
 import { DateTimeText } from '../components/DateTimeText';
 import { DocumentViewLayout } from '../components/DocumentViewLayout';
 import { type DocumentFile } from '../models/documentFile';
-import { canSubmitDocumentFileRescan, documentFileScanStatusLabel, documentFileScanStatusSeverity, unavailableDocumentFileMessage } from '../models/documentFile';
+import { canMarkDocumentFileScanNotRequired, canSubmitDocumentFileRescan, documentFileScanStatusLabel, documentFileScanStatusSeverity, unavailableDocumentFileMessage } from '../models/documentFile';
 import { useDocument } from '../queries/useDocuments';
 import { usePublicSettings } from '../queries/useAppSettings';
 import {
@@ -35,6 +37,7 @@ import {
   useDocumentFilePageImage,
   useDocumentFilePages,
   useDocumentFileThumbnail,
+  useMarkDocumentFileScanNotRequired,
   useRescanDocumentFile,
   useDeleteDocumentFile,
 } from '../queries/useDocumentFiles';
@@ -63,9 +66,12 @@ type DocumentFileListItemProps = {
   isDownloading: boolean;
   isDeleting: boolean;
   isRescanning: boolean;
+  isMarkingScanNotRequired: boolean;
   canDelete: boolean;
   virusScanningEnabled: boolean;
-  onRescan: (event: React.MouseEvent, file: DocumentFile) => void;
+  onRescan: (file: DocumentFile) => void;
+  onScanNotRequired: (file: DocumentFile) => void;
+  canAdministerScan: boolean;
 };
 
 type DocumentFileGridItemProps = {
@@ -77,9 +83,12 @@ type DocumentFileGridItemProps = {
   isDownloading: boolean;
   isDeleting: boolean;
   isRescanning: boolean;
+  isMarkingScanNotRequired: boolean;
   canDelete: boolean;
   virusScanningEnabled: boolean;
-  onRescan: (event: React.MouseEvent, file: DocumentFile) => void;
+  onRescan: (file: DocumentFile) => void;
+  onScanNotRequired: (file: DocumentFile) => void;
+  canAdministerScan: boolean;
 };
 
 function formatBytes(size: number) {
@@ -186,7 +195,6 @@ function DownloadButton({ file, onDownload, isDownloading }: Readonly<{
   return (
     <Button
       type="button"
-      label={isDownloading ? 'Downloading' : 'Download'}
       icon={isDownloading ? 'pi pi-spin pi-spinner' : 'pi pi-download'}
       severity="contrast"
       outlined
@@ -199,24 +207,72 @@ function DownloadButton({ file, onDownload, isDownloading }: Readonly<{
   );
 }
 
-function RescanButton({ file, onRescan, isRescanning }: Readonly<{
+function ScanActionsButton({ file, onRescan, onScanNotRequired, isRescanning, isMarkingScanNotRequired, virusScanningEnabled, canAdministerScan }: Readonly<{
   file: DocumentFile;
-  onRescan: (event: React.MouseEvent, file: DocumentFile) => void;
+  onRescan: (file: DocumentFile) => void;
+  onScanNotRequired: (file: DocumentFile) => void;
   isRescanning: boolean;
+  isMarkingScanNotRequired: boolean;
+  virusScanningEnabled: boolean;
+  canAdministerScan: boolean;
 }>) {
-  return (
-    <Button
-      type="button"
-      label={isRescanning ? 'Submitting' : 'Rescan'}
-      icon={isRescanning ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'}
-      severity="warning"
-      outlined
-      size="small"
-      aria-label={`Rescan ${file.filename}`}
-      onClick={(event) => onRescan(event, file)}
-      disabled={isRescanning || !canSubmitDocumentFileRescan(file)}
-    />
-  );
+  const canRescan = virusScanningEnabled && canSubmitDocumentFileRescan(file);
+  const canMarkScanNotRequired = canAdministerScan && canMarkDocumentFileScanNotRequired(file);
+  const isBusy = isRescanning || isMarkingScanNotRequired;
+
+  if (canRescan && canMarkScanNotRequired) {
+    return (
+      <SplitButton
+        label={isBusy ? 'Submitting' : 'Rescan'}
+        icon={isBusy ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'}
+        severity="warning"
+        outlined
+        size="small"
+        aria-label={`Rescan ${file.filename}`}
+        onClick={() => onRescan(file)}
+        disabled={isBusy}
+        model={[{
+          label: 'Bypass Scan',
+          icon: 'pi pi-check-circle',
+          command: () => onScanNotRequired(file),
+        }]}
+      />
+    );
+  }
+
+  if (canMarkScanNotRequired) {
+    return (
+      <Button
+        type="button"
+        label={isMarkingScanNotRequired ? 'Submitting' : 'Bypass Scan'}
+        icon={isMarkingScanNotRequired ? 'pi pi-spin pi-spinner' : 'pi pi-check-circle'}
+        severity="warning"
+        outlined
+        size="small"
+        aria-label={`Mark ${file.filename} as scan not required`}
+        onClick={() => onScanNotRequired(file)}
+        disabled={isBusy}
+      />
+    );
+  }
+
+  if (virusScanningEnabled) {
+    return (
+      <Button
+        type="button"
+        label={isRescanning ? 'Submitting' : 'Rescan'}
+        icon={isRescanning ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'}
+        severity="warning"
+        outlined
+        size="small"
+        aria-label={`Rescan ${file.filename}`}
+        onClick={() => onRescan(file)}
+        disabled={isBusy || !canRescan}
+      />
+    );
+  }
+
+  return null;
 }
 
 function DeleteButton({ file, onDelete, isDeleting, canDelete }: Readonly<{
@@ -240,17 +296,25 @@ function DeleteButton({ file, onDelete, isDeleting, canDelete }: Readonly<{
   );
 }
 
-function DocumentFileActions({ file, onDownload, onDelete, onRescan, isDownloading, isDeleting, isRescanning, canDelete, virusScanningEnabled }: Readonly<{
+function DocumentFileActions({ file, onDownload, onDelete, onRescan, onScanNotRequired, isDownloading, isDeleting, isRescanning, isMarkingScanNotRequired, canDelete, virusScanningEnabled, canAdministerScan }: Readonly<{
   file: DocumentFile;
   onDownload: (event: React.MouseEvent, file: DocumentFile) => void;
   onDelete: (event: React.MouseEvent, file: DocumentFile) => void;
-  onRescan: (event: React.MouseEvent, file: DocumentFile) => void;
+  onRescan: (file: DocumentFile) => void;
+  onScanNotRequired: (file: DocumentFile) => void;
   isDownloading: boolean;
   isDeleting: boolean;
   isRescanning: boolean;
+  isMarkingScanNotRequired: boolean;
   canDelete: boolean;
   virusScanningEnabled: boolean;
+  canAdministerScan: boolean;
 }>) {
+  const showScanActions = virusScanningEnabled || (canAdministerScan && canMarkDocumentFileScanNotRequired(file));
+  const scanActionDisabled = isRescanning
+    || isMarkingScanNotRequired
+    || (virusScanningEnabled && !canSubmitDocumentFileRescan(file) && !canMarkDocumentFileScanNotRequired(file));
+
   return (
     <div
       className="flex align-items-center gap-2 aut-document-file-actions"
@@ -269,9 +333,9 @@ function DocumentFileActions({ file, onDownload, onDelete, onRescan, isDownloadi
       <span className={classNames('aut-file-action', { 'is-disabled': isDownloading || !file.content_available })}>
         <DownloadButton file={file} onDownload={onDownload} isDownloading={isDownloading} />
       </span>
-      {virusScanningEnabled && (
-        <span className={classNames('aut-file-action', { 'is-disabled': isRescanning || !canSubmitDocumentFileRescan(file) })}>
-          <RescanButton file={file} onRescan={onRescan} isRescanning={isRescanning} />
+      {showScanActions && (
+        <span className={classNames('aut-file-action', { 'is-disabled': scanActionDisabled })}>
+          <ScanActionsButton file={file} onRescan={onRescan} onScanNotRequired={onScanNotRequired} isRescanning={isRescanning} isMarkingScanNotRequired={isMarkingScanNotRequired} virusScanningEnabled={virusScanningEnabled} canAdministerScan={canAdministerScan} />
         </span>
       )}
       <span className={classNames('aut-file-action', { 'is-disabled': isDeleting || !canDelete })}>
@@ -281,7 +345,7 @@ function DocumentFileActions({ file, onDownload, onDelete, onRescan, isDownloadi
   );
 }
 
-function DocumentFileListItem({ documentId, file, index, onOpenPreview, onDownload, onDelete, onRescan, isDownloading, isDeleting, isRescanning, canDelete, virusScanningEnabled }: Readonly<DocumentFileListItemProps>) {
+function DocumentFileListItem({ documentId, file, index, onOpenPreview, onDownload, onDelete, onRescan, onScanNotRequired, isDownloading, isDeleting, isRescanning, isMarkingScanNotRequired, canDelete, virusScanningEnabled, canAdministerScan }: Readonly<DocumentFileListItemProps>) {
   const canPreview = file.content_available;
   return (
     <div className="col-12 aut-document-list aut-document-file-list" key={file.id}>
@@ -307,7 +371,7 @@ function DocumentFileListItem({ documentId, file, index, onOpenPreview, onDownlo
           <div className="flex flex-column align-items-center sm:align-items-start gap-3 aut-document-header">
             <header className="flex align-items-center justify-content-between gap-2 aut-document-header-row aut-document-file-header-row">
               <span className="aut-document-file-name">{file.filename}</span>
-              <DocumentFileActions file={file} onDownload={onDownload} onDelete={onDelete} onRescan={onRescan} isDownloading={isDownloading} isDeleting={isDeleting} isRescanning={isRescanning} canDelete={canDelete} virusScanningEnabled={virusScanningEnabled} />
+              <DocumentFileActions file={file} onDownload={onDownload} onDelete={onDelete} onRescan={onRescan} onScanNotRequired={onScanNotRequired} isDownloading={isDownloading} isDeleting={isDeleting} isRescanning={isRescanning} isMarkingScanNotRequired={isMarkingScanNotRequired} canDelete={canDelete} virusScanningEnabled={virusScanningEnabled} canAdministerScan={canAdministerScan} />
             </header>
             {!file.content_available && (
               <Message severity="warn" text={unavailableDocumentFileMessage(file)} />
@@ -322,7 +386,7 @@ function DocumentFileListItem({ documentId, file, index, onOpenPreview, onDownlo
   );
 }
 
-function DocumentFileGridItem({ documentId, file, onOpenPreview, onDownload, onDelete, onRescan, isDownloading, isDeleting, isRescanning, canDelete, virusScanningEnabled }: Readonly<DocumentFileGridItemProps>) {
+function DocumentFileGridItem({ documentId, file, onOpenPreview, onDownload, onDelete, onRescan, onScanNotRequired, isDownloading, isDeleting, isRescanning, isMarkingScanNotRequired, canDelete, virusScanningEnabled, canAdministerScan }: Readonly<DocumentFileGridItemProps>) {
   const canPreview = file.content_available;
   return (
     <div className="col-12 sm:col-6 lg:col-4 xl:col-3 p-2 aut-document-grid aut-document-file-grid" key={file.id}>
@@ -353,7 +417,7 @@ function DocumentFileGridItem({ documentId, file, onOpenPreview, onDownload, onD
               <Message className="m-2" severity="warn" text={unavailableDocumentFileMessage(file)} />
             )}
             <div className="aut-document-file-grid-actions">
-              <DocumentFileActions file={file} onDownload={onDownload} onDelete={onDelete} onRescan={onRescan} isDownloading={isDownloading} isDeleting={isDeleting} isRescanning={isRescanning} canDelete={canDelete} virusScanningEnabled={virusScanningEnabled} />
+              <DocumentFileActions file={file} onDownload={onDownload} onDelete={onDelete} onRescan={onRescan} onScanNotRequired={onScanNotRequired} isDownloading={isDownloading} isDeleting={isDeleting} isRescanning={isRescanning} isMarkingScanNotRequired={isMarkingScanNotRequired} canDelete={canDelete} virusScanningEnabled={virusScanningEnabled} canAdministerScan={canAdministerScan} />
             </div>
           </aside>
         </section>
@@ -664,17 +728,21 @@ export function ListDocumentFiles() {
   const documentId = useId('id');
   const navigate = useNavigate();
   const toast = useRef<Toast>(null);
+  const auth = useAuth();
   const { data: document, isLoading: isDocumentLoading, isError: isDocumentError, error: documentError } = useDocument(documentId);
   const { data: files, isLoading: isFilesLoading, isError: isFilesError, error: filesError } = useDocumentFiles(documentId);
   const { data: publicSettings } = usePublicSettings();
   const deleteDocumentFile = useDeleteDocumentFile();
   const rescanDocumentFile = useRescanDocumentFile();
+  const markScanNotRequired = useMarkDocumentFileScanNotRequired();
   const [layout, setLayout] = useState<'list' | 'grid'>('grid');
   const [downloadingIds, setDownloadingIds] = useState<Set<number>>(new Set());
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [rescanningId, setRescanningId] = useState<number | null>(null);
+  const [markingScanNotRequiredId, setMarkingScanNotRequiredId] = useState<number | null>(null);
   const virusScanningEnabled = publicSettings?.virus_scanning_enabled ?? false;
+  const canAdministerScan = canAdminister(auth);
 
   const openPreview = (fileId: number) => {
     navigate(`/documents/${documentId}/preview?file_id=${fileId}`);
@@ -729,9 +797,7 @@ export function ListDocumentFiles() {
     });
   };
 
-  const handleRescan = async (event: React.MouseEvent, file: DocumentFile) => {
-    event.preventDefault();
-    event.stopPropagation();
+  const handleRescan = async (file: DocumentFile) => {
     setRescanningId(file.id);
     try {
       await rescanDocumentFile.mutateAsync({ documentId, fileId: file.id });
@@ -742,6 +808,30 @@ export function ListDocumentFiles() {
     } finally {
       setRescanningId(null);
     }
+  };
+
+  const markFileScanNotRequired = async (file: DocumentFile) => {
+    setMarkingScanNotRequiredId(file.id);
+    try {
+      await markScanNotRequired.mutateAsync({ documentId, fileId: file.id });
+      toast.current?.show({ severity: 'success', summary: 'Scan not required', detail: `${file.filename} is now available without a virus scan.` });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Something went wrong';
+      toast.current?.show({ severity: 'error', summary: 'Update failed', detail });
+    } finally {
+      setMarkingScanNotRequiredId(null);
+    }
+  };
+
+  const confirmScanNotRequired = (file: DocumentFile) => {
+    confirmDialog({
+      message: `Mark "${file.filename}" as not requiring a virus scan? This will make the file available without a clean scan result.`,
+      header: 'Bypass Scan',
+      icon: 'pi pi-exclamation-triangle',
+      defaultFocus: 'reject',
+      acceptClassName: 'p-button-warning',
+      accept: () => void markFileScanNotRequired(file),
+    });
   };
 
   const itemTemplate = (file: DocumentFile, currentLayout: 'list' | 'grid', index: number) => {
@@ -757,11 +847,14 @@ export function ListDocumentFiles() {
           onDownload={handleDownload}
           onDelete={confirmDeleteFile}
           onRescan={handleRescan}
+          onScanNotRequired={confirmScanNotRequired}
           isDownloading={downloadingIds.has(file.id)}
           isDeleting={deletingId === file.id}
           isRescanning={rescanningId === file.id}
+          isMarkingScanNotRequired={markingScanNotRequiredId === file.id}
           canDelete={(files?.length ?? 0) > 1}
           virusScanningEnabled={virusScanningEnabled}
+          canAdministerScan={canAdministerScan}
         />
       );
     }
@@ -775,11 +868,14 @@ export function ListDocumentFiles() {
         onDownload={handleDownload}
         onDelete={confirmDeleteFile}
         onRescan={handleRescan}
+        onScanNotRequired={confirmScanNotRequired}
         isDownloading={downloadingIds.has(file.id)}
         isDeleting={deletingId === file.id}
         isRescanning={rescanningId === file.id}
+        isMarkingScanNotRequired={markingScanNotRequiredId === file.id}
         canDelete={(files?.length ?? 0) > 1}
         virusScanningEnabled={virusScanningEnabled}
+        canAdministerScan={canAdministerScan}
       />
     );
   };
