@@ -172,8 +172,8 @@ export function ListDocumentTypes() {
         >
         <Column field="slug" header="Slug" body={slugTemplate} sortable></Column>
         <Column field="name" header="Name" body={nameTemplate} sortable></Column>
-        <Column field="description" header="Description" sortable></Column>
         <Column field="document_count" header="Documents"></Column>
+        <Column field="description" header="Description" sortable></Column>
         {canManageTypes && <Column body={actionTemplate} headerClassName="w-9rem" />}
       </DataTable>
     </Card>
