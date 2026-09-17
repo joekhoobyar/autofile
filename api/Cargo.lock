@@ -224,6 +224,7 @@ dependencies = [
  "diesel_full_text_search",
  "diesel_json",
  "diesel_migrations",
+ "hex",
  "httpdate",
  "jsonwebtoken",
  "minijinja",

@@ -68,6 +68,6 @@ pub async fn write_field_to_temp_file(
     Ok(TempUpload {
         path: temp_path,
         size: size as i64,
-        checksum_sha256: format!("{:x}", hasher.finalize()),
+        checksum_sha256: hex::encode(hasher.finalize()),
     })
 }
