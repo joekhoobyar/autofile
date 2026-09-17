@@ -19,7 +19,7 @@ chrono = { version = "0.4", features = ["serde"] }
 httpdate = "1"
 jsonwebtoken = { version = "11", features = ["aws_lc_rs"] }
 argon2 = "0.6"
-rand = "0.8"
+rand = "0.10"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 async-trait = "0.1"
