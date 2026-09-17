@@ -879,6 +879,50 @@ button:disabled,
   white-space: nowrap;
 }
 
+.aut-cabinet-tree-table {
+  .p-treetable-thead > tr > th,
+  .p-treetable-tbody > tr > td {
+    vertical-align: middle;
+  }
+
+  .aut-cabinet-count-column {
+    width: 8.5rem;
+    min-width: 8.5rem;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .aut-cabinet-slug-column {
+    width: 14rem;
+  }
+
+  .aut-cabinet-name-column {
+    width: 18rem;
+  }
+
+  .aut-cabinet-actions-column {
+    width: 6.5rem;
+  }
+}
+
+.aut-cabinet-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.aut-cabinet-count-label-short {
+  display: none;
+}
+
+.aut-document-type-count-label-short {
+  display: none;
+}
+
+.aut-document-index-count-label-short {
+  display: none;
+}
+
 @media (max-width: 900px) {
   .aut-editor-row,
   .aut-modifier-row,
@@ -889,6 +933,71 @@ button:disabled,
   .aut-panel-actions,
   .aut-row-actions {
     flex-wrap: wrap;
+  }
+
+  .aut-cabinet-tree-table {
+    .p-treetable-thead > tr > th,
+    .p-treetable-tbody > tr > td {
+      padding-left: 0.45rem;
+      padding-right: 0.45rem;
+    }
+
+    .aut-cabinet-description-column {
+      display: none;
+    }
+
+    .aut-cabinet-count-column {
+      width: 4.75rem;
+      min-width: 4.75rem;
+    }
+
+    .aut-cabinet-count-label-full {
+      display: none;
+    }
+
+    .aut-cabinet-count-label-short {
+      display: inline;
+    }
+
+    .aut-cabinet-actions-column {
+      width: 5.5rem;
+    }
+
+    .aut-cabinet-slug-column,
+    .aut-cabinet-name-column {
+      width: auto;
+      min-width: 0;
+    }
+
+    .title {
+      overflow-wrap: anywhere;
+    }
+  }
+
+  .aut-cabinet-row-actions {
+    gap: 0.25rem;
+  }
+
+  .aut-document-types-table .aut-document-type-description-column,
+  .aut-document-indexes-table .aut-document-index-description-column,
+  .aut-metadata-types-table .aut-metadata-type-description-column {
+    display: none;
+  }
+
+  .aut-document-type-count-label-full {
+    display: none;
+  }
+
+  .aut-document-type-count-label-short {
+    display: inline;
+  }
+
+  .aut-document-index-count-label-full {
+    display: none;
+  }
+
+  .aut-document-index-count-label-short {
+    display: inline;
   }
 }
 

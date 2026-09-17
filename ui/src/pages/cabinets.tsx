@@ -76,7 +76,7 @@ export function ListCabinets() {
 
   const actionTemplate = (c: TreeNode) => {
     return (
-      <div className="flex flex-wrap gap-2">
+      <div className="aut-cabinet-row-actions">
         <Button type="button" icon="pi pi-pencil" severity="success" rounded text raised aria-description="Edit"
           onClick={() => navigate(`${c.data.id}/edit`)}
         ></Button>
@@ -161,13 +161,14 @@ export function ListCabinets() {
       </div>
 
       <TreeTable value={filteredData}
+          className="aut-cabinet-tree-table"
           loading={isPending || isFetching}
         >
-        <Column field="slug" header="Slug" body={slugTemplate} sortable expander></Column>
-        <Column field="name" header="Name" body={nameTemplate} sortable></Column>
-        <Column field="document_count" header="Documents" sortable></Column>
-        <Column field="description" header="Description" sortable></Column>
-        <Column body={actionTemplate} headerClassName="w-9rem" />
+        <Column field="slug" header="Slug" body={slugTemplate} sortable expander className="aut-cabinet-slug-column" headerClassName="aut-cabinet-slug-column"></Column>
+        <Column field="name" header="Name" body={nameTemplate} sortable className="aut-cabinet-name-column" headerClassName="aut-cabinet-name-column"></Column>
+        <Column field="document_count" header={<><span className="aut-cabinet-count-label-full">Documents</span><span className="aut-cabinet-count-label-short">Docs</span></>} sortable className="aut-cabinet-count-column" headerClassName="aut-cabinet-count-column"></Column>
+        <Column field="description" header="Description" sortable className="aut-cabinet-description-column" headerClassName="aut-cabinet-description-column"></Column>
+        <Column body={actionTemplate} className="aut-cabinet-actions-column" headerClassName="aut-cabinet-actions-column" />
       </TreeTable>
     </Card>
     <AppToast ref={toast} />

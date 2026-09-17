@@ -176,6 +176,7 @@ export function ListDocumentIndexes() {
       </div>
 
       <DataTable lazy value={data?.items}
+          className="aut-document-indexes-table"
           onPage={onPage}
           paginator={true}
           first={Math.max(((data?.page ?? listParams.page ?? 1) - 1) * (data?.per_page ?? listParams.per_page ?? 0), 0)}
@@ -186,8 +187,8 @@ export function ListDocumentIndexes() {
         >
         <Column field="slug" header="Slug" body={slugTemplate} sortable></Column>
         <Column field="name" header="Name" body={nameTemplate} sortable></Column>
-        <Column field="document_count" header="Documents"></Column>
-        <Column field="description" header="Description" sortable></Column>
+        <Column field="document_count" header={<><span className="aut-document-index-count-label-full">Documents</span><span className="aut-document-index-count-label-short">Docs</span></>}></Column>
+        <Column field="description" header="Description" sortable className="aut-document-index-description-column" headerClassName="aut-document-index-description-column"></Column>
         <Column field="enabled" header="Enabled" body={enabledTemplate} sortable></Column>
         <Column body={actionTemplate} headerClassName="w-13rem" />
       </DataTable>

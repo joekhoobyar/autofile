@@ -162,6 +162,7 @@ export function ListDocumentTypes() {
       </div>
 
       <DataTable lazy value={data?.items}
+          className="aut-document-types-table"
           onPage={onPage}
           paginator={true}
           first={Math.max(((data?.page ?? listParams.page ?? 1) - 1) * (data?.per_page ?? listParams.per_page ?? 0), 0)}
@@ -172,8 +173,8 @@ export function ListDocumentTypes() {
         >
         <Column field="slug" header="Slug" body={slugTemplate} sortable></Column>
         <Column field="name" header="Name" body={nameTemplate} sortable></Column>
-        <Column field="document_count" header="Documents"></Column>
-        <Column field="description" header="Description" sortable></Column>
+        <Column field="document_count" header={<><span className="aut-document-type-count-label-full">Documents</span><span className="aut-document-type-count-label-short">Docs</span></>}></Column>
+        <Column field="description" header="Description" sortable className="aut-document-type-description-column" headerClassName="aut-document-type-description-column"></Column>
         {canManageTypes && <Column body={actionTemplate} headerClassName="w-9rem" />}
       </DataTable>
     </Card>
