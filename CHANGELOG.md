@@ -7,13 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Security
+### Changed
 
-- Updated various dependencies
+- Breaking API Change: Split the document metadata value field into string_value, number_value and date_value.  Updated the backend and frontend code accordingly.
 
 ### Fixed
 
 - Improved mobile view of some list pages
+
+### Security
+
+- Updated various dependencies
 
 ## [0.6.1] - 2026-09-16
 
