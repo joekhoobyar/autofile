@@ -187,12 +187,23 @@ pub async fn insert_metadata_type(
     name: &str,
     user_id: i64,
 ) {
+    insert_metadata_type_with_data_type(db, id, slug, name, "string", user_id).await;
+}
+
+pub async fn insert_metadata_type_with_data_type(
+    db: &mut bb8::PooledConnection<'_, AsyncPgConnection>,
+    id: i64,
+    slug: &str,
+    name: &str,
+    data_type: &str,
+    user_id: i64,
+) {
     diesel::insert_into(metadata_types::table)
         .values((
             metadata_types::id.eq(id),
             metadata_types::slug.eq(slug),
             metadata_types::name.eq(name),
-            metadata_types::data_type.eq("string"),
+            metadata_types::data_type.eq(data_type),
             metadata_types::description.eq::<Option<String>>(None),
             metadata_types::options.eq::<Option<serde_json::Value>>(None),
             metadata_types::created_by.eq(user_id),
@@ -252,7 +263,9 @@ pub async fn insert_document_metadata(
         .values((
             document_metadatas::document_id.eq(document_id),
             document_metadatas::metadata_type_id.eq(metadata_type_id),
-            document_metadatas::value.eq(value),
+            document_metadatas::string_value.eq(value),
+            document_metadatas::number_value.eq::<Option<bigdecimal::BigDecimal>>(None),
+            document_metadatas::date_value.eq::<Option<chrono::NaiveDate>>(None),
             document_metadatas::created_by.eq(user_id),
             document_metadatas::updated_by.eq(user_id),
         ))

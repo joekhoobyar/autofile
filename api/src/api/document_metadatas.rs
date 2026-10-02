@@ -49,11 +49,11 @@ pub async fn get_by_ids(
     request_body = Vec<NewDocumentMetadata>,
     responses(
         (status = 200, description = "All stored metadata rows for the document after the upsert", body = Vec<DocumentMetadata>),
-        (status = 400, description = "Invalid request, e.g. unknown field or bad date/lookup value", body = ApiError),
+        (status = 400, description = "Invalid request", body = ApiError),
         (status = 401, description = "Missing or invalid access token", body = ApiError),
         (status = 403, description = "Password change required", body = ApiError),
         (status = 404, description = "Document not found", body = ApiError),
-        (status = 422, description = "Validation failed", body = ApiError),
+        (status = 422, description = "Validation failed, e.g. multiple typed value fields, wrong value field for the Metadata Type, bad date, or bad lookup value", body = ApiError),
     )
 )]
 async fn upsert(

@@ -163,11 +163,13 @@ diesel::table! {
     document_metadatas (document_id, metadata_type_id) {
         document_id -> Int8,
         metadata_type_id -> Int8,
-        value -> Varchar,
         created_at -> Timestamptz,
         created_by -> Int8,
         updated_at -> Timestamptz,
         updated_by -> Int8,
+        string_value -> Nullable<Varchar>,
+        number_value -> Nullable<Numeric>,
+        date_value -> Nullable<Date>,
     }
 }
 

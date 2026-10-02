@@ -123,7 +123,7 @@ The [OpenAPI Spec](openapi.md) lists the methods, parameters, request bodies, an
 
 Documents are the main managed resource and may include a stored file, extracted text, OCR text, classifier results, metadata, tags, cabinet placement, and document index assignments.
 
-`GET /api/v1/documents` supports text search plus narrowing filters. File-level narrowing filters include `file_content_type`, `duplicate_checksum=true`, and `file_scan_status`, which returns documents that have at least one file with the requested scan status (`not_required`, `pending`, `scanning`, `clean`, `infected`, or `scan_error`). Unknown `file_scan_status` values simply return no matching documents.
+`GET /api/v1/documents` supports text search plus narrowing filters. `metadata_value` searches only string-backed metadata values (`string` and `lookup` Metadata Types), not Date metadata values. File-level narrowing filters include `file_content_type`, `duplicate_checksum=true`, and `file_scan_status`, which returns documents that have at least one file with the requested scan status (`not_required`, `pending`, `scanning`, `clean`, `infected`, or `scan_error`). Unknown `file_scan_status` values simply return no matching documents.
 
 See the [OpenAPI Spec](openapi.md) for document endpoint details and the [Documents concept guide](../concepts/documents.md) for how documents are processed.
 
@@ -216,7 +216,15 @@ See the [Document Types guide](../concepts/document-types.md), [Metadata overvie
 
 Document Metadata stores per-document values keyed by Metadata Type. One document can have at most one value for each Metadata Type.
 
-Date metadata values must be sent as `YYYY-MM-DD`, regardless of the frontend display format. Lookup values must match a configured choice after surrounding whitespace is trimmed for validation.
+Document metadata row endpoints use typed value fields instead of a single `value` field:
+
+- `string_value` for String and Lookup metadata.
+- `date_value` for Date metadata, sent as `YYYY-MM-DD` regardless of the frontend display format.
+- `number_value` is reserved for future number metadata support and currently rejects non-null values.
+
+Each upsert item can set at most one typed value field. Setting multiple typed value fields, or setting a field that does not match the Metadata Type, returns `422 Unprocessable Entity`. Lookup values must match a configured choice after surrounding whitespace is trimmed for validation.
+
+Document list and detail responses still expose `metadata` as a slug-keyed string map for display, classifier matching, and index templates. Date values in that map are serialized as `YYYY-MM-DD`.
 
 Metadata upserts are incremental: omitted fields remain unchanged, and blank optional values delete the stored row instead of storing an empty string. Successful metadata changes queue updates for enabled document indexes that may depend on the changed metadata.
 

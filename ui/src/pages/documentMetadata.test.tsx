@@ -127,7 +127,7 @@ describe('EditDocumentMetadata', () => {
     fireEvent.click(screen.getByRole('button', { name: /save/i }));
 
     await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith([{ metadata_type_id: 1, value: 'Globex' }]);
+      expect(mutateAsync).toHaveBeenCalledWith([{ metadata_type_id: 1, string_value: 'Globex' }]);
     });
   });
 

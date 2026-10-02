@@ -25,6 +25,7 @@ use crate::domain::classifier_blocks::{ClassifierBlock, ClassifierChildRule, Cla
 use crate::domain::document_files::DocumentFile;
 use crate::domain::documents::DocumentChangeset;
 use crate::domain::documents::DocumentView;
+use crate::domain::metadata_types::DataType;
 use crate::schema::document_types;
 use crate::schema::{
     cabinet_documents, cabinets, classifier_blocks, document_file_ocr_pages, document_file_pages,
@@ -404,20 +405,33 @@ pub async fn persist_computed_actions(
 
     if !computed_metadata.is_empty() {
         let metadata_slugs: Vec<String> = computed_metadata.keys().cloned().collect();
-        let metadata_rows: Vec<(String, i64)> = metadata_types::table
+        let metadata_rows: Vec<(String, i64, DataType)> = metadata_types::table
             .filter(metadata_types::slug.eq_any(&metadata_slugs))
-            .select((metadata_types::slug, metadata_types::id))
-            .load::<(String, i64)>(db)
+            .select((
+                metadata_types::slug,
+                metadata_types::id,
+                metadata_types::data_type,
+            ))
+            .load::<(String, i64, DataType)>(db)
             .await?;
 
-        let metadata_type_ids: HashMap<String, i64> = metadata_rows.into_iter().collect();
+        let metadata_type_ids: HashMap<String, (i64, DataType)> = metadata_rows
+            .into_iter()
+            .map(|(slug, id, data_type)| (slug, (id, data_type)))
+            .collect();
         let mut metadata_input = Vec::new();
 
         for (slug, value) in computed_metadata {
-            if let Some(metadata_type_id) = metadata_type_ids.get(&slug) {
+            if let Some((metadata_type_id, data_type)) = metadata_type_ids.get(&slug) {
+                let (string_value, date_value) = match data_type {
+                    DataType::Date => (None, Some(value)),
+                    DataType::String | DataType::Lookup => (Some(value), None),
+                };
                 metadata_input.push(NewDocumentMetadata {
                     metadata_type_id: *metadata_type_id,
-                    value,
+                    string_value,
+                    number_value: None,
+                    date_value,
                 });
             } else {
                 tracing::error!(

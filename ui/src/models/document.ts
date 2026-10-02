@@ -40,17 +40,21 @@ export interface DocumentListParams {
 
 export interface NewDocumentMetadata {
   metadata_type_id: number;
-  value: string;
+  string_value?: string | null;
+  number_value?: number | null;
+  date_value?: string | null;
 }
 
 export interface DocumentMetadata {
   document_id: number;
   metadata_type_id: number;
-  value: string;
   created_at: string;
   created_by: number;
   updated_at: string;
   updated_by: number;
+  string_value: string | null;
+  number_value: number | null;
+  date_value: string | null;
 }
 
 export interface NewCabinetDocument {

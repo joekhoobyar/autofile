@@ -21,10 +21,10 @@ Autofile supports three metadata data types:
 | Data Type | Document Editor | Value Rules | Example |
 | --- | --- | --- | --- |
 | **String** | Text input | Any text value. | `Acme Corporation` |
-| **Date** | Date picker | A valid date stored as `YYYY-MM-DD`; the UI display format is configurable. | `2026-08-25` |
+| **Date** | Date picker | A valid date; API, classifier, and template string representations use `YYYY-MM-DD`. The UI display format is configurable. | `2026-08-25` |
 | **Lookup** | Dropdown | A configured choice; surrounding whitespace is ignored during validation. | `Paid` |
 
-All document metadata values are represented as strings in the API. The selected data type controls validation and UI behavior.
+Document metadata row APIs use typed value fields (`string_value`, `date_value`, and reserved `number_value`). Document list/detail responses and templates still expose metadata as slug-keyed strings. The selected data type controls validation and UI behavior.
 
 ### String
 
@@ -32,7 +32,7 @@ Use String for names, reference numbers, account numbers, and other free-form te
 
 ### Date
 
-Use Date for calendar dates such as an issue date, statement date, or due date. Values are stored in ISO-style `YYYY-MM-DD` format, which also makes year and month extraction straightforward in [index templates](indexes.md). The Settings page controls how the frontend displays and edits these dates, but it does not change the API, storage, classifier, or template format.
+Use Date for calendar dates such as an issue date, statement date, or due date. Date metadata is stored as a date, and string representations use ISO-style `YYYY-MM-DD`, which also makes year and month extraction straightforward in [index templates](indexes.md). The Settings page controls how the frontend displays and edits these dates, but it does not change the API, classifier, or template string format.
 
 For example, `2026-08-25` represents August 25, 2026.
 

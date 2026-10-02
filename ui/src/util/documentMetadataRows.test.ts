@@ -108,13 +108,13 @@ describe('buildMetadataUpdates', () => {
   it('builds a save payload with only changed values', () => {
     const rows = [
       row({ metadataTypeId: 1, slug: 'vendor', value: 'Acme' }),
-      row({ metadataTypeId: 2, slug: 'invoice_date', value: '2024-01-03' }),
+      row({ metadataTypeId: 2, slug: 'invoice_date', value: '2024-01-03', dataType: 'date' }),
       row({ metadataTypeId: 3, slug: 'status', value: 'Paid' }),
     ];
 
     expect(buildMetadataUpdates(doc.metadata, rows)).toEqual([
-      { metadata_type_id: 2, value: '2024-01-03' },
-      { metadata_type_id: 3, value: 'Paid' },
+      { metadata_type_id: 2, date_value: '2024-01-03' },
+      { metadata_type_id: 3, string_value: 'Paid' },
     ]);
   });
 });

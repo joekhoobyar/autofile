@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use autofile_api::application::classifier_blocks::{
     UpdateClassifierBlockInput, compute_classification_actions, create_classifier_block,
     delete_classifier_block, load_classifier_blocks, load_document_text, persist_computed_actions,
@@ -5,7 +7,8 @@ use autofile_api::application::classifier_blocks::{
 };
 use autofile_api::application::documents::get_document_view;
 use autofile_api::domain::classifier_blocks::ClassifierPattern;
-use autofile_api::schema::classifier_blocks;
+use autofile_api::schema::{classifier_blocks, document_metadatas};
+use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
@@ -13,7 +16,9 @@ use diesel_async::pooled_connection::bb8;
 
 use crate::support::db::TestDatabase;
 use crate::support::fixtures::{
-    build_rules, insert_user, seed_classifier_blocks, seed_classifier_document_scenario,
+    build_rules, insert_document, insert_document_type, insert_metadata_type_with_data_type,
+    insert_user, link_document_type_metadata, seed_classifier_blocks,
+    seed_classifier_document_scenario,
 };
 
 async fn list_block_orders(
@@ -36,6 +41,51 @@ async fn list_block_names_and_orders(
         .load(db)
         .await
         .expect("classifier blocks should load")
+}
+
+async fn seed_classifier_date_metadata_scenario(
+    db: &mut bb8::PooledConnection<'_, AsyncPgConnection>,
+) -> i64 {
+    const USER_ID: i64 = 9301;
+    const DOCUMENT_TYPE_ID: i64 = 9302;
+    const DATE_METADATA_ID: i64 = 9303;
+    const DOCUMENT_ID: i64 = 9304;
+
+    insert_user(
+        db,
+        USER_ID,
+        "classifier-date",
+        "classifier-date@example.com",
+    )
+    .await;
+    insert_document_type(
+        db,
+        DOCUMENT_TYPE_ID,
+        "classifier-date-type",
+        "Classifier Date Type",
+        USER_ID,
+    )
+    .await;
+    insert_metadata_type_with_data_type(
+        db,
+        DATE_METADATA_ID,
+        "classifier_tmv_issue_date",
+        "Classifier TMV Issue Date",
+        "date",
+        USER_ID,
+    )
+    .await;
+    link_document_type_metadata(db, DOCUMENT_TYPE_ID, DATE_METADATA_ID).await;
+    insert_document(
+        db,
+        DOCUMENT_ID,
+        "Classifier Date Document",
+        DOCUMENT_TYPE_ID,
+        USER_ID,
+    )
+    .await;
+
+    DOCUMENT_ID
 }
 
 #[tokio::test]
@@ -78,6 +128,63 @@ async fn persists_computed_actions_without_enqueue_side_effects() {
         refreshed.metadata.get("invoice_number"),
         Some(&"123".to_string())
     );
+}
+
+#[tokio::test]
+async fn persist_computed_actions_writes_date_metadata_to_date_value() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    let document_id = seed_classifier_date_metadata_scenario(&mut db).await;
+
+    persist_computed_actions(
+        &mut db,
+        document_id,
+        9301,
+        HashMap::from([(
+            "classifier_tmv_issue_date".to_string(),
+            "2026-08-25".to_string(),
+        )]),
+    )
+    .await
+    .expect("classification persistence should succeed");
+
+    let date_value: Option<NaiveDate> = document_metadatas::table
+        .filter(document_metadatas::document_id.eq(document_id))
+        .select(document_metadatas::date_value)
+        .first(&mut db)
+        .await
+        .expect("metadata row should load");
+
+    assert_eq!(date_value, NaiveDate::from_ymd_opt(2026, 8, 25));
+}
+
+#[tokio::test]
+async fn persist_computed_actions_rejects_invalid_date_metadata() {
+    let test_db = TestDatabase::new().await;
+    let mut db = test_db
+        .pool
+        .get()
+        .await
+        .expect("db connection should succeed");
+    let document_id = seed_classifier_date_metadata_scenario(&mut db).await;
+
+    let err = persist_computed_actions(
+        &mut db,
+        document_id,
+        9301,
+        HashMap::from([(
+            "classifier_tmv_issue_date".to_string(),
+            "not-a-date".to_string(),
+        )]),
+    )
+    .await
+    .expect_err("invalid date metadata should fail");
+
+    assert!(err.to_string().contains("YYYY-MM-DD"));
 }
 
 #[tokio::test]

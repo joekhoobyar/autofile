@@ -45,5 +45,11 @@ export function getMissingRequiredRows(rows: MetadataRow[]): MetadataRow[] {
 export function buildMetadataUpdates(originalMetadata: Record<string, string>, rows: MetadataRow[]): NewDocumentMetadata[] {
   return rows
     .filter((row) => (originalMetadata[row.slug] ?? '') !== row.value)
-    .map((row) => ({ metadata_type_id: row.metadataTypeId, value: row.value }));
+    .map((row) => {
+      if (row.dataType === 'date') {
+        return { metadata_type_id: row.metadataTypeId, date_value: row.value };
+      }
+
+      return { metadata_type_id: row.metadataTypeId, string_value: row.value };
+    });
 }
