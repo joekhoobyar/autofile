@@ -11,6 +11,7 @@ use crate::application::document_files::{
 use crate::application::document_index_documents::build_template_document_view;
 use crate::application::document_index_documents::delete_document_index_document;
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
+use crate::application::document_metadatas::typed_metadata_value_to_string;
 use crate::application::jobs::{FastJob, MediumJob};
 use crate::domain::classifier_blocks::ClassifierBlock;
 use crate::domain::document_files::DocumentFile;
@@ -553,14 +554,14 @@ pub async fn list_documents(
             if let Some(metadata_type_id) = params.metadata_type_id {
                 let subquery = document_metadatas::table
                     .filter(document_metadatas::document_id.eq(documents::id))
-                    .filter(document_metadatas::value.ilike(pattern))
+                    .filter(document_metadatas::string_value.ilike(pattern))
                     .filter(document_metadatas::metadata_type_id.eq(metadata_type_id));
 
                 query = query.filter(exists(subquery));
             } else {
                 let subquery = document_metadatas::table
                     .filter(document_metadatas::document_id.eq(documents::id))
-                    .filter(document_metadatas::value.ilike(pattern));
+                    .filter(document_metadatas::string_value.ilike(pattern));
 
                 query = query.filter(exists(subquery));
             }
@@ -711,23 +712,41 @@ pub async fn list_documents(
 
     let mut metadata_by_document: HashMap<i64, HashMap<String, String>> = HashMap::new();
     if !document_ids.is_empty() {
-        let metadata_rows: Vec<(i64, String, String)> = document_metadatas::table
+        let metadata_rows: Vec<(
+            i64,
+            String,
+            Option<String>,
+            Option<bigdecimal::BigDecimal>,
+            Option<chrono::NaiveDate>,
+        )> = document_metadatas::table
             .inner_join(metadata_types::table)
             .filter(document_metadatas::document_id.eq_any(&document_ids))
             .select((
                 document_metadatas::document_id,
                 metadata_types::slug,
-                document_metadatas::value,
+                document_metadatas::string_value,
+                document_metadatas::number_value,
+                document_metadatas::date_value,
             ))
-            .load::<(i64, String, String)>(db)
+            .load::<(
+                i64,
+                String,
+                Option<String>,
+                Option<bigdecimal::BigDecimal>,
+                Option<chrono::NaiveDate>,
+            )>(db)
             .await
             .api_context("Failed to list document metadata")?;
 
-        for (document_id, slug, value) in metadata_rows {
-            metadata_by_document
-                .entry(document_id)
-                .or_default()
-                .insert(slug, value);
+        for (document_id, slug, string_value, number_value, date_value) in metadata_rows {
+            if let Some(value) =
+                typed_metadata_value_to_string(string_value, number_value, date_value)
+            {
+                metadata_by_document
+                    .entry(document_id)
+                    .or_default()
+                    .insert(slug, value);
+            }
         }
     }
 
@@ -919,14 +938,35 @@ pub async fn get_document_view(
         .await
         .app_context("Failed to fetch document")?;
 
-    let metadata_rows: Vec<(String, String)> = document_metadatas::table
+    let metadata_rows: Vec<(
+        String,
+        Option<String>,
+        Option<bigdecimal::BigDecimal>,
+        Option<chrono::NaiveDate>,
+    )> = document_metadatas::table
         .inner_join(metadata_types::table)
         .filter(document_metadatas::document_id.eq(document.id))
-        .select((metadata_types::slug, document_metadatas::value))
-        .load::<(String, String)>(db)
+        .select((
+            metadata_types::slug,
+            document_metadatas::string_value,
+            document_metadatas::number_value,
+            document_metadatas::date_value,
+        ))
+        .load::<(
+            String,
+            Option<String>,
+            Option<bigdecimal::BigDecimal>,
+            Option<chrono::NaiveDate>,
+        )>(db)
         .await
         .app_context("Failed to list document metadata")?;
-    let metadata: HashMap<String, String> = metadata_rows.into_iter().collect();
+    let metadata: HashMap<String, String> = metadata_rows
+        .into_iter()
+        .filter_map(|(slug, string_value, number_value, date_value)| {
+            typed_metadata_value_to_string(string_value, number_value, date_value)
+                .map(|value| (slug, value))
+        })
+        .collect();
 
     let cabinet_rows: Vec<i64> = cabinet_documents::table
         .filter(cabinet_documents::document_id.eq(document.id))

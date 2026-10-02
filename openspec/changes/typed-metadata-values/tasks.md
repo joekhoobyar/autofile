@@ -20,14 +20,14 @@
 
 ## 3. Backend Reads And Search
 
-- [ ] 3.1 Update document metadata list/get endpoints to select and return typed metadata rows.
-- [ ] 3.2 Add a helper for converting stored typed metadata to the string form used by `DocumentView.metadata`.
-- [ ] 3.3 Update document list and detail metadata loading to populate `DocumentView.metadata` from typed columns.
-- [ ] 3.4 Update classifier persistence to route slug-keyed string metadata actions through typed metadata normalization so Date metadata actions parse as `YYYY-MM-DD` and store in `date_value`.
-- [ ] 3.5 Update document index template inputs to continue receiving slug-keyed string metadata.
-- [ ] 3.6 Change `metadata_value` document search filtering to query only `string_value`.
-- [ ] 3.7 Keep `metadata_type_id`-only document search matching any stored metadata row for that type.
-- [ ] 3.8 Update metadata type value suggestions to query distinct non-empty `string_value` values.
+- [x] 3.1 Update document metadata list/get endpoints to select and return typed metadata rows.
+- [x] 3.2 Add a helper for converting stored typed metadata to the string form used by `DocumentView.metadata`.
+- [x] 3.3 Update document list and detail metadata loading to populate `DocumentView.metadata` from typed columns.
+- [x] 3.4 Update classifier persistence to route slug-keyed string metadata actions through typed metadata normalization so Date metadata actions parse as `YYYY-MM-DD` and store in `date_value`.
+- [x] 3.5 Update document index template inputs to continue receiving slug-keyed string metadata.
+- [x] 3.6 Change `metadata_value` document search filtering to query only `string_value`.
+- [x] 3.7 Keep `metadata_type_id`-only document search matching any stored metadata row for that type.
+- [x] 3.8 Update metadata type value suggestions to query distinct non-empty `string_value` values.
 
 ## 4. UI
 

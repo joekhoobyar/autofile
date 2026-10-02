@@ -60,6 +60,16 @@ impl NormalizedDocumentMetadata {
     }
 }
 
+pub(crate) fn typed_metadata_value_to_string(
+    string_value: Option<String>,
+    number_value: Option<BigDecimal>,
+    date_value: Option<NaiveDate>,
+) -> Option<String> {
+    string_value
+        .or_else(|| number_value.map(|value| value.to_string()))
+        .or_else(|| date_value.map(|value| value.to_string()))
+}
+
 pub async fn get_document_metadata(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
     document_id: i64,

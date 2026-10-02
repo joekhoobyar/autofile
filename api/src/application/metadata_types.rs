@@ -115,17 +115,18 @@ pub async fn list_metadata_type_values(
     let limit = params.limit.unwrap_or(20).clamp(1, 50);
     let mut query = document_metadatas::table
         .filter(document_metadatas::metadata_type_id.eq(id))
-        .filter(diesel::dsl::sql::<Bool>("btrim(value) <> ''"))
+        .filter(document_metadatas::string_value.is_not_null())
+        .filter(diesel::dsl::sql::<Bool>("btrim(string_value) <> ''"))
         .into_boxed();
 
     if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
-        query = query.filter(document_metadatas::value.ilike(format!("%{}%", q)));
+        query = query.filter(document_metadatas::string_value.ilike(format!("%{}%", q)));
     }
 
     query
-        .select(document_metadatas::value)
+        .select(document_metadatas::string_value.assume_not_null())
         .distinct()
-        .order(document_metadatas::value.asc())
+        .order(document_metadatas::string_value.asc())
         .limit(limit)
         .load::<String>(db)
         .await
