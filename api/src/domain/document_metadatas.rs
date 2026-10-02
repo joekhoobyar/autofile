@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use serde::Serialize;
@@ -13,11 +14,17 @@ use crate::schema::document_metadatas;
 pub struct DocumentMetadata {
     pub document_id: i64,
     pub metadata_type_id: i64,
-    /// Stored metadata value. For Date metadata, clients must send and receive values in YYYY-MM-DD format regardless of the configured frontend display format.
-    #[schema(example = "2026-08-25")]
-    pub value: String,
     pub created_at: DateTime<Utc>,
     pub created_by: i64,
     pub updated_at: DateTime<Utc>,
     pub updated_by: i64,
+    /// Stored string or lookup metadata value.
+    #[schema(example = "Acme Corporation")]
+    pub string_value: Option<String>,
+    /// Stored numeric metadata value. Number metadata types are not supported yet.
+    #[schema(value_type = Option<f64>, example = 123.45)]
+    pub number_value: Option<BigDecimal>,
+    /// Stored date metadata value. API dates use YYYY-MM-DD regardless of the configured frontend display format.
+    #[schema(example = "2026-08-25")]
+    pub date_value: Option<chrono::NaiveDate>,
 }

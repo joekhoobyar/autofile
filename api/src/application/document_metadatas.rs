@@ -8,6 +8,7 @@ use crate::schema::{document_metadatas, document_types_metadata_types, documents
 use crate::shared::app_state::AppState;
 use crate::shared::errors::{ApiError, ApiErrorContext};
 
+use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 use serde::Deserialize;
 use serde_json::Value;
@@ -18,25 +19,45 @@ use diesel::upsert::excluded;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 
-#[derive(Debug, Deserialize, Insertable, utoipa::ToSchema)]
-#[diesel(table_name = document_metadatas)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct NewDocumentMetadata {
     pub metadata_type_id: i64,
-    /// Metadata value to store. For Date metadata, clients must send YYYY-MM-DD regardless of the configured frontend display format.
+    /// String or lookup metadata value to store.
+    #[schema(example = "Acme Corporation")]
+    pub string_value: Option<String>,
+    /// Numeric metadata value to store. Number metadata types are not supported yet.
+    #[schema(value_type = Option<f64>, example = 123.45)]
+    pub number_value: Option<BigDecimal>,
+    /// Date metadata value to store. Clients must send YYYY-MM-DD regardless of the configured frontend display format.
     #[schema(example = "2026-08-25")]
-    pub value: String,
+    pub date_value: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Insertable)]
+#[derive(Debug, Insertable)]
 #[diesel(table_name = document_metadatas)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct InsertableDocumentMetadata {
     document_id: i64,
     metadata_type_id: i64,
-    value: String,
     created_by: i64,
     updated_by: i64,
+    string_value: Option<String>,
+    number_value: Option<BigDecimal>,
+    date_value: Option<NaiveDate>,
+}
+
+#[derive(Debug)]
+struct NormalizedDocumentMetadata {
+    metadata_type_id: i64,
+    string_value: Option<String>,
+    number_value: Option<BigDecimal>,
+    date_value: Option<NaiveDate>,
+}
+
+impl NormalizedDocumentMetadata {
+    fn is_empty(&self) -> bool {
+        self.string_value.is_none() && self.number_value.is_none() && self.date_value.is_none()
+    }
 }
 
 pub async fn get_document_metadata(
@@ -154,15 +175,15 @@ pub async fn document_metadatas_upsert(
     // including required fields, data types, and lookup choices.
     // Required blank values fail validation here, so any blank value
     // remaining afterwards is optional and means "delete the stored row".
-    validate_document_metadata_input(db, document_id, &input).await?;
+    let normalized_input = validate_document_metadata_input(db, document_id, &input).await?;
 
     // Partition the input into blank optional values (to delete) and
     // non-blank values (to upsert).
     let mut delete_ids: Vec<i64> = Vec::new();
-    let mut upsert_input: Vec<&NewDocumentMetadata> =
-        Vec::with_capacity(input.len().min(MAX_METADATA_UPSERT_ITEMS));
-    for m in &input {
-        if m.value.trim().is_empty() {
+    let mut upsert_input: Vec<NormalizedDocumentMetadata> =
+        Vec::with_capacity(normalized_input.len().min(MAX_METADATA_UPSERT_ITEMS));
+    for m in normalized_input {
+        if m.is_empty() {
             if !delete_ids.contains(&m.metadata_type_id) {
                 delete_ids.push(m.metadata_type_id);
             }
@@ -193,9 +214,11 @@ pub async fn document_metadatas_upsert(
         .map(|m| InsertableDocumentMetadata {
             document_id,
             metadata_type_id: m.metadata_type_id,
-            value: m.value.clone(),
             created_by: user_id,
             updated_by: user_id,
+            string_value: m.string_value,
+            number_value: m.number_value,
+            date_value: m.date_value,
         })
         .collect();
 
@@ -208,7 +231,9 @@ pub async fn document_metadatas_upsert(
         ))
         .do_update()
         .set((
-            document_metadatas::value.eq(excluded(document_metadatas::value)),
+            document_metadatas::string_value.eq(excluded(document_metadatas::string_value)),
+            document_metadatas::number_value.eq(excluded(document_metadatas::number_value)),
+            document_metadatas::date_value.eq(excluded(document_metadatas::date_value)),
             document_metadatas::updated_by.eq(excluded(document_metadatas::updated_by)),
             document_metadatas::updated_at.eq(diesel::dsl::now),
         ))
@@ -245,11 +270,34 @@ fn extract_lookup_choices(options: Option<&Value>) -> Result<HashSet<&str>, ApiE
     Ok(result)
 }
 
-fn validate_metadata_value(
+fn empty_normalized(metadata_type_id: i64) -> NormalizedDocumentMetadata {
+    NormalizedDocumentMetadata {
+        metadata_type_id,
+        string_value: None,
+        number_value: None,
+        date_value: None,
+    }
+}
+
+fn validate_empty_metadata_value(
+    metadata_type_id: i64,
+    rule: &MetadataValidationRule,
+) -> Result<NormalizedDocumentMetadata, ApiError> {
+    if rule.required {
+        return Err(ApiError::unprocessable_entity(&format!(
+            "Metadata field {} is required for this document type and cannot be empty",
+            metadata_type_id
+        )));
+    }
+
+    Ok(empty_normalized(metadata_type_id))
+}
+
+fn normalize_string_metadata_value(
     metadata_type_id: i64,
     rule: &MetadataValidationRule,
     value: &str,
-) -> Result<(), ApiError> {
+) -> Result<NormalizedDocumentMetadata, ApiError> {
     let trimmed = value.trim();
 
     if rule.required && trimmed.is_empty() {
@@ -260,23 +308,29 @@ fn validate_metadata_value(
     }
 
     if trimmed.is_empty() {
-        return Ok(());
+        return Ok(empty_normalized(metadata_type_id));
     }
 
     match rule.data_type {
-        DataType::String => Ok(()),
-        DataType::Date => NaiveDate::parse_from_str(trimmed, "%Y-%m-%d")
-            .map(|_| ())
-            .map_err(|_| {
-                ApiError::unprocessable_entity(&format!(
-                    "Metadata field {} must be a valid date in YYYY-MM-DD format",
-                    metadata_type_id
-                ))
-            }),
+        DataType::String => Ok(NormalizedDocumentMetadata {
+            metadata_type_id,
+            string_value: Some(value.to_string()),
+            number_value: None,
+            date_value: None,
+        }),
+        DataType::Date => Err(ApiError::unprocessable_entity(&format!(
+            "Metadata field {} must use date_value",
+            metadata_type_id
+        ))),
         DataType::Lookup => {
             let choices = extract_lookup_choices(rule.options.as_ref())?;
             if choices.contains(trimmed) {
-                Ok(())
+                Ok(NormalizedDocumentMetadata {
+                    metadata_type_id,
+                    string_value: Some(value.to_string()),
+                    number_value: None,
+                    date_value: None,
+                })
             } else {
                 Err(ApiError::unprocessable_entity(&format!(
                     "Metadata field {} must be one of the configured choices",
@@ -287,11 +341,90 @@ fn validate_metadata_value(
     }
 }
 
+fn normalize_date_metadata_value(
+    metadata_type_id: i64,
+    rule: &MetadataValidationRule,
+    value: &str,
+) -> Result<NormalizedDocumentMetadata, ApiError> {
+    let trimmed = value.trim();
+
+    if rule.required && trimmed.is_empty() {
+        return Err(ApiError::unprocessable_entity(&format!(
+            "Metadata field {} is required for this document type and cannot be empty",
+            metadata_type_id
+        )));
+    }
+
+    if trimmed.is_empty() {
+        return Ok(empty_normalized(metadata_type_id));
+    }
+
+    if rule.data_type != DataType::Date {
+        return Err(ApiError::unprocessable_entity(&format!(
+            "Metadata field {} must use string_value",
+            metadata_type_id
+        )));
+    }
+
+    let date_value = NaiveDate::parse_from_str(trimmed, "%Y-%m-%d").map_err(|_| {
+        ApiError::unprocessable_entity(&format!(
+            "Metadata field {} must be a valid date in YYYY-MM-DD format",
+            metadata_type_id
+        ))
+    })?;
+
+    Ok(NormalizedDocumentMetadata {
+        metadata_type_id,
+        string_value: None,
+        number_value: None,
+        date_value: Some(date_value),
+    })
+}
+
+fn normalize_metadata_value(
+    metadata_type_id: i64,
+    rule: &MetadataValidationRule,
+    input: &NewDocumentMetadata,
+) -> Result<NormalizedDocumentMetadata, ApiError> {
+    let typed_value_count = [
+        input.string_value.is_some(),
+        input.number_value.is_some(),
+        input.date_value.is_some(),
+    ]
+    .into_iter()
+    .filter(|is_set| *is_set)
+    .count();
+
+    if typed_value_count > 1 {
+        return Err(ApiError::unprocessable_entity(&format!(
+            "Metadata field {} must set at most one typed value",
+            metadata_type_id
+        )));
+    }
+
+    if input.number_value.is_some() {
+        return Err(ApiError::unprocessable_entity(&format!(
+            "Metadata field {} cannot use number_value because number metadata types are not supported yet",
+            metadata_type_id
+        )));
+    }
+
+    if let Some(value) = input.string_value.as_deref() {
+        return normalize_string_metadata_value(metadata_type_id, rule, value);
+    }
+
+    if let Some(value) = input.date_value.as_deref() {
+        return normalize_date_metadata_value(metadata_type_id, rule, value);
+    }
+
+    validate_empty_metadata_value(metadata_type_id, rule)
+}
+
 async fn validate_document_metadata_input(
     db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
     document_id: i64,
     input: &[NewDocumentMetadata],
-) -> Result<(), ApiError> {
+) -> Result<Vec<NormalizedDocumentMetadata>, ApiError> {
     let metadata_type_ids: Vec<i64> = input
         .iter()
         .map(|m| m.metadata_type_id)
@@ -300,7 +433,7 @@ async fn validate_document_metadata_input(
         .collect();
 
     if metadata_type_ids.is_empty() {
-        return Ok(());
+        return Ok(Vec::new());
     }
 
     // Build a map of metadata type ID to validation rules, by joining from the document to its document type,
@@ -338,6 +471,7 @@ async fn validate_document_metadata_input(
             })
             .collect();
 
+    let mut normalized = Vec::with_capacity(input.len());
     for m in input {
         let Some(rule) = rules.get(&m.metadata_type_id) else {
             return Err(ApiError::unprocessable_entity(&format!(
@@ -345,8 +479,8 @@ async fn validate_document_metadata_input(
                 m.metadata_type_id
             )));
         };
-        validate_metadata_value(m.metadata_type_id, rule, &m.value)?;
+        normalized.push(normalize_metadata_value(m.metadata_type_id, rule, m)?);
     }
 
-    Ok(())
+    Ok(normalized)
 }

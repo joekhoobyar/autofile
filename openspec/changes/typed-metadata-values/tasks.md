@@ -10,13 +10,13 @@
 
 ## 2. Backend API And Domain
 
-- [ ] 2.1 Update `DocumentMetadata` to expose `string_value`, `number_value`, and `date_value` instead of `value`.
-- [ ] 2.2 Update `NewDocumentMetadata` to accept typed value fields instead of `value`.
-- [ ] 2.3 Implement typed metadata input normalization that rejects multiple non-null value fields with `422`.
-- [ ] 2.4 Validate that the submitted typed value field matches the Metadata Type data type, with lookup values stored in `string_value` and dates stored in `date_value`.
-- [ ] 2.5 Reject non-null `number_value` until a number Metadata Type exists.
-- [ ] 2.6 Preserve optional blank/null upsert behavior by deleting the stored row instead of writing an all-null row.
-- [ ] 2.7 Update bulk upsert conflict handling to set the selected typed value and clear the other typed value columns.
+- [x] 2.1 Update `DocumentMetadata` to expose `string_value`, `number_value`, and `date_value` instead of `value`.
+- [x] 2.2 Update `NewDocumentMetadata` to accept typed value fields instead of `value`.
+- [x] 2.3 Implement typed metadata input normalization that rejects multiple non-null value fields with `422`.
+- [x] 2.4 Validate that the submitted typed value field matches the Metadata Type data type, with lookup values stored in `string_value` and dates stored in `date_value`.
+- [x] 2.5 Reject non-null `number_value` until a number Metadata Type exists.
+- [x] 2.6 Preserve optional blank/null upsert behavior by deleting the stored row instead of writing an all-null row.
+- [x] 2.7 Update bulk upsert conflict handling to set the selected typed value and clear the other typed value columns.
 
 ## 3. Backend Reads And Search
 
