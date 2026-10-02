@@ -297,21 +297,9 @@ pub async fn create_document_file(
     let file_info = upload_document_file_to_s3(&state, file_upload).await?;
     let file_info_for_cleanup = file_info.clone();
 
-    let fast_jobs = state.fast_jobs.as_ref().clone();
-    let medium_jobs = state.medium_jobs.as_ref().clone();
-    let scan_enqueue_failed = Arc::new(AtomicBool::new(false));
-    let scan_enqueue_failed_for_tx = Arc::clone(&scan_enqueue_failed);
-    let thumbnail_enqueue_failed = Arc::new(AtomicBool::new(false));
-    let thumbnail_enqueue_failed_for_tx = Arc::clone(&thumbnail_enqueue_failed);
-    let pages_enqueue_failed = Arc::new(AtomicBool::new(false));
-    let pages_enqueue_failed_for_tx = Arc::clone(&pages_enqueue_failed);
-
     let result = db
         .build_transaction()
         .run::<_, diesel::result::Error, _>(async move |conn| {
-            let mut fast_jobs = fast_jobs;
-            let mut medium_jobs = medium_jobs;
-
             documents::table
                 .find(document_id)
                 .select(documents::id)
@@ -321,60 +309,41 @@ pub async fn create_document_file(
             let inserted_file =
                 insert_document_file(conn, document_id, file_info, user_id, scan_decision).await?;
 
-            if scan_decision.requested {
-                if medium_jobs
-                    .push(MediumJob::ScanDocumentFile {
-                        document_file_id: inserted_file.id,
-                    })
-                    .await
-                    .is_err()
-                {
-                    scan_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
-                    return Err(diesel::result::Error::RollbackTransaction);
-                }
-            } else if enqueue_post_upload_processing_jobs(
-                &mut fast_jobs,
-                &mut medium_jobs,
-                inserted_file.id,
-            )
-            .await
-            .is_err()
-            {
-                pages_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
-                thumbnail_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
-                return Err(diesel::result::Error::RollbackTransaction);
-            }
-
-            Ok(document_file_view(inserted_file))
+            Ok((document_file_view(inserted_file), scan_decision.requested))
         })
         .await;
 
     match result {
-        Ok(document_file) => Ok(document_file),
+        Ok((document_file, scan_requested)) => {
+            if scan_requested {
+                let mut medium_jobs = state.medium_jobs.as_ref().clone();
+                medium_jobs
+                    .push(MediumJob::ScanDocumentFile {
+                        document_file_id: document_file.id,
+                    })
+                    .await
+                    .map_err(|_| {
+                        ApiError::internal_server_error("Failed to enqueue virus scan job")
+                    })?;
+            } else {
+                let mut fast_jobs = state.fast_jobs.as_ref().clone();
+                let mut medium_jobs = state.medium_jobs.as_ref().clone();
+                enqueue_post_upload_processing_jobs(
+                    &mut fast_jobs,
+                    &mut medium_jobs,
+                    document_file.id,
+                )
+                .await
+                .map_err(|_| {
+                    ApiError::internal_server_error("Failed to enqueue document processing jobs")
+                })?;
+            }
+
+            Ok(document_file)
+        }
         Err(e) => {
             delete_uploaded_document_file_from_s3(&state, &file_info_for_cleanup).await;
-            if matches!(e, diesel::result::Error::RollbackTransaction) {
-                let scan_failed = scan_enqueue_failed.as_ref().load(Ordering::Relaxed);
-                let pages_failed = pages_enqueue_failed.as_ref().load(Ordering::Relaxed);
-                let thumbnail_failed = thumbnail_enqueue_failed.as_ref().load(Ordering::Relaxed);
-                if scan_failed {
-                    Err(ApiError::internal_server_error(
-                        "Failed to enqueue virus scan job",
-                    ))
-                } else if pages_failed {
-                    Err(ApiError::internal_server_error(
-                        "Failed to enqueue file pages job",
-                    ))
-                } else if thumbnail_failed {
-                    Err(ApiError::internal_server_error(
-                        "Failed to enqueue thumbnail job",
-                    ))
-                } else {
-                    Err(ApiError::from_diesel("Failed to create document_file", e))
-                }
-            } else {
-                Err(ApiError::from_diesel("Failed to create document_file", e))
-            }
+            Err(ApiError::from_diesel("Failed to create document_file", e))
         }
     }
 }
@@ -485,10 +454,6 @@ pub async fn rescan_document_file(
         return Err(ApiError::conflict("Virus scanning is disabled"));
     }
 
-    let medium_jobs = state.medium_jobs.as_ref().clone();
-    let enqueue_failed = Arc::new(AtomicBool::new(false));
-    let enqueue_failed_for_tx = Arc::clone(&enqueue_failed);
-
     let result = db
         .build_transaction()
         .run::<_, diesel::result::Error, _>(async move |conn| {
@@ -525,24 +490,27 @@ pub async fn rescan_document_file(
                 .get_result::<DocumentFile>(conn)
                 .await?;
 
-            let mut medium_jobs = medium_jobs;
-            if medium_jobs
-                .push(MediumJob::ScanDocumentFile {
-                    document_file_id: updated.id,
-                })
-                .await
-                .is_err()
-            {
-                enqueue_failed_for_tx.store(true, Ordering::Relaxed);
-                return Err(diesel::result::Error::RollbackTransaction);
-            }
-
             Ok(document_file_view(updated))
         })
         .await;
 
     match result {
         Ok(view) => {
+            let mut medium_jobs = state.medium_jobs.as_ref().clone();
+            medium_jobs
+                .push(MediumJob::ScanDocumentFile {
+                    document_file_id: view.id,
+                })
+                .await
+                .map_err(|_| {
+                    tracing::error!(
+                        document_file_id = id,
+                        document_id,
+                        "virus rescan failed to enqueue scan job"
+                    );
+                    ApiError::internal_server_error("Failed to enqueue virus scan job")
+                })?;
+
             tracing::info!(
                 document_file_id = id,
                 document_id,
@@ -554,15 +522,6 @@ pub async fn rescan_document_file(
         Err(err) => {
             if matches!(err, diesel::result::Error::NotFound) {
                 Err(ApiError::not_found("Document file not found"))
-            } else if enqueue_failed.as_ref().load(Ordering::Relaxed) {
-                tracing::error!(
-                    document_file_id = id,
-                    document_id,
-                    "virus rescan failed to enqueue scan job"
-                );
-                Err(ApiError::internal_server_error(
-                    "Failed to enqueue virus scan job",
-                ))
             } else if matches!(err, diesel::result::Error::RollbackTransaction) {
                 Err(ApiError::conflict(
                     "File is already pending or actively scanning",
@@ -587,11 +546,6 @@ pub async fn mark_document_file_scan_not_required(
     document_id: i64,
     id: i64,
 ) -> Result<DocumentFileView, ApiError> {
-    let fast_jobs = state.fast_jobs.as_ref().clone();
-    let medium_jobs = state.medium_jobs.as_ref().clone();
-    let enqueue_failed = Arc::new(AtomicBool::new(false));
-    let enqueue_failed_for_tx = Arc::clone(&enqueue_failed);
-
     let result = db
         .build_transaction()
         .run::<_, diesel::result::Error, _>(async move |conn| {
@@ -629,29 +583,25 @@ pub async fn mark_document_file_scan_not_required(
                 .get_result::<DocumentFile>(conn)
                 .await?;
 
-            let mut fast_jobs = fast_jobs;
-            let mut medium_jobs = medium_jobs;
-            if enqueue_post_upload_processing_jobs(&mut fast_jobs, &mut medium_jobs, updated.id)
-                .await
-                .is_err()
-            {
-                enqueue_failed_for_tx.store(true, Ordering::Relaxed);
-                return Err(diesel::result::Error::RollbackTransaction);
-            }
-
             Ok(document_file_view(updated))
         })
         .await;
 
     match result {
-        Ok(view) => Ok(view),
+        Ok(view) => {
+            let mut fast_jobs = state.fast_jobs.as_ref().clone();
+            let mut medium_jobs = state.medium_jobs.as_ref().clone();
+            enqueue_post_upload_processing_jobs(&mut fast_jobs, &mut medium_jobs, view.id)
+                .await
+                .map_err(|_| {
+                    ApiError::internal_server_error("Failed to enqueue document processing jobs")
+                })?;
+
+            Ok(view)
+        }
         Err(err) => {
             if matches!(err, diesel::result::Error::NotFound) {
                 Err(ApiError::not_found("Document file not found"))
-            } else if enqueue_failed.as_ref().load(Ordering::Relaxed) {
-                Err(ApiError::internal_server_error(
-                    "Failed to enqueue document processing jobs",
-                ))
             } else if matches!(err, diesel::result::Error::RollbackTransaction) {
                 Err(ApiError::conflict(
                     "Infected files cannot be marked as scan not required",
@@ -860,10 +810,6 @@ pub async fn scan_document_file(
             let log_scanner = scanner.clone();
             let log_scanner_version = scanner_version.clone();
             let log_signature_version = signature_version.clone();
-            let mut fast_jobs = state.fast_jobs.as_ref().clone();
-            let mut medium_jobs = state.medium_jobs.as_ref().clone();
-            let enqueue_failed = Arc::new(AtomicBool::new(false));
-            let enqueue_failed_for_tx = Arc::clone(&enqueue_failed);
             let result = db
                 .build_transaction()
                 .run::<_, diesel::result::Error, _>(async move |conn| {
@@ -880,39 +826,38 @@ pub async fn scan_document_file(
                         },
                     )
                     .await?;
-                    enqueue_post_upload_processing_jobs(
-                        &mut fast_jobs,
-                        &mut medium_jobs,
-                        document_file_id,
-                    )
-                    .await
-                    .map_err(|_| {
-                        enqueue_failed_for_tx.store(true, Ordering::Relaxed);
-                        diesel::result::Error::RollbackTransaction
-                    })?;
                     Ok(())
                 })
                 .await;
 
             if let Err(err) = result {
-                if enqueue_failed.as_ref().load(Ordering::Relaxed) {
-                    tracing::error!(
-                        document_file_id,
-                        "virus scan was clean but failed to enqueue post-upload processing jobs; marked scan_error for retry"
-                    );
-                    mark_scan_error(
-                        &mut db,
-                        document_file_id,
-                        "autofile",
-                        "Failed to enqueue document processing jobs",
-                    )
-                    .await?;
-                    return Err(std::io::Error::other(
-                        "Failed to enqueue document processing jobs",
-                    )
-                    .into());
-                }
                 return Err(err.into());
+            }
+
+            let mut fast_jobs = state.fast_jobs.as_ref().clone();
+            let mut medium_jobs = state.medium_jobs.as_ref().clone();
+            if enqueue_post_upload_processing_jobs(
+                &mut fast_jobs,
+                &mut medium_jobs,
+                document_file_id,
+            )
+            .await
+            .is_err()
+            {
+                tracing::error!(
+                    document_file_id,
+                    "virus scan was clean but failed to enqueue post-upload processing jobs; marked scan_error for retry"
+                );
+                mark_scan_error(
+                    &mut db,
+                    document_file_id,
+                    "autofile",
+                    "Failed to enqueue document processing jobs",
+                )
+                .await?;
+                return Err(
+                    std::io::Error::other("Failed to enqueue document processing jobs").into(),
+                );
             }
 
             tracing::info!(

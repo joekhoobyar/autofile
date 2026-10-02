@@ -26,10 +26,8 @@ const WORKER_POLL_INTERVAL: Duration = Duration::from_millis(500);
 pub async fn create_storages(redis_url: &str) -> QueueStorages {
     let redis_conn = create_redis_connection_with_retry(redis_url).await;
     QueueStorages {
-        fast: RedisStorage::new(redis_conn.clone())
-            .with_config(queue_config(FAST_QUEUE)),
-        medium: RedisStorage::new(redis_conn.clone())
-            .with_config(queue_config(MEDIUM_QUEUE)),
+        fast: RedisStorage::new(redis_conn.clone()).with_config(queue_config(FAST_QUEUE)),
+        medium: RedisStorage::new(redis_conn.clone()).with_config(queue_config(MEDIUM_QUEUE)),
         slow: RedisStorage::new(redis_conn).with_config(queue_config(SLOW_QUEUE)),
     }
 }

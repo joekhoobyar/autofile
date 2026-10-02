@@ -1,7 +1,6 @@
 use chrono::Utc;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::application::classifier_blocks::{compute_classification_actions, load_document_text};
 use crate::application::document_files::{
@@ -169,20 +168,9 @@ pub async fn create_document(
     }
 
     let file_info_for_cleanup = file_info.clone();
-    let fast_jobs = state.fast_jobs.as_ref().clone();
-    let medium_jobs = state.medium_jobs.as_ref().clone();
-    let scan_enqueue_failed = Arc::new(AtomicBool::new(false));
-    let scan_enqueue_failed_for_tx = Arc::clone(&scan_enqueue_failed);
-    let thumb_enqueue_failed = Arc::new(AtomicBool::new(false));
-    let thumb_enqueue_failed_for_tx = Arc::clone(&thumb_enqueue_failed);
-    let pages_enqueue_failed = Arc::new(AtomicBool::new(false));
-    let pages_enqueue_failed_for_tx = Arc::clone(&pages_enqueue_failed);
-
     let result = db
         .build_transaction()
         .run::<_, diesel::result::Error, _>(async move |conn| {
-            let mut fast_jobs = fast_jobs;
-            let mut medium_jobs = medium_jobs;
             let inserted_document: Document = diesel::insert_into(documents::table)
                 .values((
                     documents::title.eq(&title),
@@ -194,7 +182,7 @@ pub async fn create_document(
                 .get_result(conn)
                 .await?;
 
-            if let Some(upload) = file_info {
+            let inserted_file = if let Some(upload) = file_info {
                 let inserted_file = insert_document_file(
                     conn,
                     inserted_document.id,
@@ -204,53 +192,63 @@ pub async fn create_document(
                 )
                 .await?;
 
-                if scan_decision
-                    .expect("scan decision is present when file info is present")
-                    .requested
-                {
-                    if medium_jobs
-                        .push(MediumJob::ScanDocumentFile {
-                            document_file_id: inserted_file.id,
-                        })
-                        .await
-                        .is_err()
-                    {
-                        scan_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
-                        return Err(diesel::result::Error::RollbackTransaction);
-                    }
-                } else {
-                    if fast_jobs
-                        .push(FastJob::GenerateThumbnail {
-                            document_file_id: inserted_file.id,
-                            page: 1,
-                            width: 800,
-                        })
-                        .await
-                        .is_err()
-                    {
-                        thumb_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
-                        return Err(diesel::result::Error::RollbackTransaction);
-                    }
+                Some((
+                    inserted_file.id,
+                    scan_decision
+                        .expect("scan decision is present when file info is present")
+                        .requested,
+                ))
+            } else {
+                None
+            };
 
-                    if medium_jobs
-                        .push(MediumJob::ProcessFilePages {
-                            document_file_id: inserted_file.id,
-                        })
-                        .await
-                        .is_err()
-                    {
-                        pages_enqueue_failed_for_tx.store(true, Ordering::Relaxed);
-                        return Err(diesel::result::Error::RollbackTransaction);
-                    }
-                }
-            }
-
-            Ok(inserted_document)
+            Ok((inserted_document, inserted_file))
         })
         .await;
 
     match result {
-        Ok(document) => {
+        Ok((document, inserted_file)) => {
+            if let Some((document_file_id, scan_requested)) = inserted_file {
+                if scan_requested {
+                    let mut medium_jobs = state.medium_jobs.as_ref().clone();
+                    medium_jobs
+                        .push(MediumJob::ScanDocumentFile { document_file_id })
+                        .await
+                        .map_err(|_| {
+                            ApiError::new(
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                "Failed to enqueue virus scan job",
+                            )
+                        })?;
+                } else {
+                    let mut fast_jobs = state.fast_jobs.as_ref().clone();
+                    fast_jobs
+                        .push(FastJob::GenerateThumbnail {
+                            document_file_id,
+                            page: 1,
+                            width: 800,
+                        })
+                        .await
+                        .map_err(|_| {
+                            ApiError::new(
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                "Failed to enqueue thumbnail job",
+                            )
+                        })?;
+
+                    let mut medium_jobs = state.medium_jobs.as_ref().clone();
+                    medium_jobs
+                        .push(MediumJob::ProcessFilePages { document_file_id })
+                        .await
+                        .map_err(|_| {
+                            ApiError::new(
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                "Failed to enqueue file pages job",
+                            )
+                        })?;
+                }
+            }
+
             enqueue_document_index_document_updates(document.id, state.clone()).await?;
             Ok(document)
         }
@@ -258,36 +256,7 @@ pub async fn create_document(
             if let Some(upload) = file_info_for_cleanup {
                 delete_uploaded_document_file_from_s3(&state, &upload).await;
             }
-            if matches!(e, diesel::result::Error::RollbackTransaction) {
-                let scan_failed = scan_enqueue_failed.as_ref().load(Ordering::Relaxed);
-                let thumb_failed = thumb_enqueue_failed.as_ref().load(Ordering::Relaxed);
-                let pages_failed = pages_enqueue_failed.as_ref().load(Ordering::Relaxed);
-                if scan_failed {
-                    Err(ApiError::new(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to enqueue virus scan job",
-                    ))
-                } else if thumb_failed && pages_failed {
-                    Err(ApiError::new(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to enqueue document processing jobs",
-                    ))
-                } else if thumb_failed {
-                    Err(ApiError::new(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to enqueue thumbnail job",
-                    ))
-                } else if pages_failed {
-                    Err(ApiError::new(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Failed to enqueue file pages job",
-                    ))
-                } else {
-                    Err(ApiError::from_diesel("Failed to create document", e))
-                }
-            } else {
-                Err(ApiError::from_diesel("Failed to create document", e))
-            }
+            Err(ApiError::from_diesel("Failed to create document", e))
         }
     }
 }

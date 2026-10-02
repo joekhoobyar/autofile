@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Improved mobile view of some list pages
+- Fixed race conditions by enqueuing job processing after the transaction commits
+- Workarounds for new Apalis 1.0.0-rc10 behavior
 
 ### Security
 
