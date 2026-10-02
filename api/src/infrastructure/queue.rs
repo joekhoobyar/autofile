@@ -3,7 +3,7 @@ use std::sync::Arc;
 use apalis::layers::WorkerBuilderExt;
 use apalis::layers::retry::RetryPolicy;
 use apalis::prelude::*;
-use apalis_redis::{Config, RedisStorage};
+use apalis_redis::{RedisConfig, RedisStorage};
 use redis::AsyncCommands;
 use tokio::time::{Duration, sleep, timeout};
 
@@ -21,19 +21,14 @@ pub struct QueueStorages {
 const FAST_QUEUE: &str = "autofile:fast";
 const MEDIUM_QUEUE: &str = "autofile:medium";
 const SLOW_QUEUE: &str = "autofile:slow";
-const WORKER_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 pub async fn create_storages(redis_url: &str) -> QueueStorages {
     let redis_conn = create_redis_connection_with_retry(redis_url).await;
     QueueStorages {
-        fast: RedisStorage::new(redis_conn.clone()).with_config(queue_config(FAST_QUEUE)),
-        medium: RedisStorage::new(redis_conn.clone()).with_config(queue_config(MEDIUM_QUEUE)),
-        slow: RedisStorage::new(redis_conn).with_config(queue_config(SLOW_QUEUE)),
+        fast: RedisStorage::new_with_config(redis_conn.clone(), RedisConfig::new(FAST_QUEUE)),
+        medium: RedisStorage::new_with_config(redis_conn.clone(), RedisConfig::new(MEDIUM_QUEUE)),
+        slow: RedisStorage::new_with_config(redis_conn, RedisConfig::new(SLOW_QUEUE)),
     }
-}
-
-fn queue_config(queue: &str) -> Config {
-    Config::default().queue(queue).emit_events(false)
 }
 
 pub fn build_monitor(app_state: Arc<AppState>) -> Monitor {
@@ -54,13 +49,7 @@ pub fn build_monitor(app_state: Arc<AppState>) -> Monitor {
             move |_| {
                 // One or more workers pulling from Redis
                 WorkerBuilder::new(fast_worker_name.clone())
-                    .backend(
-                        app_state
-                            .fast_jobs
-                            .as_ref()
-                            .clone()
-                            .poll_with_interval(WORKER_POLL_INTERVAL),
-                    )
+                    .backend(app_state.fast_jobs.as_ref().clone())
                     .concurrency(6) // Adjust concurrency as needed
                     .retry(RetryPolicy::retries(7))
                     .catch_panic()
@@ -74,13 +63,7 @@ pub fn build_monitor(app_state: Arc<AppState>) -> Monitor {
             let medium_worker_name = medium_worker_name.clone();
             move |_| {
                 WorkerBuilder::new(medium_worker_name.clone())
-                    .backend(
-                        app_state
-                            .medium_jobs
-                            .as_ref()
-                            .clone()
-                            .poll_with_interval(WORKER_POLL_INTERVAL),
-                    )
+                    .backend(app_state.medium_jobs.as_ref().clone())
                     .concurrency(4)
                     .retry(RetryPolicy::retries(7))
                     .catch_panic()
@@ -94,13 +77,7 @@ pub fn build_monitor(app_state: Arc<AppState>) -> Monitor {
             let slow_worker_name = slow_worker_name.clone();
             move |_| {
                 WorkerBuilder::new(slow_worker_name.clone())
-                    .backend(
-                        app_state
-                            .slow_jobs
-                            .as_ref()
-                            .clone()
-                            .poll_with_interval(WORKER_POLL_INTERVAL),
-                    )
+                    .backend(app_state.slow_jobs.as_ref().clone())
                     .concurrency(2)
                     .retry(RetryPolicy::retries(7))
                     .catch_panic()
