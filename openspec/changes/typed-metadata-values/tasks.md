@@ -1,12 +1,12 @@
 ## 1. Database Schema
 
-- [ ] 1.1 Add a Diesel migration that introduces nullable `string_value`, `number_value NUMERIC`, and `date_value DATE` columns on `document_metadatas`.
-- [ ] 1.2 Backfill `string_value` for existing `string` and `lookup` metadata rows.
-- [ ] 1.3 Validate and backfill `date_value` for existing `date` metadata rows from `value::date`.
-- [ ] 1.4 Replace the `(metadata_type_id, value)` metadata suggestion index with `(metadata_type_id, string_value)`.
-- [ ] 1.5 Drop the old `value` column and add a check constraint requiring exactly one typed value column per row.
-- [ ] 1.6 Add a down migration that recreates `value`, backfills it from typed columns, removes typed columns, and restores the old index.
-- [ ] 1.7 Regenerate and review `api/src/schema.rs`.
+- [x] 1.1 Add a Diesel migration that introduces nullable `string_value`, `number_value NUMERIC`, and `date_value DATE` columns on `document_metadatas`.
+- [x] 1.2 Backfill `string_value` for existing `string` and `lookup` metadata rows.
+- [x] 1.3 Validate and backfill `date_value` for existing `date` metadata rows from `value::date`.
+- [x] 1.4 Replace the `(metadata_type_id, value)` metadata suggestion index with `(metadata_type_id, string_value)`.
+- [x] 1.5 Drop the old `value` column and add a check constraint requiring exactly one typed value column per row.
+- [x] 1.6 Add a down migration that recreates `value`, backfills it from typed columns, removes typed columns, and restores the old index.
+- [x] 1.7 Regenerate and review `api/src/schema.rs`.
 
 ## 2. Backend API And Domain
 
