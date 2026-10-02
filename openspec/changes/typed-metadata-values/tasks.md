@@ -46,13 +46,13 @@
 
 ## 6. Tests And Validation
 
-- [ ] 6.1 Update integration test fixtures to insert typed metadata values.
-- [ ] 6.2 Add or update API tests for saving and reading string metadata rows.
-- [ ] 6.3 Add or update API tests for saving and reading date metadata rows as typed rows and document view strings.
-- [ ] 6.4 Add API tests that multiple typed value fields return `422`.
-- [ ] 6.5 Add API tests that non-null `number_value` returns `422` until number metadata exists.
-- [ ] 6.6 Add API tests that `metadata_value` search matches `string_value` and does not match `date_value`.
-- [ ] 6.7 Add API tests that `metadata_type_id`-only search still matches date metadata rows.
-- [ ] 6.8 Add API tests that classifier metadata actions can write valid `YYYY-MM-DD` Date metadata into `date_value` and reject invalid date strings.
-- [ ] 6.9 Run relevant API checks from `api/`: `cargo fmt --all -- --check`, `cargo check --locked --all-targets`, and targeted tests.
-- [ ] 6.10 Run relevant UI checks from `ui/`: `npm run lint`, `npm test`, and `npm run build` if UI files change.
+- [x] 6.1 Update integration test fixtures to insert typed metadata values.
+- [x] 6.2 Add or update API tests for saving and reading string metadata rows.
+- [x] 6.3 Add or update API tests for saving and reading date metadata rows as typed rows and document view strings.
+- [x] 6.4 Add API tests that multiple typed value fields return `422`.
+- [x] 6.5 Add API tests that non-null `number_value` returns `422` until number metadata exists.
+- [x] 6.6 Add API tests that `metadata_value` search matches `string_value` and does not match `date_value`.
+- [x] 6.7 Add API tests that `metadata_type_id`-only search still matches date metadata rows.
+- [x] 6.8 Add API tests that classifier metadata actions can write valid `YYYY-MM-DD` Date metadata into `date_value` and reject invalid date strings.
+- [x] 6.9 Run relevant API checks from `api/`: `cargo fmt --all -- --check`, `cargo check --locked --all-targets`, and targeted tests.
+- [x] 6.10 Run relevant UI checks from `ui/`: `npm run lint`, `npm test`, and `npm run build` if UI files change.

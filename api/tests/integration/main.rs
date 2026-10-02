@@ -8,6 +8,7 @@ mod document_file_delete_rescan;
 mod document_file_page_cleanup;
 mod document_index_documents;
 mod document_list_scan_status;
+mod document_metadatas;
 mod document_types;
 mod document_types_metadata_types;
 mod metadata_types;
