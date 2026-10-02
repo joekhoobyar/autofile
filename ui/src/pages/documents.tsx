@@ -949,7 +949,7 @@ export function AdvancedDocumentSearch() {
           </div>
 
           <div className="col-12 md:col-6 xl:col-4">
-            <label htmlFor="advanced-search-metadata-value" className="font-medium mb-2 block">String Metadata Value</label>
+            <label htmlFor="advanced-search-metadata-value" className="font-medium mb-2 block">Text Metadata Value</label>
             <Controller
               name="metadata_value"
               control={control}
