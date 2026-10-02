@@ -64,6 +64,21 @@ pub enum DocumentSortField {
     UpdatedAt,
 }
 
+type DocumentMetadataListRow = (
+    i64,
+    String,
+    Option<String>,
+    Option<bigdecimal::BigDecimal>,
+    Option<chrono::NaiveDate>,
+);
+
+type DocumentMetadataViewRow = (
+    String,
+    Option<String>,
+    Option<bigdecimal::BigDecimal>,
+    Option<chrono::NaiveDate>,
+);
+
 #[derive(Debug, Default, serde::Deserialize, utoipa::IntoParams)]
 #[into_params(parameter_in = Query)]
 pub struct ListDocumentsQuery {
@@ -712,13 +727,7 @@ pub async fn list_documents(
 
     let mut metadata_by_document: HashMap<i64, HashMap<String, String>> = HashMap::new();
     if !document_ids.is_empty() {
-        let metadata_rows: Vec<(
-            i64,
-            String,
-            Option<String>,
-            Option<bigdecimal::BigDecimal>,
-            Option<chrono::NaiveDate>,
-        )> = document_metadatas::table
+        let metadata_rows: Vec<DocumentMetadataListRow> = document_metadatas::table
             .inner_join(metadata_types::table)
             .filter(document_metadatas::document_id.eq_any(&document_ids))
             .select((
@@ -728,13 +737,7 @@ pub async fn list_documents(
                 document_metadatas::number_value,
                 document_metadatas::date_value,
             ))
-            .load::<(
-                i64,
-                String,
-                Option<String>,
-                Option<bigdecimal::BigDecimal>,
-                Option<chrono::NaiveDate>,
-            )>(db)
+            .load::<DocumentMetadataListRow>(db)
             .await
             .api_context("Failed to list document metadata")?;
 
@@ -938,12 +941,7 @@ pub async fn get_document_view(
         .await
         .app_context("Failed to fetch document")?;
 
-    let metadata_rows: Vec<(
-        String,
-        Option<String>,
-        Option<bigdecimal::BigDecimal>,
-        Option<chrono::NaiveDate>,
-    )> = document_metadatas::table
+    let metadata_rows: Vec<DocumentMetadataViewRow> = document_metadatas::table
         .inner_join(metadata_types::table)
         .filter(document_metadatas::document_id.eq(document.id))
         .select((
@@ -952,12 +950,7 @@ pub async fn get_document_view(
             document_metadatas::number_value,
             document_metadatas::date_value,
         ))
-        .load::<(
-            String,
-            Option<String>,
-            Option<bigdecimal::BigDecimal>,
-            Option<chrono::NaiveDate>,
-        )>(db)
+        .load::<DocumentMetadataViewRow>(db)
         .await
         .app_context("Failed to list document metadata")?;
     let metadata: HashMap<String, String> = metadata_rows
