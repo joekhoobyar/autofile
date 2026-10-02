@@ -46,10 +46,10 @@ pub fn build_monitor(app_state: Arc<AppState>) -> Monitor {
                 // One or more workers pulling from Redis
                 WorkerBuilder::new(fast_worker_name.clone())
                     .backend(app_state.fast_jobs.as_ref().clone())
-                    .catch_panic()
-                    .retry(RetryPolicy::retries(7))
-                    .enable_tracing()
                     .concurrency(6) // Adjust concurrency as needed
+                    .retry(RetryPolicy::retries(7))
+                    .catch_panic()
+                    .enable_tracing()
                     .data(app_state.clone())
                     .build(handle_fast_job)
             }
@@ -60,10 +60,10 @@ pub fn build_monitor(app_state: Arc<AppState>) -> Monitor {
             move |_| {
                 WorkerBuilder::new(medium_worker_name.clone())
                     .backend(app_state.medium_jobs.as_ref().clone())
-                    .catch_panic()
-                    .retry(RetryPolicy::retries(7))
-                    .enable_tracing()
                     .concurrency(4)
+                    .retry(RetryPolicy::retries(7))
+                    .catch_panic()
+                    .enable_tracing()
                     .data(app_state.clone())
                     .build(handle_medium_job)
             }
@@ -74,10 +74,10 @@ pub fn build_monitor(app_state: Arc<AppState>) -> Monitor {
             move |_| {
                 WorkerBuilder::new(slow_worker_name.clone())
                     .backend(app_state.slow_jobs.as_ref().clone())
-                    .catch_panic()
-                    .retry(RetryPolicy::retries(7))
-                    .enable_tracing()
                     .concurrency(2)
+                    .retry(RetryPolicy::retries(7))
+                    .catch_panic()
+                    .enable_tracing()
                     .data(app_state.clone())
                     .build(handle_slow_job)
             }
