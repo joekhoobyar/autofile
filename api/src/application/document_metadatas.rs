@@ -22,10 +22,10 @@ use diesel_async::{AsyncPgConnection, RunQueryDsl};
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct NewDocumentMetadata {
     pub metadata_type_id: i64,
-    /// String or lookup metadata value to store.
+    /// String or lookup metadata value to store. Set at most one typed value field per item.
     #[schema(example = "Acme Corporation")]
     pub string_value: Option<String>,
-    /// Numeric metadata value to store. Number metadata types are not supported yet.
+    /// Numeric metadata value to store. This field is reserved and rejected until number metadata types are supported.
     #[schema(value_type = Option<f64>, example = 123.45)]
     pub number_value: Option<BigDecimal>,
     /// Date metadata value to store. Clients must send YYYY-MM-DD regardless of the configured frontend display format.

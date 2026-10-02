@@ -26,12 +26,24 @@ Fields are displayed alphabetically by name. The value editor depends on the Met
 | Data Type | Editor | Behavior |
 | --- | --- | --- |
 | String | Text input | Accepts free-form text. |
-| Date | Date picker | Displays and edits dates using the configured UI date format, and stores a valid `YYYY-MM-DD` date. |
+| Date | Date picker | Displays and edits dates using the configured UI date format, and stores a valid date. API, classifier, and template string representations use `YYYY-MM-DD`. |
 | Lookup | Dropdown | Selects one of the configured choices. |
 
 The editor sends only values that changed. Existing values for other fields remain unchanged.
 
-The date display format is configured on the Settings page and affects only the frontend. The API, stored metadata values, classifier rules, and index templates continue to use `YYYY-MM-DD` for Date metadata.
+The date display format is configured on the Settings page and affects only the frontend. The Document Metadata API writes Date metadata through `date_value` and requires `YYYY-MM-DD`; classifier rules and index templates continue to use `YYYY-MM-DD` for Date metadata strings.
+
+## API Value Fields
+
+Document metadata row APIs use explicit typed value fields instead of a single `value` field:
+
+- `string_value` stores String and Lookup metadata.
+- `date_value` stores Date metadata and must be sent as `YYYY-MM-DD`.
+- `number_value` is reserved for future number metadata support and is currently rejected when non-null.
+
+Set at most one typed value field per metadata item. Setting multiple typed value fields, or setting a value field that does not match the Metadata Type, returns `422 Unprocessable Entity`.
+
+Document list and detail responses still include `metadata` as a slug-keyed string map for display, classifiers, and index templates. In that map, Date metadata appears as `YYYY-MM-DD`.
 
 ## Required Values
 
@@ -52,9 +64,12 @@ The API validates every submitted value against the document's current Document 
 
 - The Metadata Type must be associated with the Document Type.
 - A submitted required value cannot be blank.
+- Each submitted item can set at most one typed value field.
+- String and Lookup metadata must use `string_value`; Date metadata must use `date_value`.
 - A Date must be a real calendar date in `YYYY-MM-DD` format.
 - A Lookup value must match one of the configured choices after surrounding whitespace is trimmed for validation.
 - String values have no additional format restrictions.
+- Non-null `number_value` is rejected until number metadata types are supported.
 
 Avoid leading or trailing whitespace. Validation ignores surrounding whitespace, but the submitted text is stored as provided.
 
@@ -77,17 +92,17 @@ See [Assign A Document Type](document-types.md#assign-a-document-type) before ch
 
 ## Search Metadata
 
-The basic document search checks title, extracted document text, and metadata values. Metadata matching is case-insensitive and finds partial values.
+The basic document search checks title and extracted document text. Advanced metadata value matching is case-insensitive and finds partial string or lookup values.
 
 Use **Advanced Document Search** for more control:
 
-1. Enter a **Metadata Value**.
+1. Enter a **String Metadata Value** to search String or Lookup values.
 2. Optionally select a **Metadata Type** to restrict the value to one field.
 3. Optionally select a **Document Type**.
 4. Select **Match Any** to match any criterion instead of requiring all criteria.
 5. Select **Search**.
 
-Selecting a Metadata Type without entering a value finds documents that have a stored record for that field.
+Date metadata values are not searched by the metadata value field. Selecting a Metadata Type without entering a value finds documents that have a stored record for that field, including Date metadata fields.
 
 ## Use Metadata In Indexes
 

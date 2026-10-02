@@ -85,7 +85,7 @@ pub struct ListDocumentsQuery {
     pub tag_id: Option<i64>,
     /// Narrow results to documents with a value for one Metadata Type.
     pub metadata_type_id: Option<i64>,
-    /// Case-insensitive metadata value substring match.
+    /// Case-insensitive string/lookup metadata value substring match. Date metadata is not searched by this field.
     pub metadata_value: Option<String>,
     /// Case-insensitive filename substring search.
     pub filename: Option<String>,

@@ -26,7 +26,7 @@ pub struct DocumentView {
     pub title: String,
     pub document_type_id: i64,
     pub pages: i32,
-    /// Stored metadata values keyed by Metadata Type slug.
+    /// String representation of stored metadata values keyed by Metadata Type slug.
     #[schema(schema_with = metadata_map_schema)]
     pub metadata: HashMap<String, String>,
     pub cabinet_ids: Vec<i64>,
@@ -62,7 +62,7 @@ pub struct DocumentChangeset {
     pub document_type_id: Option<i64>,
 }
 
-/// Free-form string map schema for document metadata.
+/// Free-form string map schema for document metadata display/template values.
 ///
 /// utoipa renders `HashMap` fields with a redundant `propertyNames` keyword
 /// that Swagger UI displays as a confusing extra child; this keeps the
@@ -71,7 +71,7 @@ fn metadata_map_schema() -> utoipa::openapi::Object {
     let string_schema =
         utoipa::openapi::ObjectBuilder::new().schema_type(utoipa::openapi::schema::Type::String);
     utoipa::openapi::ObjectBuilder::new()
-        .description(Some("Stored metadata values keyed by Metadata Type slug. Date metadata values use YYYY-MM-DD regardless of the configured frontend display format."))
+        .description(Some("String representation of stored metadata values keyed by Metadata Type slug. Date metadata values use YYYY-MM-DD regardless of the configured frontend display format."))
         .additional_properties(Some(string_schema))
         .build()
 }

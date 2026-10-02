@@ -18,10 +18,10 @@ pub struct DocumentMetadata {
     pub created_by: i64,
     pub updated_at: DateTime<Utc>,
     pub updated_by: i64,
-    /// Stored string or lookup metadata value.
+    /// Stored string or lookup metadata value. Exactly one typed value field is non-null for stored rows.
     #[schema(example = "Acme Corporation")]
     pub string_value: Option<String>,
-    /// Stored numeric metadata value. Number metadata types are not supported yet.
+    /// Stored numeric metadata value. This field is reserved; number metadata types are not supported yet.
     #[schema(value_type = Option<f64>, example = 123.45)]
     pub number_value: Option<BigDecimal>,
     /// Stored date metadata value. API dates use YYYY-MM-DD regardless of the configured frontend display format.

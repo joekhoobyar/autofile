@@ -39,10 +39,10 @@
 
 ## 5. Documentation And OpenAPI
 
-- [ ] 5.1 Update Rust OpenAPI schema comments and endpoint descriptions for typed metadata row payloads.
-- [ ] 5.2 Update `docs/concepts/document-metadata.md` for typed storage, typed API payloads, and string-only metadata value search.
-- [ ] 5.3 Update `docs/reference/api.md` for the breaking metadata API change and unchanged `DocumentView.metadata` string map.
-- [ ] 5.4 Update any classifier or index documentation that references metadata value serialization if needed.
+- [x] 5.1 Update Rust OpenAPI schema comments and endpoint descriptions for typed metadata row payloads.
+- [x] 5.2 Update `docs/concepts/document-metadata.md` for typed storage, typed API payloads, and string-only metadata value search.
+- [x] 5.3 Update `docs/reference/api.md` for the breaking metadata API change and unchanged `DocumentView.metadata` string map.
+- [x] 5.4 Update any classifier or index documentation that references metadata value serialization if needed.
 
 ## 6. Tests And Validation
 
