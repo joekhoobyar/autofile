@@ -949,7 +949,7 @@ export function AdvancedDocumentSearch() {
           </div>
 
           <div className="col-12 md:col-6 xl:col-4">
-            <label htmlFor="advanced-search-metadata-value" className="font-medium mb-2 block">Metadata Value</label>
+            <label htmlFor="advanced-search-metadata-value" className="font-medium mb-2 block">String Metadata Value</label>
             <Controller
               name="metadata_value"
               control={control}
@@ -958,10 +958,11 @@ export function AdvancedDocumentSearch() {
                   id="advanced-search-metadata-value"
                   value={field.value}
                   onChange={field.onChange}
-                  placeholder="Metadata value contains..."
+                  placeholder="String or lookup value contains..."
                 />
               )}
             />
+            <small className="text-color-secondary block mt-2">Date metadata values are not searched by this field.</small>
           </div>
 
           <div className="col-12 md:col-6 xl:col-4">

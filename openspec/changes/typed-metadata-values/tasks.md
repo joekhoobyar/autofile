@@ -31,11 +31,11 @@
 
 ## 4. UI
 
-- [ ] 4.1 Update handwritten document metadata models to use `string_value`, `number_value`, and `date_value`.
-- [ ] 4.2 Update metadata editor row utilities to build typed upsert payloads from row data types.
-- [ ] 4.3 Send `string_value` for string and lookup rows, `date_value` for date rows, and no `number_value` until number metadata is supported.
-- [ ] 4.4 Update UI tests that assert document metadata save payloads.
-- [ ] 4.5 Update advanced search UI copy if needed to clarify that metadata value search matches string values.
+- [x] 4.1 Update handwritten document metadata models to use `string_value`, `number_value`, and `date_value`.
+- [x] 4.2 Update metadata editor row utilities to build typed upsert payloads from row data types.
+- [x] 4.3 Send `string_value` for string and lookup rows, `date_value` for date rows, and no `number_value` until number metadata is supported.
+- [x] 4.4 Update UI tests that assert document metadata save payloads.
+- [x] 4.5 Update advanced search UI copy if needed to clarify that metadata value search matches string values.
 
 ## 5. Documentation And OpenAPI
 
