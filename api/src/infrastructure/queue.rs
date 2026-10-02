@@ -3,7 +3,7 @@ use std::sync::Arc;
 use apalis::layers::WorkerBuilderExt;
 use apalis::layers::retry::RetryPolicy;
 use apalis::prelude::*;
-use apalis_redis::{RedisConfig, RedisStorage};
+use apalis_redis::RedisStorage;
 use redis::AsyncCommands;
 use tokio::time::{Duration, sleep, timeout};
 
@@ -18,16 +18,12 @@ pub struct QueueStorages {
     pub slow: RedisStorage<SlowJob>,
 }
 
-const FAST_QUEUE: &str = "autofile:fast";
-const MEDIUM_QUEUE: &str = "autofile:medium";
-const SLOW_QUEUE: &str = "autofile:slow";
-
 pub async fn create_storages(redis_url: &str) -> QueueStorages {
     let redis_conn = create_redis_connection_with_retry(redis_url).await;
     QueueStorages {
-        fast: RedisStorage::new_with_config(redis_conn.clone(), RedisConfig::new(FAST_QUEUE)),
-        medium: RedisStorage::new_with_config(redis_conn.clone(), RedisConfig::new(MEDIUM_QUEUE)),
-        slow: RedisStorage::new_with_config(redis_conn, RedisConfig::new(SLOW_QUEUE)),
+        fast: RedisStorage::new(redis_conn.clone()),
+        medium: RedisStorage::new(redis_conn.clone()),
+        slow: RedisStorage::new(redis_conn),
     }
 }
 
