@@ -437,7 +437,10 @@ export function DocumentActions({
         )}
       >
         <p className="mt-0 text-color-secondary">
-          Each row includes document ID, title, and preview URL. Choose metadata fields to add after those columns.
+          Each row includes document ID, title, and preview URL.
+        </p>
+        <p className="mt-0 text-color-secondary">
+          Choose metadata fields to add after those columns.
         </p>
         <PickList
           dataKey="id"
@@ -452,6 +455,7 @@ export function DocumentActions({
           breakpoint="900px"
           filter
           filterBy="name"
+          showSourceControls={false}
           sourceFilterPlaceholder="Search available"
           targetFilterPlaceholder="Search selected"
         />
