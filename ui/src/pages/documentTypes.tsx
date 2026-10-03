@@ -28,6 +28,7 @@ import { DateTimeText } from '../components/DateTimeText';
 import { canAdminister, useAuth } from '../auth';
 
 const DOCUMENT_TYPE_LIST_DEFAULT_PARAMS: ListParams = { sf: 'name' };
+const DEFAULT_DOCUMENT_TYPE_ID = 1;
 
 export function ListDocumentTypes() {
   const auth = useAuth();
@@ -64,14 +65,20 @@ export function ListDocumentTypes() {
   }
 
   const actionTemplate = (c: DocumentType) => {
+    const deleteDisabled = c.id === DEFAULT_DOCUMENT_TYPE_ID;
+    const deleteTitle = deleteDisabled ? 'Default document type cannot be deleted' : 'Delete';
+
     return (
       <div className="flex flex-wrap gap-2">
         <Button type="button" icon="pi pi-pencil" severity="success" rounded text raised aria-description="Edit"
           onClick={() => navigate(`${c.id}/edit`)}
         ></Button>
-        <Button type="button" icon="pi pi-trash" severity="danger" rounded text raised aria-description="Delete"
-          onClick={() => confirmDeleteDocumentType(c)}
-        ></Button>
+        <span title={deleteTitle}>
+          <Button type="button" icon="pi pi-trash" severity="danger" rounded text raised aria-description="Delete"
+            disabled={deleteDisabled}
+            onClick={() => confirmDeleteDocumentType(c)}
+          ></Button>
+        </span>
       </div>
     );
   };
@@ -235,7 +242,7 @@ export function ViewDocumentType() {
       label: `${label}${item.required ? ' (required)' : ''}`,
     };
   }) ?? [];
-  const deleteDisabled = data.id === 1;
+  const deleteDisabled = data.id === DEFAULT_DOCUMENT_TYPE_ID;
   const deleteTitle = deleteDisabled ? 'Default document type cannot be deleted' : 'Delete';
 
   return (

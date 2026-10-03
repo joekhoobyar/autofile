@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Blocked deleting the default **Unspecified** document type from the document types list page.
+
 ## [0.6.3] - 2026-10-03
 
 ### Fixed
