@@ -1,6 +1,6 @@
 [package]
 name = "autofile-api"
-version = "0.6.4"
+version = "0.6.5"
 authors = ["Joe Khoobyar"]
 license = "AGPL-3.0-only"
 edition = "2024"
@@ -25,6 +25,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 async-trait = "0.1"
 anyhow = "1"
+csv = "1"
 
 bigdecimal = { version = "0.4", features = ["serde"] }
 diesel = { version = "2.3", features = ["postgres", "chrono", "numeric", "serde_json"] }

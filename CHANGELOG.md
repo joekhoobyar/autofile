@@ -7,11 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-10-03
+
+### Added
+
+- Added CSV export for the document list, including advanced search filters, current sort order, preview URLs, and user-selected metadata columns.
+
 ### Fixed
 
 - Blocked deleting the default **Unspecified** document type from the document types list page.
 
-## [0.6.3] - 2026-10-03
+## [0.6.3] - 2026-10-02
 
 ### Fixed
 

@@ -5,6 +5,7 @@ import { Dialog } from 'primereact/dialog';
 import { Dropdown } from 'primereact/dropdown';
 import { Menu } from 'primereact/menu';
 import type { MenuItem } from 'primereact/menuitem';
+import { PickList, type PickListChangeEvent } from 'primereact/picklist';
 import { TreeSelect } from 'primereact/treeselect';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { type Toast } from 'primereact/toast';
@@ -12,10 +13,12 @@ import { type Toast } from 'primereact/toast';
 import { AppToast } from './AppToast';
 import { useCabinets, useCabinetTree } from '../queries/useCabinets';
 import { useTags } from '../queries/useTags';
-import { useClassifyDocument, useDeleteDocument, useGenerateThumbnail, useProcessDocumentFilePages, useRemoveCabinetDocument, useRemoveTagDocument, useSaveCabinetDocument, useSaveTagDocument } from '../queries/useDocuments';
+import { downloadDocumentListCsv, useClassifyDocument, useDeleteDocument, useGenerateThumbnail, useProcessDocumentFilePages, useRemoveCabinetDocument, useRemoveTagDocument, useSaveCabinetDocument, useSaveTagDocument } from '../queries/useDocuments';
 import { downloadFirstDocumentFile } from '../queries/useDocumentFiles';
-import type { Document } from '../models/document';
+import type { Document, DocumentListParams } from '../models/document';
 import { MAX_CABINETS } from '../models/cabinet';
+import { useMetadataTypes } from '../queries/useMetadataTypes';
+import type { MetadataType } from '../models/metadataType';
 
 type DocumentActionsProps = {
   documentIds: number[];
@@ -23,6 +26,7 @@ type DocumentActionsProps = {
   onAfterAction?: () => void;
   onAfterDelete?: () => void;
   includeNewDocument?: boolean;
+  csvExportParams?: DocumentListParams;
   buttonClassName?: string;
   buttonStyle?: CSSProperties;
   containerClassName?: string;
@@ -34,6 +38,7 @@ export function DocumentActions({
   onAfterAction,
   onAfterDelete,
   includeNewDocument = false,
+  csvExportParams,
   buttonClassName,
   buttonStyle,
   containerClassName,
@@ -42,6 +47,7 @@ export function DocumentActions({
   const toast = useRef<Toast>(null);
   const menuId = useId();
   const hasSelection = documentIds.length > 0;
+  const hasCsvExport = !!csvExportParams;
   const deleteDocument = useDeleteDocument();
   const processDocumentFilePages = useProcessDocumentFilePages();
   const generateThumbnail = useGenerateThumbnail();
@@ -53,6 +59,7 @@ export function DocumentActions({
   const { data: cabinetTreeOptions, isPending: isCabinetTreePending, isFetching: isCabinetTreeFetching } = useCabinetTree({ keyField: 'id' });
   const { data: cabinetOptions, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinets({ page: 1, per_page: MAX_CABINETS, sf: 'name' });
   const { data: tagOptions, isPending: isTagsPending, isFetching: isTagsFetching } = useTags({ page: 1, per_page: 200, sf: 'name' });
+  const { data: metadataTypes, isPending: isMetadataTypesPending, isFetching: isMetadataTypesFetching } = useMetadataTypes({ page: 1, per_page: 200, sf: 'name' });
   const selectedDocumentCabinetIds = new Set(documents?.flatMap((document) => document.cabinet_ids ?? []) ?? []);
   const removeCabinetOptions = (cabinetOptions?.items ?? [])
     .filter((cabinet) => selectedDocumentCabinetIds.has(cabinet.id))
@@ -69,6 +76,13 @@ export function DocumentActions({
   const [removeTagVisible, setRemoveTagVisible] = useState(false);
   const [removeTagId, setRemoveTagId] = useState<number | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [csvExportVisible, setCsvExportVisible] = useState(false);
+  const [selectedCsvMetadataTypes, setSelectedCsvMetadataTypes] = useState<MetadataType[]>([]);
+  const [isCsvExporting, setIsCsvExporting] = useState(false);
+
+  const csvMetadataSource = (metadataTypes?.items ?? []).filter(
+    (metadataType) => !selectedCsvMetadataTypes.some((selected) => selected.id === metadataType.id),
+  );
 
   const showSuccess = (summary: string, detail: string) => {
     toast.current?.show({ severity: 'success', summary, detail });
@@ -268,6 +282,39 @@ export function DocumentActions({
     }
   };
 
+  const openCsvExportDialog = () => {
+    if (!hasCsvExport) return;
+    setCsvExportVisible(true);
+  };
+
+  const closeCsvExportDialog = () => {
+    setCsvExportVisible(false);
+  };
+
+  const downloadCsvExport = async () => {
+    if (!csvExportParams || isCsvExporting) return;
+    setIsCsvExporting(true);
+    try {
+      await downloadDocumentListCsv(
+        csvExportParams,
+        selectedCsvMetadataTypes.map((metadataType) => metadataType.id),
+      );
+      closeCsvExportDialog();
+      showSuccess('CSV download started', 'Exporting all matching documents.');
+    } catch (error) {
+      showError('CSV export failed', error);
+    } finally {
+      setIsCsvExporting(false);
+    }
+  };
+
+  const metadataTypeTemplate = (metadataType: MetadataType) => (
+    <div className="flex flex-column">
+      <span>{metadataType.name}</span>
+      {metadataType.description && <small className="text-color-secondary">{metadataType.description}</small>}
+    </div>
+  );
+
   const confirmDeleteSelectedDocuments = () => {
     if (!hasSelection) return;
     const count = documentIds.length;
@@ -337,6 +384,11 @@ export function DocumentActions({
         ]
       : []),
     { icon: 'pi pi-download', label: 'Download', command: () => { void downloadSelectedDocuments(); }, disabled: !hasSelection || isDownloading },
+    ...(hasCsvExport
+      ? [
+          { icon: 'pi pi-file', label: 'Export CSV', command: () => { openCsvExportDialog(); }, disabled: isCsvExporting },
+        ]
+      : []),
     { separator: true },
     { icon: 'pi pi-plus-circle', label: 'Add to Cabinet', command: () => { openAddToCabinetDialog(); }, disabled: !hasSelection },
     { icon: 'pi pi-minus-circle', label: 'Remove from Cabinet', command: () => { openRemoveFromCabinetDialog(); }, disabled: !hasSelection },
@@ -365,6 +417,52 @@ export function DocumentActions({
         aria-haspopup
       />
 
+      <Dialog
+        header="Export Document List to CSV"
+        visible={csvExportVisible}
+        onHide={closeCsvExportDialog}
+        style={{ width: '95vw', maxWidth: '900px' }}
+        dismissableMask={true}
+        footer={(
+          <div className="flex justify-content-end gap-2">
+            <Button label="Cancel" type="button" severity="secondary" icon="pi pi-times" onClick={closeCsvExportDialog} />
+            <Button
+              label="Download CSV"
+              type="button"
+              icon={isCsvExporting ? 'pi pi-spin pi-spinner' : 'pi pi-download'}
+              onClick={() => void downloadCsvExport()}
+              disabled={isCsvExporting}
+            />
+          </div>
+        )}
+      >
+        <p className="mt-0 text-color-secondary">
+          Each row includes document ID, title, and preview URL.
+        </p>
+        <p className="mt-0 text-color-secondary">
+          Choose metadata fields to add after those columns.
+        </p>
+        <PickList
+          dataKey="id"
+          source={csvMetadataSource}
+          target={selectedCsvMetadataTypes}
+          onChange={(event: PickListChangeEvent) => setSelectedCsvMetadataTypes(event.target as MetadataType[])}
+          itemTemplate={metadataTypeTemplate}
+          sourceHeader="Available Metadata"
+          targetHeader="Selected Metadata"
+          sourceStyle={{ height: '18rem' }}
+          targetStyle={{ height: '18rem' }}
+          breakpoint="900px"
+          filter
+          filterBy="name"
+          showSourceControls={false}
+          sourceFilterPlaceholder="Search available"
+          targetFilterPlaceholder="Search selected"
+        />
+        {(isMetadataTypesPending || isMetadataTypesFetching) && (
+          <small className="text-color-secondary block mt-2">Loading metadata fields...</small>
+        )}
+      </Dialog>
       <Dialog
         header="Add to Cabinet"
         visible={addToCabinetVisible}
