@@ -5,6 +5,7 @@ import { Button } from 'primereact/button';
 import { Menu } from 'primereact/menu';
 import type { MenuItem } from 'primereact/menuitem';
 import { DocumentActions } from './DocumentActions';
+import { useDocument } from '../queries/useDocuments';
 
 type DocumentViewLayoutProps = {
   documentId: number;
@@ -16,6 +17,7 @@ export function DocumentViewLayout({ documentId, children }: Readonly<DocumentVi
   const location = useLocation();
   const menuRef = useRef<Menu>(null);
   const menuId = `document-view-menu-${documentId}`;
+  const { data: document } = useDocument(documentId);
 
   const menuItems = useMemo<MenuItem[]>(
     () => {
@@ -94,6 +96,7 @@ export function DocumentViewLayout({ documentId, children }: Readonly<DocumentVi
       <aside className="aut-document-view-side">
         <DocumentActions
           documentIds={[documentId]}
+          documents={document ? [document] : []}
           onAfterDelete={() => navigate('/documents')}
           containerClassName="aut-document-view-actions"
         />

@@ -450,6 +450,10 @@ export function ListDocuments() {
   const setSearchText = (value: string) => setSearchDraft({ appliedSearchText, value });
   const { isPending, data, isFetching } = useDocuments(effectiveListParams);
   const visibleDocumentIds = useMemo(() => data?.items.map((doc) => doc.id) ?? [], [data?.items]);
+  const selectedDocuments = useMemo(
+    () => data?.items.filter((doc) => selectedIds.has(doc.id)) ?? [],
+    [data?.items, selectedIds]
+  );
   const allVisibleSelected = isAllVisibleSelected(visibleDocumentIds, selectedIds);
   const { data: cabinetOptions } = useCabinets({ page: 1, per_page: MAX_CABINETS });
   const { data: cabinetTreeOptions, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinetTree({ keyField: 'id' });
@@ -601,6 +605,7 @@ export function ListDocuments() {
     <div className="flex justify-content-end align-items-center gap-3 flex-wrap">
       <DocumentActions
         documentIds={Array.from(selectedIds)}
+        documents={selectedDocuments}
         onAfterAction={() => setSelectedIds(new Set())}
         includeNewDocument
       />

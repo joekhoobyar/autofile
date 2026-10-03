@@ -10,13 +10,16 @@ import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { type Toast } from 'primereact/toast';
 
 import { AppToast } from './AppToast';
-import { useCabinetTree } from '../queries/useCabinets';
+import { useCabinets, useCabinetTree } from '../queries/useCabinets';
 import { useTags } from '../queries/useTags';
 import { useClassifyDocument, useDeleteDocument, useGenerateThumbnail, useProcessDocumentFilePages, useRemoveCabinetDocument, useRemoveTagDocument, useSaveCabinetDocument, useSaveTagDocument } from '../queries/useDocuments';
 import { downloadFirstDocumentFile } from '../queries/useDocumentFiles';
+import type { Document } from '../models/document';
+import { MAX_CABINETS } from '../models/cabinet';
 
 type DocumentActionsProps = {
   documentIds: number[];
+  documents?: Document[];
   onAfterAction?: () => void;
   onAfterDelete?: () => void;
   includeNewDocument?: boolean;
@@ -27,6 +30,7 @@ type DocumentActionsProps = {
 
 export function DocumentActions({
   documentIds,
+  documents,
   onAfterAction,
   onAfterDelete,
   includeNewDocument = false,
@@ -46,8 +50,16 @@ export function DocumentActions({
   const removeCabinetDocument = useRemoveCabinetDocument();
   const saveTagDocument = useSaveTagDocument();
   const removeTagDocument = useRemoveTagDocument();
-  const { data: cabinetOptions, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinetTree({ keyField: 'id' });
+  const { data: cabinetTreeOptions, isPending: isCabinetTreePending, isFetching: isCabinetTreeFetching } = useCabinetTree({ keyField: 'id' });
+  const { data: cabinetOptions, isPending: isCabinetsPending, isFetching: isCabinetsFetching } = useCabinets({ page: 1, per_page: MAX_CABINETS, sf: 'name' });
   const { data: tagOptions, isPending: isTagsPending, isFetching: isTagsFetching } = useTags({ page: 1, per_page: 200, sf: 'name' });
+  const selectedDocumentCabinetIds = new Set(documents?.flatMap((document) => document.cabinet_ids ?? []) ?? []);
+  const removeCabinetOptions = (cabinetOptions?.items ?? [])
+    .filter((cabinet) => selectedDocumentCabinetIds.has(cabinet.id))
+    .sort((left, right) => (left.displayName ?? left.name ?? left.slug).localeCompare(right.displayName ?? right.name ?? right.slug));
+  const addTagOptions = tagOptions?.items ?? [];
+  const selectedDocumentTagIds = new Set(documents?.flatMap((document) => document.tag_ids ?? []) ?? []);
+  const removeTagOptions = addTagOptions.filter((tag) => selectedDocumentTagIds.has(tag.id));
   const [addToCabinetVisible, setAddToCabinetVisible] = useState(false);
   const [selectedCabinetId, setSelectedCabinetId] = useState<number | null>(null);
   const [removeFromCabinetVisible, setRemoveFromCabinetVisible] = useState(false);
@@ -380,8 +392,8 @@ export function DocumentActions({
               value={selectedCabinetId ? String(selectedCabinetId) : null}
               onChange={(event) => setSelectedCabinetId(event.value ? Number(event.value) : null)}
               placeholder="Select a cabinet"
-              options={cabinetOptions ?? []}
-              disabled={isCabinetsPending || isCabinetsFetching}
+              options={cabinetTreeOptions ?? []}
+              disabled={isCabinetTreePending || isCabinetTreeFetching}
               filter
               className="w-full"
             />
@@ -411,14 +423,15 @@ export function DocumentActions({
         <div className="grid p-fluid">
           <div className="col-12">
             <label htmlFor="remove_cabinet_id" className="font-medium mb-2 block">Cabinet</label>
-            <TreeSelect
-              inputId="remove_cabinet_id"
-              value={removeCabinetId ? String(removeCabinetId) : null}
-              onChange={(event) => setRemoveCabinetId(event.value ? Number(event.value) : null)}
-              placeholder="Select a cabinet"
-              options={cabinetOptions ?? []}
-              disabled={isCabinetsPending || isCabinetsFetching}
-              filter
+            <Dropdown
+              id="remove_cabinet_id"
+              value={removeCabinetId}
+              onChange={(event) => setRemoveCabinetId(event.value as number)}
+              optionLabel="displayName"
+              optionValue="id"
+              placeholder={removeCabinetOptions.length > 0 ? 'Select a cabinet' : 'No cabinets on selected documents'}
+              options={removeCabinetOptions}
+              loading={isCabinetsPending || isCabinetsFetching}
               className="w-full"
             />
           </div>
@@ -453,7 +466,7 @@ export function DocumentActions({
               optionLabel="name"
               optionValue="id"
               placeholder="Select a tag"
-              options={tagOptions?.items ?? []}
+              options={addTagOptions}
               loading={isTagsPending || isTagsFetching}
               className="w-full"
             />
@@ -489,8 +502,8 @@ export function DocumentActions({
               onChange={(event) => setRemoveTagId(event.value as number)}
               optionLabel="name"
               optionValue="id"
-              placeholder="Select a tag"
-              options={tagOptions?.items ?? []}
+              placeholder={removeTagOptions.length > 0 ? 'Select a tag' : 'No tags on selected documents'}
+              options={removeTagOptions}
               loading={isTagsPending || isTagsFetching}
               className="w-full"
             />
