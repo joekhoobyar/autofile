@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Scoped the document action Remove Tag and Remove from Cabinet dialogs to only show tags and cabinets assigned to the selected documents.
+- Fix document metadata migration handling of blank or null dates
 
 ## [0.6.2] - 2026-10-02
 
