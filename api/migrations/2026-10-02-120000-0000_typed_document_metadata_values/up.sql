@@ -3,6 +3,12 @@ ADD COLUMN string_value VARCHAR,
 ADD COLUMN number_value NUMERIC,
 ADD COLUMN date_value DATE;
 
+DELETE FROM document_metadatas dm
+USING metadata_types mt
+WHERE mt.id = dm.metadata_type_id
+  AND mt.data_type = 'date'
+  AND NULLIF(BTRIM(dm.value), '') IS NULL;
+
 UPDATE document_metadatas dm
 SET string_value = dm.value
 FROM metadata_types mt
@@ -19,7 +25,7 @@ BEGIN
         JOIN metadata_types mt ON mt.id = dm.metadata_type_id
         WHERE mt.data_type = 'date'
     LOOP
-        IF date_metadata.value !~ '^\d{4}-\d{2}-\d{2}$' THEN
+        IF BTRIM(date_metadata.value) !~ '^\d{4}-\d{2}-\d{2}$' THEN
             RAISE EXCEPTION 'Cannot migrate document_metadatas: document_id %, metadata_type_id % has date value % that is not in YYYY-MM-DD format',
                 date_metadata.document_id,
                 date_metadata.metadata_type_id,
@@ -27,7 +33,7 @@ BEGIN
         END IF;
 
         BEGIN
-            PERFORM date_metadata.value::date;
+            PERFORM BTRIM(date_metadata.value)::date;
         EXCEPTION WHEN others THEN
             RAISE EXCEPTION 'Cannot migrate document_metadatas: document_id %, metadata_type_id % has invalid date value %',
                 date_metadata.document_id,
@@ -38,7 +44,7 @@ BEGIN
 END $$;
 
 UPDATE document_metadatas dm
-SET date_value = dm.value::date
+SET date_value = BTRIM(dm.value)::date
 FROM metadata_types mt
 WHERE mt.id = dm.metadata_type_id
   AND mt.data_type = 'date';
