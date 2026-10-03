@@ -311,7 +311,7 @@ export function DocumentActions({
   const metadataTypeTemplate = (metadataType: MetadataType) => (
     <div className="flex flex-column">
       <span>{metadataType.name}</span>
-      <small className="text-color-secondary">{metadataType.slug}</small>
+      {metadataType.description && <small className="text-color-secondary">{metadataType.description}</small>}
     </div>
   );
 
@@ -451,7 +451,7 @@ export function DocumentActions({
           targetStyle={{ height: '18rem' }}
           breakpoint="900px"
           filter
-          filterBy="name,slug"
+          filterBy="name"
           sourceFilterPlaceholder="Search available"
           targetFilterPlaceholder="Search selected"
         />
