@@ -25,6 +25,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 async-trait = "0.1"
 anyhow = "1"
+csv = "1"
 
 bigdecimal = { version = "0.4", features = ["serde"] }
 diesel = { version = "2.3", features = ["postgres", "chrono", "numeric", "serde_json"] }

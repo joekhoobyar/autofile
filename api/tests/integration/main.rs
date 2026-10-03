@@ -3,6 +3,7 @@ mod support;
 mod app_settings;
 mod clamav_scanner;
 mod classifier_blocks;
+mod document_csv_export;
 mod document_file_content_gates;
 mod document_file_delete_rescan;
 mod document_file_page_cleanup;

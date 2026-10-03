@@ -177,4 +177,20 @@ describe('ListDocuments search scope', () => {
 
     expect(mockDocumentActions).toHaveBeenLastCalledWith(expect.objectContaining({ documentIds: [1, 2] }));
   });
+
+  it('passes effective list search params to the CSV export action', () => {
+    renderList('/cabinets/2/documents#q=invoice&filename=scan.pdf&sf=title&sd=asc', '/cabinets/:cabinetId/documents');
+
+    expect(mockDocumentActions).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        csvExportParams: expect.objectContaining({
+          cabinet_id: 2,
+          q: 'invoice',
+          filename: 'scan.pdf',
+          sf: 'title',
+          sd: false,
+        }),
+      }),
+    );
+  });
 });

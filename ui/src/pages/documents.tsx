@@ -608,6 +608,7 @@ export function ListDocuments() {
         documents={selectedDocuments}
         onAfterAction={() => setSelectedIds(new Set())}
         includeNewDocument
+        csvExportParams={effectiveListParams}
       />
       <div className="flex align-items-center gap-2">
         <Checkbox
