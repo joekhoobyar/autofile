@@ -5,10 +5,11 @@ use crate::application::document_files::{
 };
 use crate::application::document_index_documents::enqueue_document_index_document_updates;
 use crate::application::documents::{
-    CreateDocumentInput, ListDocumentsQuery, TestClassifierBlockResponse, TestTemplateResponse,
-    create_document, delete_document, enqueue_document_classification,
-    enqueue_document_file_page_processing, enqueue_document_thumbnail_generation,
-    get_document_thumbnail_metadata, get_document_view, list_document_index_values, list_documents,
+    CreateDocumentInput, DocumentSortField, ExportDocumentsCsvInput, ListDocumentsQuery,
+    TestClassifierBlockResponse, TestTemplateResponse, create_document, delete_document,
+    enqueue_document_classification, enqueue_document_file_page_processing,
+    enqueue_document_thumbnail_generation, export_documents_csv, get_document_thumbnail_metadata,
+    get_document_view, list_document_index_values, list_documents,
     test_classifier_block as test_classifier_block_workflow,
     test_template as test_template_workflow, update_document,
 };
@@ -28,7 +29,7 @@ use serde::Deserialize;
 use axum::{
     Json,
     extract::{Multipart, Path, Query, State},
-    http::HeaderMap,
+    http::{HeaderMap, header},
     response::Response,
 };
 use utoipa_axum::{router::OpenApiRouter, routes};
@@ -65,6 +66,73 @@ struct TestClassifierBlockInput {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct TestTemplateInput {
     template: String,
+}
+
+#[derive(Debug, Default, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct ExportDocumentsCsvQuery {
+    /// When true, match any of the text-search criteria instead of all.
+    pub match_any: Option<bool>,
+    /// Case-insensitive title substring search.
+    pub q: Option<String>,
+    /// Full-text search over extracted document text and OCR text.
+    pub text: Option<String>,
+    /// Narrow results to one Document Type.
+    pub document_type_id: Option<i64>,
+    /// Narrow results to documents in one cabinet.
+    pub cabinet_id: Option<i64>,
+    /// Narrow results to documents with one tag.
+    pub tag_id: Option<i64>,
+    /// Narrow results to documents with a value for one Metadata Type.
+    pub metadata_type_id: Option<i64>,
+    /// Case-insensitive string/lookup metadata value substring match. Date metadata is not searched by this field.
+    pub metadata_value: Option<String>,
+    /// Case-insensitive filename substring search.
+    pub filename: Option<String>,
+    /// Narrow results to documents with a file content type substring match.
+    pub file_content_type: Option<String>,
+    /// Narrow results to documents with a file in this scan status.
+    pub file_scan_status: Option<String>,
+    /// Narrow results to documents assigned to one document index value.
+    pub document_index_value_id: Option<i64>,
+    /// When true, narrow results to documents sharing a title with another document.
+    pub duplicates: Option<bool>,
+    /// When true, narrow results to documents with a file checksum also present on another document.
+    pub duplicate_checksum: Option<bool>,
+    /// Sort field.
+    pub sf: Option<DocumentSortField>,
+    /// Set to true for descending order.
+    pub sd: Option<bool>,
+    /// Comma-separated, ordered Metadata Type IDs to include after the built-in ID, title, and URL columns.
+    pub metadata_type_ids: Option<String>,
+    /// Absolute UI origin used to build document preview URLs, for example https://autofile.example.com.
+    #[serde(default)]
+    pub preview_base_url: String,
+}
+
+impl ExportDocumentsCsvQuery {
+    fn into_list_query(self) -> ListDocumentsQuery {
+        ListDocumentsQuery {
+            page: None,
+            per_page: None,
+            match_any: self.match_any,
+            q: self.q,
+            text: self.text,
+            document_type_id: self.document_type_id,
+            cabinet_id: self.cabinet_id,
+            tag_id: self.tag_id,
+            metadata_type_id: self.metadata_type_id,
+            metadata_value: self.metadata_value,
+            filename: self.filename,
+            file_content_type: self.file_content_type,
+            file_scan_status: self.file_scan_status,
+            document_index_value_id: self.document_index_value_id,
+            duplicates: self.duplicates,
+            duplicate_checksum: self.duplicate_checksum,
+            sf: self.sf,
+            sd: self.sd,
+        }
+    }
 }
 
 async fn parse_create_multipart(
@@ -449,6 +517,59 @@ pub async fn list(
 
 #[utoipa::path(
     get,
+    path = "/export.csv",
+    tag = "documents",
+    security(("bearer" = [])),
+    params(ExportDocumentsCsvQuery),
+    responses(
+        (status = 200, description = "CSV export of all matching documents", content_type = "text/csv", body = Vec<u8>),
+        (status = 400, description = "Invalid query", body = ApiError),
+        (status = 401, description = "Missing or invalid access token", body = ApiError),
+        (status = 403, description = "Password change required", body = ApiError),
+    )
+)]
+pub async fn export_csv(
+    _user: AuthUser,
+    DbConn(mut db): DbConn,
+    Query(params): Query<ExportDocumentsCsvQuery>,
+) -> Result<Response, ApiError> {
+    let metadata_type_ids = parse_metadata_type_ids(params.metadata_type_ids.as_deref())?;
+    let preview_base_url = params.preview_base_url.clone();
+    let bytes = export_documents_csv(
+        &mut db,
+        ExportDocumentsCsvInput {
+            search: params.into_list_query(),
+            metadata_type_ids,
+            preview_base_url,
+        },
+    )
+    .await?;
+
+    Response::builder()
+        .header(header::CONTENT_TYPE, "text/csv; charset=utf-8")
+        .header(
+            header::CONTENT_DISPOSITION,
+            "attachment; filename=\"documents.csv\"",
+        )
+        .body(bytes.into())
+        .map_err(|e| ApiError::internal_server_error(&format!("Failed to build CSV response: {e}")))
+}
+
+fn parse_metadata_type_ids(value: Option<&str>) -> Result<Vec<i64>, ApiError> {
+    value
+        .unwrap_or_default()
+        .split(',')
+        .filter(|part| !part.trim().is_empty())
+        .map(|part| {
+            part.trim().parse::<i64>().map_err(|_| {
+                ApiError::bad_request("metadata_type_ids must be comma-separated integers")
+            })
+        })
+        .collect()
+}
+
+#[utoipa::path(
+    get,
     path = "/{id}/index-values",
     tag = "documents",
     security(("bearer" = [])),
@@ -471,6 +592,7 @@ pub async fn list_index_values(
 
 pub fn routes(max_upload_bytes: usize) -> OpenApiRouter<Arc<AppState>> {
     OpenApiRouter::new()
+        .routes(routes!(export_csv))
         .routes(routes!(list))
         .routes(routes!(create))
         // Coarse backstop: the precise per-file limit is enforced while

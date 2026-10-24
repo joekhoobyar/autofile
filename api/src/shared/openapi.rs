@@ -78,6 +78,7 @@ pub fn build_openapi_router(
         crate::application::document_index_values::DocumentIndexValueSortField,
         crate::application::document_types::DocumentTypeSortField,
         crate::application::documents::DocumentSortField,
+        crate::application::documents::ListDocumentsQuery,
         crate::application::metadata_types::MetadataTypeSortField,
         crate::application::tag_documents::TagDocumentSortField,
         crate::application::tags::TagSortField,

@@ -51,6 +51,39 @@ export function useDocuments(params: DocumentListParams): UseQueryResult<Resourc
   });
 }
 
+export async function downloadDocumentListCsv(params: DocumentListParams, metadataTypeIds: number[]): Promise<void> {
+  const qp: string[] = [];
+  for (const [key, value] of Object.entries(params)) {
+    if (key === 'page' || key === 'per_page' || value === undefined || value === null) continue;
+    qp.push(`${key}=${encodeURIComponent(String(value))}`);
+  }
+  if (metadataTypeIds.length > 0) {
+    qp.push(`metadata_type_ids=${encodeURIComponent(metadataTypeIds.join(','))}`);
+  }
+  if (typeof window !== 'undefined') {
+    qp.push(`preview_base_url=${encodeURIComponent(window.location.origin)}`);
+  }
+
+  const res = await apiFetchRaw(`api/v1/documents/export.csv${qp.length ? `?${qp.join('&')}` : ''}`, {
+    headers: { Accept: 'text/csv' },
+  });
+  if (!res.ok) {
+    throw await parseApiError(res);
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = window.document.createElement('a');
+  link.href = url;
+  link.download = 'documents.csv';
+  window.document.body.appendChild(link);
+  link.click();
+  window.setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, 10_000);
+}
+
 export function useDocument(id: string | number, options = {}): UseQueryResult<Document, HttpError> {
   return useQuery({
     queryKey: ['document', 'get', {id}],

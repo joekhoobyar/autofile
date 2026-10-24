@@ -78,7 +78,15 @@ type DocumentMetadataViewRow = (
     Option<chrono::NaiveDate>,
 );
 
-#[derive(Debug, Default, serde::Deserialize, utoipa::IntoParams)]
+type DocumentMetadataExportRow = (
+    i64,
+    i64,
+    Option<String>,
+    Option<bigdecimal::BigDecimal>,
+    Option<chrono::NaiveDate>,
+);
+
+#[derive(Debug, Default, serde::Deserialize, utoipa::IntoParams, utoipa::ToSchema)]
 #[into_params(parameter_in = Query)]
 pub struct ListDocumentsQuery {
     /// 1-based page number.
@@ -117,6 +125,214 @@ pub struct ListDocumentsQuery {
     pub sf: Option<DocumentSortField>,
     /// Set to true for descending order.
     pub sd: Option<bool>,
+}
+
+pub struct ExportDocumentsCsvInput {
+    pub search: ListDocumentsQuery,
+    pub metadata_type_ids: Vec<i64>,
+    pub preview_base_url: String,
+}
+
+fn document_base_filter<'a>(
+    params: &'a ListDocumentsQuery,
+) -> documents::BoxedQuery<'a, diesel::pg::Pg> {
+    let match_any = params.match_any.unwrap_or_default();
+    let mut query = documents::table.into_boxed();
+
+    if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
+        let pattern = format!("%{}%", q);
+        let criteria = documents::title.ilike(pattern);
+        if match_any {
+            query = query.or_filter(criteria);
+        } else {
+            query = query.filter(criteria);
+        }
+    }
+
+    if let Some(text) = params.text.as_deref().filter(|s| !s.is_empty()) {
+        let text_subquery = document_file_pages::table
+            .inner_join(
+                document_files::table
+                    .on(document_files::id.eq(document_file_pages::document_file_id)),
+            )
+            .filter(
+                document_file_pages::text_ts
+                    .assume_not_null()
+                    .matches(phraseto_tsquery(text)),
+            )
+            .filter(document_files::document_id.eq(documents::id));
+
+        let ocr_subquery = document_file_ocr_pages::table
+            .inner_join(
+                document_files::table
+                    .on(document_files::id.eq(document_file_ocr_pages::document_file_id)),
+            )
+            .filter(
+                document_file_ocr_pages::ocr_ts
+                    .assume_not_null()
+                    .matches(phraseto_tsquery(text)),
+            )
+            .filter(document_files::document_id.eq(documents::id));
+
+        if match_any {
+            query = query
+                .or_filter(exists(text_subquery))
+                .or_filter(exists(ocr_subquery));
+        } else {
+            query = query.filter(exists(text_subquery).or(exists(ocr_subquery)));
+        }
+    }
+
+    if let Some(filename) = params.filename.as_deref().filter(|s| !s.is_empty()) {
+        let pattern = format!("%{}%", filename);
+        let subquery = document_files::table
+            .filter(document_files::document_id.eq(documents::id))
+            .filter(document_files::filename.ilike(pattern));
+
+        if match_any {
+            query = query.or_filter(exists(subquery));
+        } else {
+            query = query.filter(exists(subquery));
+        }
+    }
+
+    if let Some(id) = params.document_type_id {
+        query = query.filter(documents::document_type_id.eq(id));
+    }
+
+    if let Some(value) = params.metadata_value.as_deref().filter(|s| !s.is_empty()) {
+        let pattern = format!("%{}%", value);
+
+        if let Some(metadata_type_id) = params.metadata_type_id {
+            let subquery = document_metadatas::table
+                .filter(document_metadatas::document_id.eq(documents::id))
+                .filter(document_metadatas::string_value.ilike(pattern))
+                .filter(document_metadatas::metadata_type_id.eq(metadata_type_id));
+
+            query = query.filter(exists(subquery));
+        } else {
+            let subquery = document_metadatas::table
+                .filter(document_metadatas::document_id.eq(documents::id))
+                .filter(document_metadatas::string_value.ilike(pattern));
+
+            query = query.filter(exists(subquery));
+        }
+    } else if let Some(metadata_type_id) = params.metadata_type_id {
+        let subquery = document_metadatas::table
+            .filter(document_metadatas::document_id.eq(documents::id))
+            .filter(document_metadatas::metadata_type_id.eq(metadata_type_id));
+
+        query = query.filter(exists(subquery));
+    }
+
+    if let Some(content_type) = params
+        .file_content_type
+        .as_deref()
+        .filter(|s| !s.is_empty())
+    {
+        let pattern = format!("%{}%", content_type);
+        let subquery = document_files::table
+            .filter(document_files::document_id.eq(documents::id))
+            .filter(document_files::content_type.ilike(pattern));
+
+        query = query.filter(exists(subquery));
+    }
+
+    if let Some(scan_status) = params.file_scan_status.as_deref().filter(|s| !s.is_empty()) {
+        let subquery = document_files::table
+            .filter(document_files::document_id.eq(documents::id))
+            .filter(document_files::scan_status.eq(scan_status));
+
+        query = query.filter(exists(subquery));
+    }
+
+    if let Some(id) = params.cabinet_id {
+        let subquery = cabinet_documents::table
+            .filter(cabinet_documents::cabinet_id.eq(id))
+            .filter(cabinet_documents::document_id.eq(documents::id));
+
+        query = query.filter(exists(subquery));
+    }
+
+    if let Some(id) = params.tag_id {
+        let subquery = tag_documents::table
+            .filter(tag_documents::tag_id.eq(id))
+            .filter(tag_documents::document_id.eq(documents::id));
+
+        query = query.filter(exists(subquery));
+    }
+
+    if let Some(id) = params.document_index_value_id {
+        let subquery = document_index_documents::table
+            .filter(document_index_documents::document_index_value_id.eq(id))
+            .filter(document_index_documents::document_id.eq(documents::id));
+
+        query = query.filter(exists(subquery));
+    }
+
+    if params.duplicates.unwrap_or_default() {
+        let duplicate_documents = diesel::alias!(documents as duplicate_documents);
+        let subquery = duplicate_documents
+            .filter(
+                duplicate_documents
+                    .field(documents::title)
+                    .eq(documents::title),
+            )
+            .filter(duplicate_documents.field(documents::id).ne(documents::id));
+
+        query = query.filter(exists(subquery));
+    }
+
+    if params.duplicate_checksum.unwrap_or_default() {
+        let criteria = diesel::dsl::sql::<Bool>(
+            r#"
+            EXISTS (
+                SELECT 1
+                FROM document_files matching_files
+                WHERE matching_files.document_id = documents.id
+                  AND matching_files.checksum_sha256 IS NOT NULL
+                  AND EXISTS (
+                      SELECT 1
+                      FROM document_files duplicate_files
+                      WHERE duplicate_files.checksum_sha256 = matching_files.checksum_sha256
+                        AND duplicate_files.document_id <> matching_files.document_id
+                  )
+            )
+            "#,
+        );
+
+        query = query.filter(criteria);
+    }
+
+    query
+}
+
+fn sort_document_query<'a>(
+    query: documents::BoxedQuery<'a, diesel::pg::Pg>,
+    params: &ListDocumentsQuery,
+) -> documents::BoxedQuery<'a, diesel::pg::Pg> {
+    match (params.sf, params.sd) {
+        (Some(DocumentSortField::Title), Some(true)) => {
+            query.order((documents::title.desc(), documents::id.asc()))
+        }
+        (Some(DocumentSortField::Title), _) => {
+            query.order((documents::title.asc(), documents::id.asc()))
+        }
+        (Some(DocumentSortField::CreatedAt), Some(true)) => {
+            query.order((documents::created_at.desc(), documents::id.asc()))
+        }
+        (Some(DocumentSortField::CreatedAt), _) => {
+            query.order((documents::created_at.asc(), documents::id.asc()))
+        }
+        (Some(DocumentSortField::UpdatedAt), Some(true)) => {
+            query.order((documents::updated_at.desc(), documents::id.asc()))
+        }
+        (Some(DocumentSortField::UpdatedAt), _) => {
+            query.order((documents::updated_at.asc(), documents::id.asc()))
+        }
+        (Some(DocumentSortField::Id), Some(true)) => query.order(documents::id.desc()),
+        _ => query.order(documents::id.asc()),
+    }
 }
 
 pub async fn create_document(
@@ -466,208 +682,14 @@ pub async fn list_documents(
     let page = params.page.unwrap_or(1).max(1);
     let per_page = params.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
-    let match_any = params.match_any.unwrap_or_default();
 
-    let base_filter = || -> documents::BoxedQuery<'_, diesel::pg::Pg> {
-        let mut query = documents::table.into_boxed();
-
-        if let Some(q) = params.q.as_deref().filter(|s| !s.is_empty()) {
-            let pattern = format!("%{}%", q);
-            let criteria = documents::title.ilike(pattern);
-            if match_any {
-                query = query.or_filter(criteria);
-            } else {
-                query = query.filter(criteria);
-            }
-        }
-
-        if let Some(text) = params.text.as_deref().filter(|s| !s.is_empty()) {
-            let text_subquery = document_file_pages::table
-                .inner_join(
-                    document_files::table
-                        .on(document_files::id.eq(document_file_pages::document_file_id)),
-                )
-                .filter(
-                    document_file_pages::text_ts
-                        .assume_not_null()
-                        .matches(phraseto_tsquery(text)),
-                )
-                .filter(document_files::document_id.eq(documents::id));
-
-            let ocr_subquery = document_file_ocr_pages::table
-                .inner_join(
-                    document_files::table
-                        .on(document_files::id.eq(document_file_ocr_pages::document_file_id)),
-                )
-                .filter(
-                    document_file_ocr_pages::ocr_ts
-                        .assume_not_null()
-                        .matches(phraseto_tsquery(text)),
-                )
-                .filter(document_files::document_id.eq(documents::id));
-
-            if match_any {
-                query = query
-                    .or_filter(exists(text_subquery))
-                    .or_filter(exists(ocr_subquery));
-            } else {
-                query = query.filter(exists(text_subquery).or(exists(ocr_subquery)));
-            }
-        }
-
-        if let Some(filename) = params.filename.as_deref().filter(|s| !s.is_empty()) {
-            let pattern = format!("%{}%", filename);
-            let subquery = document_files::table
-                .filter(document_files::document_id.eq(documents::id))
-                .filter(document_files::filename.ilike(pattern));
-
-            if match_any {
-                query = query.or_filter(exists(subquery));
-            } else {
-                query = query.filter(exists(subquery));
-            }
-        }
-
-        if let Some(id) = params.document_type_id {
-            query = query.filter(documents::document_type_id.eq(id));
-        }
-
-        if let Some(value) = params.metadata_value.as_deref().filter(|s| !s.is_empty()) {
-            let pattern = format!("%{}%", value);
-
-            if let Some(metadata_type_id) = params.metadata_type_id {
-                let subquery = document_metadatas::table
-                    .filter(document_metadatas::document_id.eq(documents::id))
-                    .filter(document_metadatas::string_value.ilike(pattern))
-                    .filter(document_metadatas::metadata_type_id.eq(metadata_type_id));
-
-                query = query.filter(exists(subquery));
-            } else {
-                let subquery = document_metadatas::table
-                    .filter(document_metadatas::document_id.eq(documents::id))
-                    .filter(document_metadatas::string_value.ilike(pattern));
-
-                query = query.filter(exists(subquery));
-            }
-        } else if let Some(metadata_type_id) = params.metadata_type_id {
-            let subquery = document_metadatas::table
-                .filter(document_metadatas::document_id.eq(documents::id))
-                .filter(document_metadatas::metadata_type_id.eq(metadata_type_id));
-
-            query = query.filter(exists(subquery));
-        }
-
-        if let Some(content_type) = params
-            .file_content_type
-            .as_deref()
-            .filter(|s| !s.is_empty())
-        {
-            let pattern = format!("%{}%", content_type);
-            let subquery = document_files::table
-                .filter(document_files::document_id.eq(documents::id))
-                .filter(document_files::content_type.ilike(pattern));
-
-            query = query.filter(exists(subquery));
-        }
-
-        if let Some(scan_status) = params.file_scan_status.as_deref().filter(|s| !s.is_empty()) {
-            let subquery = document_files::table
-                .filter(document_files::document_id.eq(documents::id))
-                .filter(document_files::scan_status.eq(scan_status));
-
-            query = query.filter(exists(subquery));
-        }
-
-        if let Some(id) = params.cabinet_id {
-            let subquery = cabinet_documents::table
-                .filter(cabinet_documents::cabinet_id.eq(id))
-                .filter(cabinet_documents::document_id.eq(documents::id));
-
-            query = query.filter(exists(subquery));
-        }
-
-        if let Some(id) = params.tag_id {
-            let subquery = tag_documents::table
-                .filter(tag_documents::tag_id.eq(id))
-                .filter(tag_documents::document_id.eq(documents::id));
-
-            query = query.filter(exists(subquery));
-        }
-
-        if let Some(id) = params.document_index_value_id {
-            let subquery = document_index_documents::table
-                .filter(document_index_documents::document_index_value_id.eq(id))
-                .filter(document_index_documents::document_id.eq(documents::id));
-
-            query = query.filter(exists(subquery));
-        }
-
-        if params.duplicates.unwrap_or_default() {
-            let duplicate_documents = diesel::alias!(documents as duplicate_documents);
-            let subquery = duplicate_documents
-                .filter(
-                    duplicate_documents
-                        .field(documents::title)
-                        .eq(documents::title),
-                )
-                .filter(duplicate_documents.field(documents::id).ne(documents::id));
-
-            query = query.filter(exists(subquery));
-        }
-
-        if params.duplicate_checksum.unwrap_or_default() {
-            let criteria = diesel::dsl::sql::<Bool>(
-                r#"
-                EXISTS (
-                    SELECT 1
-                    FROM document_files matching_files
-                    WHERE matching_files.document_id = documents.id
-                      AND matching_files.checksum_sha256 IS NOT NULL
-                      AND EXISTS (
-                          SELECT 1
-                          FROM document_files duplicate_files
-                          WHERE duplicate_files.checksum_sha256 = matching_files.checksum_sha256
-                            AND duplicate_files.document_id <> matching_files.document_id
-                      )
-                )
-                "#,
-            );
-
-            query = query.filter(criteria);
-        }
-
-        query
-    };
-
-    let total = base_filter()
+    let total = document_base_filter(&params)
         .count()
         .get_result::<i64>(db)
         .await
         .api_context("Failed to count documents")?;
 
-    let mut query: documents::BoxedQuery<'_, diesel::pg::Pg> = base_filter();
-    query = match (params.sf, params.sd) {
-        (Some(DocumentSortField::Title), Some(true)) => {
-            query.order((documents::title.desc(), documents::id.asc()))
-        }
-        (Some(DocumentSortField::Title), _) => {
-            query.order((documents::title.asc(), documents::id.asc()))
-        }
-        (Some(DocumentSortField::CreatedAt), Some(true)) => {
-            query.order((documents::created_at.desc(), documents::id.asc()))
-        }
-        (Some(DocumentSortField::CreatedAt), _) => {
-            query.order((documents::created_at.asc(), documents::id.asc()))
-        }
-        (Some(DocumentSortField::UpdatedAt), Some(true)) => {
-            query.order((documents::updated_at.desc(), documents::id.asc()))
-        }
-        (Some(DocumentSortField::UpdatedAt), _) => {
-            query.order((documents::updated_at.asc(), documents::id.asc()))
-        }
-        (Some(DocumentSortField::Id), Some(true)) => query.order(documents::id.desc()),
-        _ => query.order(documents::id.asc()),
-    };
+    let query = sort_document_query(document_base_filter(&params), &params);
 
     let documents = query
         .limit(per_page)
@@ -782,6 +804,132 @@ pub async fn list_documents(
         per_page,
         items,
     })
+}
+
+pub async fn export_documents_csv(
+    db: &mut PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+    input: ExportDocumentsCsvInput,
+) -> Result<Vec<u8>, ApiError> {
+    let base_url = input
+        .preview_base_url
+        .trim()
+        .trim_end_matches('/')
+        .to_string();
+    if !base_url.is_empty() && !base_url.starts_with("http://") && !base_url.starts_with("https://")
+    {
+        return Err(ApiError::bad_request(
+            "preview_base_url must be an absolute HTTP(S) URL",
+        ));
+    }
+
+    let documents = sort_document_query(document_base_filter(&input.search), &input.search)
+        .select(Document::as_select())
+        .load::<Document>(db)
+        .await
+        .api_context("Failed to export documents")?;
+    let document_ids: Vec<i64> = documents.iter().map(|doc| doc.id).collect();
+
+    let metadata_type_rows: Vec<(i64, String, String)> = if input.metadata_type_ids.is_empty() {
+        Vec::new()
+    } else {
+        metadata_types::table
+            .filter(metadata_types::id.eq_any(&input.metadata_type_ids))
+            .select((
+                metadata_types::id,
+                metadata_types::name,
+                metadata_types::slug,
+            ))
+            .load::<(i64, String, String)>(db)
+            .await
+            .api_context("Failed to load export metadata types")?
+    };
+    let metadata_type_lookup: HashMap<i64, (String, String)> = metadata_type_rows
+        .into_iter()
+        .map(|(id, name, slug)| (id, (name, slug)))
+        .collect();
+    let selected_metadata_types: Vec<(i64, String, String)> = input
+        .metadata_type_ids
+        .into_iter()
+        .filter_map(|id| {
+            metadata_type_lookup
+                .get(&id)
+                .map(|(name, slug)| (id, name.clone(), slug.clone()))
+        })
+        .collect();
+
+    let mut metadata_by_document: HashMap<(i64, i64), String> = HashMap::new();
+    let selected_metadata_type_ids: Vec<i64> = selected_metadata_types
+        .iter()
+        .map(|(metadata_type_id, _, _)| *metadata_type_id)
+        .collect();
+    if !document_ids.is_empty() && !selected_metadata_type_ids.is_empty() {
+        let metadata_rows: Vec<DocumentMetadataExportRow> = document_metadatas::table
+            .filter(document_metadatas::document_id.eq_any(&document_ids))
+            .filter(document_metadatas::metadata_type_id.eq_any(&selected_metadata_type_ids))
+            .select((
+                document_metadatas::document_id,
+                document_metadatas::metadata_type_id,
+                document_metadatas::string_value,
+                document_metadatas::number_value,
+                document_metadatas::date_value,
+            ))
+            .load(db)
+            .await
+            .api_context("Failed to load export document metadata")?;
+
+        for (document_id, metadata_type_id, string_value, number_value, date_value) in metadata_rows
+        {
+            if let Some(value) =
+                typed_metadata_value_to_string(string_value, number_value, date_value)
+            {
+                metadata_by_document.insert((document_id, metadata_type_id), value);
+            }
+        }
+    }
+
+    let mut writer = csv::Writer::from_writer(Vec::new());
+    let mut header = vec![
+        "Document ID".to_string(),
+        "Title".to_string(),
+        "URL".to_string(),
+    ];
+    header.extend(
+        selected_metadata_types
+            .iter()
+            .map(|(_, name, _)| name.to_string()),
+    );
+    writer.write_record(header).map_err(|e| {
+        ApiError::internal_server_error(&format!("Failed to write CSV header: {e}"))
+    })?;
+
+    for document in documents {
+        let mut row = vec![
+            document.id.to_string(),
+            document.title,
+            if base_url.is_empty() {
+                format!("/documents/{}/preview", document.id)
+            } else {
+                format!("{base_url}/documents/{}/preview", document.id)
+            },
+        ];
+        row.extend(
+            selected_metadata_types
+                .iter()
+                .map(|(metadata_type_id, _, _)| {
+                    metadata_by_document
+                        .get(&(document.id, *metadata_type_id))
+                        .cloned()
+                        .unwrap_or_default()
+                }),
+        );
+        writer.write_record(row).map_err(|e| {
+            ApiError::internal_server_error(&format!("Failed to write CSV row: {e}"))
+        })?;
+    }
+
+    writer
+        .into_inner()
+        .map_err(|e| ApiError::internal_server_error(&format!("Failed to finalize CSV: {e}")))
 }
 
 pub async fn get_document_thumbnail_metadata(
