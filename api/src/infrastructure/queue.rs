@@ -18,6 +18,8 @@ pub struct QueueStorages {
     pub slow: RedisStorage<SlowJob>,
 }
 
+const WORKER_POLL_INTERVAL: Duration = Duration::from_millis(500);
+
 pub async fn create_storages(redis_url: &str) -> QueueStorages {
     let redis_conn = create_redis_connection_with_retry(redis_url).await;
     QueueStorages {
@@ -45,7 +47,13 @@ pub fn build_monitor(app_state: Arc<AppState>) -> Monitor {
             move |_| {
                 // One or more workers pulling from Redis
                 WorkerBuilder::new(fast_worker_name.clone())
-                    .backend(app_state.fast_jobs.as_ref().clone())
+                    .backend(
+                        app_state
+                            .fast_jobs
+                            .as_ref()
+                            .clone()
+                            .poll_with_interval(WORKER_POLL_INTERVAL),
+                    )
                     .concurrency(6) // Adjust concurrency as needed
                     .retry(RetryPolicy::retries(7))
                     .catch_panic()
@@ -59,7 +67,13 @@ pub fn build_monitor(app_state: Arc<AppState>) -> Monitor {
             let medium_worker_name = medium_worker_name.clone();
             move |_| {
                 WorkerBuilder::new(medium_worker_name.clone())
-                    .backend(app_state.medium_jobs.as_ref().clone())
+                    .backend(
+                        app_state
+                            .medium_jobs
+                            .as_ref()
+                            .clone()
+                            .poll_with_interval(WORKER_POLL_INTERVAL),
+                    )
                     .concurrency(4)
                     .retry(RetryPolicy::retries(7))
                     .catch_panic()
@@ -73,7 +87,13 @@ pub fn build_monitor(app_state: Arc<AppState>) -> Monitor {
             let slow_worker_name = slow_worker_name.clone();
             move |_| {
                 WorkerBuilder::new(slow_worker_name.clone())
-                    .backend(app_state.slow_jobs.as_ref().clone())
+                    .backend(
+                        app_state
+                            .slow_jobs
+                            .as_ref()
+                            .clone()
+                            .poll_with_interval(WORKER_POLL_INTERVAL),
+                    )
                     .concurrency(2)
                     .retry(RetryPolicy::retries(7))
                     .catch_panic()

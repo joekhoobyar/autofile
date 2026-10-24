@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Upgraded Apalis and Apalis Redis to 1.0.0.
+
+### Fixed
+
+- Restored sub-second background job polling after the Apalis upgrade, avoiding idle queue processing delays of up to 30 seconds.
+
 ## [0.6.4] - 2026-10-03
 
 ### Added
