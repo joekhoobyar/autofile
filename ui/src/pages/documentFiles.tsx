@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
@@ -942,6 +942,7 @@ export function ListDocumentFilePageTextContent() {
     () => (files ?? []).map((file) => ({ label: file.filename, value: file.id })),
     [files]
   );
+  const hasTextContent = (pages ?? []).some((page) => page.text_content?.trim());
 
   if (isDocumentError) {
     return <Message severity="error" text={documentError.message} />;
@@ -981,10 +982,24 @@ export function ListDocumentFilePageTextContent() {
           {effectiveFileId && effectiveFile?.content_available && (
             <div className="flex flex-column gap-3">
               {isPagesLoading && <div>Loading</div>}
-              {!isPagesLoading && (pages ?? []).length === 0 && (
-                <Message severity="info" text="No text content available for this file." />
+              {!isPagesLoading && !hasTextContent && (
+                <Message
+                  severity="info"
+                  content={
+                    <>
+                      <i className="pi pi-info-circle" style={{ marginRight: '0.5rem' }}></i>
+                      <p>
+                        This document does not have any text content.
+                        This commonly happens with images or scanned documents.
+                        Check the{' '}
+                        <Link to={`/documents/${documentId}/ocr-content?file_id=${effectiveFileId}`}>Document OCR</Link>{' '}
+                        to see if Autofile was able to scan text for this document.
+                      </p>
+                    </>
+                  }
+                />
               )}
-              {(pages ?? []).map((page) => (
+              {hasTextContent && (pages ?? []).map((page) => (
                 <div key={`${page.document_file_id}-${page.page_number}`}>
                   <Divider align="center">Page {page.page_number}</Divider>
                   <pre className="aut-document-text-content">
@@ -1016,6 +1031,7 @@ export function ListDocumentFilePageOcrContent() {
     () => (files ?? []).map((file) => ({ label: file.filename, value: file.id })),
     [files]
   );
+  const hasOcrContent = (pages ?? []).some((page) => page.ocr_content?.trim());
 
   if (isDocumentError) {
     return <Message severity="error" text={documentError.message} />;
@@ -1055,10 +1071,10 @@ export function ListDocumentFilePageOcrContent() {
           {effectiveFileId && effectiveFile?.content_available && (
             <div className="flex flex-column gap-3">
               {isPagesLoading && <div>Loading</div>}
-              {!isPagesLoading && (pages ?? []).length === 0 && (
-                <Message severity="info" text="No OCR content available for this file." />
+              {!isPagesLoading && !hasOcrContent && (
+                <Message severity="info" text="This document does not have any OCR content." />
               )}
-              {(pages ?? []).map((page) => (
+              {hasOcrContent && (pages ?? []).map((page) => (
                 <div key={`${page.document_file_id}-${page.page_number}`}>
                   <Divider align="center">Page {page.page_number}</Divider>
                   <pre className="aut-document-text-content">
