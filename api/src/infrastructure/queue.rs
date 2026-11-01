@@ -30,8 +30,7 @@ pub async fn create_storages(redis_url: &str) -> QueueStorages {
         medium: RedisStorage::new(redis_conn.clone())
             .with_config(Config::default().queue("autofile-medium")),
 
-        slow: RedisStorage::new(redis_conn)
-            .with_config(Config::default().queue("autofile-slow")),
+        slow: RedisStorage::new(redis_conn).with_config(Config::default().queue("autofile-slow")),
     }
 }
 
