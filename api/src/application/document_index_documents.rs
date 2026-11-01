@@ -478,7 +478,10 @@ fn render_document_index_value(
     // We will pass this DocumentView to minijinja under the "doc" key.
     let env = minijinja::Environment::new();
     let rendered_value = env
-        .render_str(&template.template, minijinja::context! { doc })
+        .render_str(
+            &template.template,
+            minijinja::context! { doc => minijinja::value::Serde(doc) },
+        )
         .map_err(|err| {
             tracing::error!(error = %err, "document_index_values template evaluation failed inside transaction");
             diesel::result::Error::RollbackTransaction

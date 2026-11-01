@@ -1030,7 +1030,7 @@ pub async fn test_template(
     let env = minijinja::Environment::new();
     match env.render_str(
         template,
-        minijinja::context! { doc => &template_document_view },
+        minijinja::context! { doc => minijinja::value::Serde(&template_document_view) },
     ) {
         Ok(rendered) => Ok(TestTemplateResponse {
             rendered: Some(rendered),
