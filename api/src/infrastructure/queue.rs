@@ -3,7 +3,7 @@ use std::sync::Arc;
 use apalis::layers::WorkerBuilderExt;
 use apalis::layers::retry::RetryPolicy;
 use apalis::prelude::*;
-use apalis_redis::RedisStorage;
+use apalis_redis::{Config, RedisStorage};
 use redis::AsyncCommands;
 use tokio::time::{Duration, sleep, timeout};
 
@@ -22,10 +22,16 @@ const WORKER_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 pub async fn create_storages(redis_url: &str) -> QueueStorages {
     let redis_conn = create_redis_connection_with_retry(redis_url).await;
+
     QueueStorages {
-        fast: RedisStorage::new(redis_conn.clone()),
-        medium: RedisStorage::new(redis_conn.clone()),
-        slow: RedisStorage::new(redis_conn),
+        fast: RedisStorage::new(redis_conn.clone())
+            .with_config(Config::default().queue("autofile-fast")),
+
+        medium: RedisStorage::new(redis_conn.clone())
+            .with_config(Config::default().queue("autofile-medium")),
+
+        slow: RedisStorage::new(redis_conn)
+            .with_config(Config::default().queue("autofile-slow")),
     }
 }
 
