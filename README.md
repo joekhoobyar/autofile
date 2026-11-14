@@ -156,6 +156,8 @@ cargo test --locked --all-targets
 
 ### UI
 
+UI development requires Node.js 24. The repository's `.nvmrc` selects that version, and npm rejects other major versions.
+
 From `ui/`:
 
 ```bash

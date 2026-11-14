@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Upgraded various API dependencies
 - Upgraded various UI dependencies
+- Upgraded Node.JS to version 24
 
 ## [0.6.7] - 2026-11-01
 
