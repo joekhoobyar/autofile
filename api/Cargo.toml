@@ -35,8 +35,8 @@ diesel_json = "0.3.0"
 diesel_full_text_search = "2.3.0"
 bb8 = "0.9.1"
 
-aws-config = "1.1"
-aws-sdk-s3 = { version = "1.15", default-features = false, features = ["sigv4a", "http-1x", "default-https-client", "rt-tokio"] }
+aws-config = "1.13.2"
+aws-sdk-s3 = { version = "1.159", default-features = false, features = ["sigv4a", "http-1x", "default-https-client", "rt-tokio"] }
 uuid = { version = "1.7", features = ["v4"] }
 
 apalis = { version = "1.0.0", features = ["limit", "retry", "catch-panic"] }
